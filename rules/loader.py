@@ -78,29 +78,22 @@ def _coherence_problems(tree: dict[str, Any], prefix: str, depth: int = 1) -> li
     return problems
 
 
-def _standard_slug(standard: str) -> str:
-    """The directory a standard's rules files live in, derived from its
-    declared name: lowercased, spaces as underscores ("RDA DCS" ->
-    "rda_dcs"). The declared name stays the human-readable one that reaches
-    READMEs and QC reports; this is only its filesystem form."""
-    return standard.lower().replace(" ", "_")
-
-
 def _layout_problems(path: Path, doc: dict[str, Any]) -> list[str]:
     """Every way the file disagrees with the path it sits at, at once.
 
     A path names a standard and a version (``<standard>/<version>.json``) and
-    the document declares both. Two identifier spaces that drift in silence
-    without this check: a stale directory makes provenance name a standard
-    nobody selected, and a file copied to a new version filename becomes that
-    version, same content, no record.
+    the document declares both, in the same spelling — there is no derivation
+    between the two, which is the point: a directory and a declaration that
+    are the same string cannot drift apart in a way this check has to
+    interpret. Without it they drift in silence: a stale directory makes
+    provenance name a standard nobody selected, and a file copied to a new
+    version filename becomes that version, same content, no record.
     """
     problems = []
-    slug = _standard_slug(doc["standard"])
-    if slug != path.parent.name:
+    if doc["standard"] != path.parent.name:
         problems.append(
-            f"declares standard {doc['standard']!r} (slug {slug!r}) but sits "
-            f"in directory {path.parent.name!r}; the two must agree."
+            f"declares standard {doc['standard']!r} but sits in directory "
+            f"{path.parent.name!r}; the two must agree."
         )
     if doc["version"] != path.stem:
         problems.append(

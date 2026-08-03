@@ -9,8 +9,8 @@
   "properties": {
     "standard": {
       "type": "string",
-      "minLength": 1,
-      "description": "Unique name of the standard this file defines (e.g. 'RDA DCS')."
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "Identifier of the standard this file defines, snake_case (e.g. 'rda_dcs'), unique across the files a project pins. It is the directory this file sits in, and the name a config's 'rules:' pin writes. Anything shown to a reader — DSW tags, QC reports — derives its label from it rather than carrying a second spelling."
     },
     "version": {
       "type": "string",

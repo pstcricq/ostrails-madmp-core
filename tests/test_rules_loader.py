@@ -27,7 +27,7 @@ def _write(tmp_path, doc):
     a fixture that wants to exercise anything else must sit where it says."""
     # .get: a doc missing these keys is exactly what some tests are checking,
     # and it still has to reach the loader to be rejected there.
-    directory = str(doc.get("standard", "unnamed")).lower()
+    directory = str(doc.get("standard", "unnamed"))
     path = tmp_path / directory / f"{doc.get('version', '1.0.0')}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(doc))
@@ -36,7 +36,7 @@ def _write(tmp_path, doc):
 
 def _minimal_doc(**dmp_fields):
     return {
-        "standard": "Test",
+        "standard": "test",
         "version": "1.0.0",
         "extends": False,
         "dmp": dmp_fields,
@@ -54,14 +54,23 @@ def test_syntactically_broken_json_is_a_rules_file_error(tmp_path):
     (and scripts/validate_rules.py) catch RulesFileError and nothing else."""
     path = tmp_path / "test" / "1.0.0.json"
     path.parent.mkdir(parents=True)
-    path.write_text('{"standard": "Test", "extends": false, "dmp": {},}')
+    path.write_text('{"standard": "test", "extends": false, "dmp": {},}')
     with pytest.raises(RulesFileError, match="invalid JSON"):
         load_rules_file(path)
 
 
 def test_minimal_valid_doc_loads(tmp_path):
     doc = _minimal_doc(title={"_cardinality": "1", "_type": "string"})
-    assert load_rules_file(_write(tmp_path, doc))["standard"] == "Test"
+    assert load_rules_file(_write(tmp_path, doc))["standard"] == "test"
+
+
+def test_non_snake_case_standard_rejected(tmp_path):
+    """`standard` is the directory name and the spelling a config's pin
+    writes, so it is a code identifier: one spelling, checked at the door.
+    Anything a reader sees is derived from it."""
+    doc = _minimal_doc(title={"_cardinality": "1", "_type": "string"})
+    doc["standard"] = "RDA DCS"
+    assert "standard" in _load_problems(tmp_path, doc)
 
 
 def test_missing_top_level_keys_rejected(tmp_path):
@@ -146,7 +155,7 @@ def test_chapter_description_on_top_level_object_accepted(tmp_path):
             "title": {"_cardinality": "1", "_type": "string"},
         }
     )
-    assert load_rules_file(_write(tmp_path, doc))["standard"] == "Test"
+    assert load_rules_file(_write(tmp_path, doc))["standard"] == "test"
 
 
 def test_chapter_description_on_top_level_scalar_rejected(tmp_path):
@@ -231,24 +240,24 @@ def _placed(tmp_path, directory, filename, standard, version):
 
 
 def test_a_correctly_placed_file_loads(tmp_path):
-    path = _placed(tmp_path, "rda_dcs", "1.0.0", "RDA DCS", "1.0.0")
-    assert load_rules_file(path)["standard"] == "RDA DCS"
+    path = _placed(tmp_path, "rda_dcs", "1.0.0", "rda_dcs", "1.0.0")
+    assert load_rules_file(path)["standard"] == "rda_dcs"
 
 
 def test_a_file_declaring_another_standard_rejected(tmp_path):
-    # Sits in ostrails/ but calls itself SOCIB: provenance would name a
+    # Sits in ostrails/ but calls itself socib: provenance would name a
     # standard the directory never promised.
-    path = _placed(tmp_path, "ostrails", "9.9.9", "SOCIB", "9.9.9")
+    path = _placed(tmp_path, "ostrails", "9.9.9", "socib", "9.9.9")
     with pytest.raises(RulesFileError) as excinfo:
         load_rules_file(path)
-    assert "'SOCIB'" in str(excinfo.value)
+    assert "'socib'" in str(excinfo.value)
     assert "'ostrails'" in str(excinfo.value)
 
 
 def test_a_file_declaring_another_version_rejected(tmp_path):
     # `cp 1.0.0.json 1.1.0.json`: same content, new name, silently a new
     # version until the declaration disagrees with the filename.
-    path = _placed(tmp_path, "rda_dcs", "1.1.0", "RDA DCS", "1.0.0")
+    path = _placed(tmp_path, "rda_dcs", "1.1.0", "rda_dcs", "1.0.0")
     with pytest.raises(RulesFileError) as excinfo:
         load_rules_file(path)
     assert "'1.0.0'" in str(excinfo.value)
@@ -256,13 +265,13 @@ def test_a_file_declaring_another_version_rejected(tmp_path):
 
 
 def test_a_file_wrong_on_both_counts_reports_both(tmp_path):
-    path = _placed(tmp_path, "ostrails", "9.9.9", "SOCIB", "1.0.0")
+    path = _placed(tmp_path, "ostrails", "9.9.9", "socib", "1.0.0")
     with pytest.raises(RulesFileError) as excinfo:
         load_rules_file(path)
     assert excinfo.value.problems == [
         (
-            "declares standard 'SOCIB' (slug 'socib') but sits in directory "
-            "'ostrails'; the two must agree."
+            "declares standard 'socib' but sits in directory 'ostrails'; "
+            "the two must agree."
         ),
         "declares version '1.0.0' but is named '9.9.9'; the two must agree.",
     ]
@@ -271,6 +280,6 @@ def test_a_file_wrong_on_both_counts_reports_both(tmp_path):
 def test_placement_is_checked_on_load_so_nobody_has_to_remember(tmp_path):
     """The price of that: a rules file only loads from <standard>/<version>.json.
     A scratch copy elsewhere is refused even though its contents are valid."""
-    path = _placed(tmp_path, "somewhere", "scratch", "RDA DCS", "1.0.0")
+    path = _placed(tmp_path, "somewhere", "scratch", "rda_dcs", "1.0.0")
     with pytest.raises(RulesFileError, match="must agree"):
         load_rules_file(path)

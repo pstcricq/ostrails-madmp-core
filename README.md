@@ -25,6 +25,12 @@ plus `ostrails` and `socib` as extensions. Each declares its own `standard`
 and `version`, and the `rules` CI job checks that both agree with the path the
 file sits at.
 
+A standard has one spelling, snake_case, and it is the same string everywhere
+it matters: the directory name, the declaration inside the file, and what a
+project's pin writes. Whatever a reader ends up seeing — a DSW tag, a line in
+a QC report — is the upper-case form of it, derived where it is displayed, so
+there is never a second spelling to keep in step.
+
 The code beside the data reads it, and refuses anything malformed at the door:
 
 - `rules/loader.py` — `load_rules_file` reads one rules file and validates it

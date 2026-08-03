@@ -78,13 +78,45 @@ Les `_suggested_values` de SOCIB listent ce qui a été *observé* dans les
 non-stricts exprès : le vocabulaire réel grandira avec les instruments et les
 productions.
 
+### Un standard n'a qu'une orthographe, et c'est du snake_case
+
+`standard` est un **identifiant de code** : `rda_dcs`, `ostrails`, `socib`. Le
+schéma l'impose (`^[a-z][a-z0-9_]*$`), et c'est exactement, au caractère près,
+le nom du répertoire où le fichier vit **et** ce qu'un pin de config écrit :
+
+```yaml
+rules:
+  - rda_dcs: "1.0.0"
+```
+
+**Ce qu'un lecteur voit est dérivé, jamais déclaré.** Les tags DSW, les
+messages et le rapport du contrôle qualité affichent la forme majuscule
+(`RDA_DCS`), obtenue mécaniquement au moment de l'affichage. Il n'y a donc
+aucun second champ à tenir accordé au premier.
+
+L'alternative — déclarer le nom humain (`"RDA DCS"`) et en dériver le
+répertoire par un slug — a été essayée puis abandonnée. Elle marche, mais elle
+fait vivre deux espaces de noms reliés par une transformation qui n'est
+inversible que dans un sens : `RDA DCS` → `rda_dcs` se calcule, l'inverse
+non (`.title()` ne rend ni `OSTrails` ni `SOCIB`). Et surtout elle laissait un
+trou : l'unicité des standards se vérifiait sur le **nom déclaré** pendant que
+le rangement se vérifiait sur le **slug**, si bien que `"RDA DCS"` et
+`"RDA_DCS"` — deux noms « uniques » — tombaient dans le même répertoire et
+pouvaient être fusionnés comme deux standards distincts. Avec une seule
+orthographe, ce trou n'existe pas : unicité et rangement parlent de la même
+chaîne.
+
+Le prix, assumé : l'affichage n'est pas curé. `OSTrails` s'affiche `OSTRAILS`.
+C'est le bon prix, parce qu'il rend la règle **lisible** — un lecteur qui voit
+`RDA_DCS` et `OSTRAILS` côte à côte comprend qu'il regarde des identifiants mis
+en majuscules, là où `RDA DCS` à côté de `OSTRAILS` laisserait croire à des
+libellés choisis un par un.
+
 ### Un fichier déclare le standard et la version de son chemin
 
-`standard` et `version` sont deux champs **requis**, et le chargement vérifie
-que tous deux s'accordent avec le chemin : le répertoire porte le slug du
-standard (`"RDA DCS"` → `rda_dcs`), le nom de fichier porte la version.
-
-Ce sont deux espaces de noms qu'il faut tenir accordés, et rien d'autre ne les
+Le chargement vérifie que les deux champs requis s'accordent avec le chemin :
+le répertoire porte le `standard`, le nom de fichier porte la `version`. Ce
+sont deux espaces de noms qu'il faut tenir accordés, et rien d'autre ne les
 tient. Sans le premier contrôle, un répertoire périmé fait nommer par la
 provenance un standard que personne n'a sélectionné. Sans le second,
 `cp 1.0.0.json 1.1.0.json` produit une nouvelle version au contenu identique,
