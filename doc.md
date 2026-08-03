@@ -162,9 +162,12 @@ les champs de premier niveau y arrivent. Ce qu'il ne sait pas faire, c'est dire
 should not be valid under {'const': 'object'}`. C'est la seule raison qu'elles
 soient en Python, et elle laisse la porte ouverte à rejuger.
 
-La passe de cohérence ne tourne que sur des documents déjà valides
-structurellement : sur un document cassé elle n'ajouterait que du bruit après
-les vraies erreurs.
+Les couches 2 et 3 ne tournent que sur un document déjà valide
+structurellement, et ce n'est pas qu'une question de bruit après les vraies
+erreurs : elles lisent `standard`, `version` et `dmp` **sans garde**, ce qui
+n'est sûr que parce que la passe schéma vient de garantir que ces clés existent
+et sont du bon type. Inverser l'ordre ne rendrait pas les messages plus
+bavards, ça lèverait un `KeyError`.
 
 Trois trous du schéma ont été fermés au passage : un vocabulaire acceptait un
 **doublon** (`["rt", "rt"]`, le plus sournois — la fusion compare les

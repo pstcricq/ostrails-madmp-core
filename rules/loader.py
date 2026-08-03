@@ -58,7 +58,7 @@ def _coherence_problems(tree: dict[str, Any], prefix: str, depth: int = 1) -> li
         for vocab_key in ("_allowed_values", "_suggested_values"):
             if vocab_key in node and node.get("_type") == "object":
                 problems.append(
-                    f"{path}: {vocab_key} on an 'object' field; vocabularies "
+                    f"{path}: {vocab_key} on an 'object' field, vocabularies "
                     f"only apply to scalar fields."
                 )
         if "_chapter_description" in node and not (
@@ -70,7 +70,7 @@ def _coherence_problems(tree: dict[str, Any], prefix: str, depth: int = 1) -> li
                 else "it is not a top-level field"
             )
             problems.append(
-                f"{path}: _chapter_description but {reason}; only a top-level "
+                f"{path}: _chapter_description but {reason}, only a top-level "
                 f"object field becomes a DSW chapter, so anywhere else it "
                 f"would be silently ignored (use _description instead)."
             )
@@ -93,7 +93,7 @@ def _layout_problems(path: Path, doc: dict[str, Any]) -> list[str]:
     if doc["standard"] != path.parent.name:
         problems.append(
             f"declares standard {doc['standard']!r} but sits in directory "
-            f"{path.parent.name!r}; the two must agree."
+            f"{path.parent.name!r}, the two must agree."
         )
     if doc["version"] != path.stem:
         problems.append(
@@ -115,9 +115,14 @@ def load_rules_file(path: str | Path) -> dict[str, Any]:
         doc = json.loads(Path(path).read_text())
     except json.JSONDecodeError as err:
         raise RulesFileError(path, [f"invalid JSON: {err}"]) from err
+    # Layers 2 and 3 only once the schema passed, and not only to spare the
+    # noise: they read doc["standard"], doc["version"] and doc["dmp"] without
+    # a guard, which is safe precisely because the schema pass guaranteed the
+    # keys are there and typed. A schema-valid document is an object, so
+    # nothing else needs asserting here.
     problems = schema_problems(validator_for(SCHEMA_PATH), doc)
-    if not problems and isinstance(doc, dict):
-        problems = _coherence_problems(doc.get("dmp", {}), "dmp") + _layout_problems(
+    if not problems:
+        problems = _coherence_problems(doc["dmp"], "dmp") + _layout_problems(
             Path(path), doc
         )
     if problems:
