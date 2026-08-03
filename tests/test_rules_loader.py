@@ -273,7 +273,7 @@ def test_a_file_wrong_on_both_counts_reports_both(tmp_path):
             "declares standard 'socib' but sits in directory 'ostrails', "
             "the two must agree."
         ),
-        "declares version '1.0.0' but is named '9.9.9'; the two must agree.",
+        "declares version '1.0.0' but is named '9.9.9', the two must agree.",
     ]
 
 

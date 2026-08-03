@@ -53,7 +53,7 @@ def _coherence_problems(tree: dict[str, Any], prefix: str, depth: int = 1) -> li
         if field_children(node) and node.get("_type") != "object":
             problems.append(
                 f"{path}: declares child fields but has _type "
-                f"{node.get('_type')!r}; only 'object' fields may have children."
+                f"{node.get('_type')!r}, only 'object' fields may have children."
             )
         for vocab_key in ("_allowed_values", "_suggested_values"):
             if vocab_key in node and node.get("_type") == "object":
@@ -97,7 +97,7 @@ def _layout_problems(path: Path, doc: dict[str, Any]) -> list[str]:
         )
     if doc["version"] != path.stem:
         problems.append(
-            f"declares version {doc['version']!r} but is named {path.stem!r}; "
+            f"declares version {doc['version']!r} but is named {path.stem!r}, "
             f"the two must agree."
         )
     return problems
