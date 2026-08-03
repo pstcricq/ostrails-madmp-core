@@ -73,6 +73,13 @@ def test_non_snake_case_standard_rejected(tmp_path):
     assert "standard" in _load_problems(tmp_path, doc)
 
 
+def test_non_snake_case_field_name_rejected(tmp_path):
+    """Field names reach the generators as question keys and reach QC as rule
+    paths, so their shape is fixed here rather than apologised for there."""
+    doc = _minimal_doc(Title={"_cardinality": "1", "_type": "string"})
+    assert "'Title'" in _load_problems(tmp_path, doc)
+
+
 def test_missing_top_level_keys_rejected(tmp_path):
     problems = _load_problems(tmp_path, {"dmp": {}})
     assert "standard" in problems
@@ -199,6 +206,25 @@ def test_all_problems_reported_at_once(tmp_path):
     assert "title" in problems
 
 
+def test_coherence_waits_for_a_schema_valid_document(tmp_path):
+    """The layers are ordered, and the order is a precondition rather than a
+    courtesy: layers 2 and 3 read `standard`, `version` and `dmp` unguarded,
+    which is only safe once the schema has vouched for them. So a document
+    wrong on both counts reports the schema alone — the coherence problem
+    below (a child field under a string) stays unsaid until the first is
+    fixed."""
+    doc = _minimal_doc(
+        title={
+            "_cardinality": "2..n",
+            "_type": "string",
+            "child": {"_cardinality": "1", "_type": "string"},
+        }
+    )
+    problems = _load_problems(tmp_path, doc)
+    assert "_cardinality" in problems
+    assert "only 'object' fields may have children" not in problems
+
+
 def test_coherence_checked_deep_in_the_tree(tmp_path):
     doc = _minimal_doc(
         dataset={
@@ -283,3 +309,32 @@ def test_placement_is_checked_on_load_so_nobody_has_to_remember(tmp_path):
     path = _placed(tmp_path, "somewhere", "scratch", "rda_dcs", "1.0.0")
     with pytest.raises(RulesFileError, match="must agree"):
         load_rules_file(path)
+
+
+def test_a_misplaced_and_incoherent_file_reports_both_layers(tmp_path):
+    """Coherence and layout are one verdict, not two passes: they are the two
+    checks a schema-valid document still has to face, and a file that fails
+    both says so once."""
+    path = tmp_path / "ostrails" / "1.0.0.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {
+                "standard": "socib",
+                "version": "1.0.0",
+                "extends": True,
+                "dmp": {
+                    "title": {
+                        "_cardinality": "1",
+                        "_type": "string",
+                        "child": {"_cardinality": "1", "_type": "string"},
+                    }
+                },
+            }
+        )
+    )
+    with pytest.raises(RulesFileError) as excinfo:
+        load_rules_file(path)
+    problems = str(excinfo.value)
+    assert "only 'object' fields may have children" in problems
+    assert "sits in directory 'ostrails'" in problems

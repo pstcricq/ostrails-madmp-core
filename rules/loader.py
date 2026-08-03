@@ -1,7 +1,10 @@
 """One ``rules/*.json`` file, and everything that can be wrong with it.
 
 :func:`load_rules_file` is the only entry point, and it validates in three
-layers, reporting every problem of all three in one error:
+layers. Never one problem at a time: a failing layer reports everything it
+found, and layers 2 and 3 report together. Layer 1 is the exception, and it
+is the ordering that makes it one — 2 and 3 read keys it vouched for, so a
+document that fails the schema is not carried further.
 
 1. Structural — against :data:`rules/rules.schema.json`: required keys,
    closed ``_cardinality``/``_type`` enumerations, no unknown metadata
