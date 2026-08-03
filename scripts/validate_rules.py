@@ -1,0 +1,53 @@
+"""Validate every rules file, and check the tree they sit in.
+
+Two things, over the whole of `rules/standards/`:
+
+1. each file loads through `load_rules_file` — the same entry point the rest
+   of the code uses, so a file that passes here is a file the loader accepts,
+   not merely one that parses as JSON;
+2. each file declares the standard and the version its path names. That is a
+   static property of the tree, so it is checked here, on every file, rather
+   than at load time on whichever subset a project happens to select.
+
+This lives in a script rather than inline in the workflow so it can be run
+before pushing: a check that only exists inside YAML gets debugged by
+push-and-wait.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+from rules import RulesFileError, load_rules_file
+
+STANDARDS = Path(__file__).parent.parent / "rules" / "standards"
+
+
+def main() -> int:
+    paths = sorted(STANDARDS.rglob("*.json"))
+    if not paths:
+        print(f"No rules file found under {STANDARDS}.", file=sys.stderr)
+        return 1
+
+    failures = 0
+    for path in paths:
+        try:
+            doc = load_rules_file(path)
+        except RulesFileError as err:
+            print(f"FAIL {path}\n     {err}", file=sys.stderr)
+            failures += 1
+            continue
+
+        print(f"ok   {path} - {doc['standard']} {path.stem}")
+
+    if failures:
+        print(f"\n{failures} of {len(paths)} rules files rejected.", file=sys.stderr)
+        return 1
+
+    print(f"\n{len(paths)} rules files valid.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

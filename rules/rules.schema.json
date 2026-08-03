@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "madmp/rules/rules.schema.json",
+  "title": "maDMP rules file",
+  "description": "The format of one rules/*.json file: a 'standard' declaration plus a recursive tree of DMP fields. Two orthogonal facts per field: '_cardinality' says how many values ('1', '0..1' single; '1..n', '0..n' list), '_type' says what each value is ('object' for structured entities, otherwise a scalar format). There is deliberately no 'list' type: list-ness is entirely expressed by the cardinality. Three further coherence rules are enforced by rules/loader.py rather than here. They are expressible in JSON Schema (via if/then and a separate top-level field definition), but only at the cost of errors like \"'object' should not be valid under {'const': 'object'}\" in place of a sentence naming the field and the fix. They are: only '_type: object' fields may declare child fields, '_allowed_values'/'_suggested_values' may only appear on scalar fields, and '_chapter_description' may only appear on a top-level object field.",
+  "type": "object",
+  "required": ["standard", "version", "extends", "dmp"],
+  "additionalProperties": false,
+  "properties": {
+    "standard": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique name of the standard this file defines (e.g. 'RDA DCS')."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Version of this standard. Must equal the file's own name: rules/standards/<standard>/<version>.json."
+    },
+    "extends": {
+      "type": "boolean",
+      "description": "false for the single base standard, true for every extension."
+    },
+    "description": {
+      "type": "string",
+      "description": "Free-form notes about this file's scope and conventions."
+    },
+    "dmp": {
+      "type": "object",
+      "description": "The root of the field tree, every key is a top-level DMP field. At least one: a rules file that declares no field constrains nothing.",
+      "minProperties": 1,
+      "patternProperties": { "^[a-z][a-z0-9_]*$": { "$ref": "#/$defs/field" } },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["_cardinality", "_type"],
+      "properties": {
+        "_cardinality": {
+          "enum": ["1", "0..1", "1..n", "0..n"],
+          "description": "How many values: '1' exactly one, '0..1' at most one, '1..n' at least one, '0..n' any number. 'n' means the field holds a JSON array."
+        },
+        "_type": {
+          "enum": [
+            "object",
+            "string",
+            "number",
+            "boolean",
+            "date",
+            "datetime",
+            "email",
+            "url",
+            "currency",
+            "country_code",
+            "language"
+          ],
+          "description": "What each value is: 'object' for a structured entity with child fields, otherwise the scalar's expected format."
+        },
+        "_description": {
+          "type": "string",
+          "description": "Human-facing description of the field (question help text, QC reports)."
+        },
+        "_chapter_description": {
+          "type": "string",
+          "description": "Description of the DSW chapter generated for a top-level object field. Only valid there — rules/loader.py rejects it anywhere else, where the generators would ignore it."
+        },
+        "_allowed_values": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Closed vocabulary: a value outside this list is a violation of the standard."
+        },
+        "_suggested_values": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Recommended vocabulary: a value outside this list is only worth a warning."
+        }
+      },
+      "patternProperties": { "^[a-z][a-z0-9_]*$": { "$ref": "#/$defs/field" } },
+      "additionalProperties": false
+    }
+  }
+}

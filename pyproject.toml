@@ -1,0 +1,45 @@
+# One environment for the whole repository: `uv sync` at the root makes every
+# module importable without sys.path hacks. The lockfile is committed, and CI
+# installs from it with `uv sync --frozen` — so CI runs the same versions this
+# file was last tested against, and a transitive release cannot turn it red on
+# its own.
+#
+# Dependencies are earned: a package is declared when code in this repository
+# imports it, and not before. Today that is jsonschema, for the meta-schema
+# rules files are validated against.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "madmp-core"
+version = "0.1.0"
+description = "Declarative maDMP rules with an explicit meta-schema, merged into one typed model."
+requires-python = ">=3.10"
+dependencies = [
+    "jsonschema>=4",     # rules/*.json validated against rules/rules.schema.json
+]
+
+[tool.setuptools.packages.find]
+include = ["rules", "utils"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+# Caches go inside .venv rather than at the root: they are as disposable as
+# the environment itself, and one ignored directory is easier to live with
+# than three while working.
+[tool.pytest.ini_options]
+cache_dir = ".venv/.pytest_cache"
+
+[tool.ruff]
+target-version = "py310"
+cache-dir = ".venv/.ruff_cache"
+
+# No `select`: ruff's own default rule set, which already covers pyflakes,
+# pycodestyle errors, import order (I), pyupgrade (UP), bugbear (B) and more.
+# Narrowing it would mean claiming to know better than the tool's defaults on
+# a codebase that passes them as-is.

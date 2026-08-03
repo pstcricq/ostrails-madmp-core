@@ -1,0 +1,17 @@
+# Environment / caches
+.venv/
+.coverage
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+
+# Where the generators write: KM bundles, template bundles, project seeds.
+# Built from the configs, the rules and the instruments, so never versioned —
+# a committed artifact drifts from the sources that should produce it, and
+# nothing would say so. (setuptools also scratches here on `uv build`.)
+build/
+
+# Editor settings (personal)
+.vscode/

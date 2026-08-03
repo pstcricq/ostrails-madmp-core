@@ -1,0 +1,201 @@
+{
+  "standard": "SOCIB",
+  "version": "1.0.0",
+  "extends": true,
+  "description": "Mandatory-field, type/format, and controlled-vocabulary checks for SOCIB's own extensions to the RDA DCS + OSTrails AP. There is no separate written specification: this file *is* the current specification of what SOCIB's pipeline produces beyond the two standards above. As in ostrails/1.0.0.json, structural parent nodes already defined by RDA DCS/OSTrails (dataset, distribution, project, project.funding, contributor) are redeclared here only with the cardinality and type needed to reach SOCIB's own new fields; the RDA/OSTrails-level checks on those entities remain the other two files' responsibility, and the merge in rules/model.py collapses the duplication into one tree at load time.\n'_suggested_values' on facility_area, dataflow_step, status, dataset.mode and data_flow.type / deployment_id.type / deployment.deployment_id.type list the values observed in the instruments' data_flow.json and in the DMPs generated today. They are deliberately non-strict (a mismatch is a warning, not a failure) because the real vocabulary is expected to grow as instruments and productions are added.\ndataset.distribution.type_input/type_output are lists (1..n) even when a step produces a single value (e.g. ['raw']), so every distribution carries them with one consistent shape; some data flow steps (e.g. Processing) produce several at once (['L0','L1','L2']).\nThe placeholder-resolution recipes stay in the instrument's data_flow.json and are never written into a DMP at any level: the instrument builds leave them out of the baseline and the project DMP, and the deployment fill reads them from data_flow.json to substitute real values. No rules field describes them, on purpose.",
+  "dmp": {
+    "acknowledgments": {
+      "_cardinality": "0..1",
+      "_type": "string",
+      "_description": "Acknowledgments for this DMP (e.g. facilities, funding, or people to credit)."
+    },
+    "contributor": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "stage": {
+        "_cardinality": "0..n",
+        "_type": "string",
+        "_suggested_values": [
+          "Planification",
+          "Acquisition",
+          "Processing",
+          "Dissemination"
+        ],
+        "_description": "The data lifecycle stage(s) this contributor was involved in."
+      }
+    },
+    "data_flow": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "_chapter_description": "The SOCIB data flows this DMP was generated from: for each, its identifier, type, and a URL to its definition. A DMP covering several instruments carries one per instrument.",
+      "_description": "A SOCIB data flow this DMP was generated from.",
+      "identifier": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Identifier of the data flow this DMP is generated from."
+      },
+      "type": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_suggested_values": ["socib"],
+        "_description": "The type/source of the data flow identifier."
+      },
+      "url": {
+        "_cardinality": "1",
+        "_type": "url",
+        "_description": "A URL pointing to the data flow definition."
+      }
+    },
+    "dataset": {
+      "_cardinality": "1..n",
+      "_type": "object",
+      "distribution": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "dataflow_step": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": [
+            "Acquisition",
+            "Transfer",
+            "Processing",
+            "Pre-processing",
+            "Post-processing",
+            "Re-processing",
+            "Archiving"
+          ],
+          "_description": "The data flow step that produced this distribution."
+        },
+        "facility_area": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["GLF", "DC"],
+          "_description": "The SOCIB facility area responsible for this distribution."
+        },
+        "format_input": {
+          "_cardinality": "1..n",
+          "_type": "string",
+          "_description": "The format(s) of the input data consumed to produce this distribution."
+        },
+        "path_input": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The path or location of the input data consumed to produce this distribution."
+        },
+        "platform_instrument": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The platform/instrument that produced the underlying data."
+        },
+        "status": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["present", "missing"],
+          "_description": "The current status of this distribution."
+        },
+        "technical_resource": {
+          "_cardinality": "0..n",
+          "_type": "object",
+          "_description": "Technical resources (hardware/software) used to produce this distribution.",
+          "description": {
+            "_cardinality": "0..1",
+            "_type": "string",
+            "_description": "What this technical resource is or does."
+          },
+          "name": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "Name of the technical resource used to produce this distribution."
+          }
+        },
+        "type_input": {
+          "_cardinality": "1..n",
+          "_type": "string",
+          "_description": "The data type(s) of the input consumed to produce this distribution (e.g. L0)."
+        },
+        "type_output": {
+          "_cardinality": "1..n",
+          "_type": "string",
+          "_description": "The data type(s) produced by this distribution (e.g. L1, L2)."
+        }
+      },
+      "mode": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_suggested_values": ["track", "rt", "dt", "dm"],
+        "_description": "The acquisition mode for this dataset (e.g. real-time, delayed-time)."
+      }
+    },
+    "deployment": {
+      "_cardinality": "0..1",
+      "_type": "object",
+      "_chapter_description": "The specific instrument deployment this DMP was generated for: its code, identifier, dates, instrument, and platform.",
+      "_description": "The specific instrument deployment this DMP was generated for.",
+      "code": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "The deployment's code/short identifier."
+      },
+      "deployment_id": {
+        "_cardinality": "1",
+        "_type": "object",
+        "_description": "Persistent identifier of this deployment.",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The deployment's identifier string."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["socib"],
+          "_description": "The type/source of the deployment identifier."
+        }
+      },
+      "initial_date": {
+        "_cardinality": "1",
+        "_type": "datetime",
+        "_description": "The deployment's start date and time."
+      },
+      "instrument_name": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Name of the instrument deployed."
+      },
+      "platform_name": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Name of the platform the instrument was deployed on."
+      }
+    },
+    "deployments": {
+      "_cardinality": "0..1",
+      "_type": "object",
+      "_chapter_description": "Summary of all deployments associated with this DMP's project: their count and a URL to the full list.",
+      "_description": "Summary of all deployments associated with this DMP's project.",
+      "count": {
+        "_cardinality": "1",
+        "_type": "number",
+        "_description": "The number of deployments associated with this DMP."
+      },
+      "url": {
+        "_cardinality": "1",
+        "_type": "url",
+        "_description": "A URL pointing to the list of deployments."
+      }
+    },
+    "project": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "funding": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "funder_name": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_description": "Name of the funding organisation."
+        }
+      }
+    }
+  }
+}

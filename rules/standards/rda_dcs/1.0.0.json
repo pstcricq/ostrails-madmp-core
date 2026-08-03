@@ -1,0 +1,1008 @@
+{
+  "standard": "RDA DCS",
+  "version": "1.0.0",
+  "extends": false,
+  "description": "Mandatory-field, type/format, and controlled-vocabulary checks derived from the cardinality table of the RDA DMP Common Standard v1.2 (https://github.com/RDA-DMP-Common/RDA-DMP-Common-Standard). This is the single base standard (extends: false); every other rules file extends it. '_allowed_values' are the standard's strict Allowed Values (a violation is a failure); '_suggested_values' are its Suggested Values (a mismatch is only a warning). '_type' says what each value is; list-ness is never a type, it is expressed by '_cardinality' alone.\nThe 'optional parent, mandatory children if present' pattern (e.g. affiliation) is expressed by giving the parent cardinality 0..n while its child fields get '1': the children are only evaluated for instances that actually exist. RDA DCS entities our DMPs do not populate yet (cost, project, related_identifier, metadata, technical_resource, security_and_privacy) are declared here on purpose — an absent optional field is reported 'missing', never a failure, which is exactly how we see which parts of the standard our data does not reach yet.\nFields are ordered depth-first, following the JSON structure itself: dmp's own fields first (alphabetically), and as soon as a field is a nested object its children are listed immediately below it (also alphabetically) before moving on to dmp's next sibling. This mirrors reading the JSON top to bottom rather than the standard's flat alphabetical index, which makes gaps against the real DMP structure easier to spot.",
+  "dmp": {
+    "alternate_identifier": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "identifier": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "The alternate identifier string."
+      },
+      "type": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "The type of the alternate identifier."
+      },
+      "_chapter_description": "Other identifiers that also point to this DMP, such as an earlier version or a copy hosted elsewhere. Leave empty if this DMP has no other known identifier.",
+      "_description": "Other identifiers that also refer to this DMP (e.g. a previous version, a mirrored record)."
+    },
+    "contact": {
+      "_cardinality": "1",
+      "_type": "object",
+      "affiliation": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "affiliation_id": {
+          "_cardinality": "1",
+          "_type": "object",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The institutional identifier string (e.g. a [ROR](https://ror.org) ID)."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["ror", "grid", "isni"],
+            "_description": "The type of institutional identifier used (e.g. [ROR](https://ror.org), [GRID](https://www.grid.ac), or [ISNI](https://isni.org))."
+          },
+          "_description": "Persistent identifier of the affiliated institution."
+        },
+        "name": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Name of the affiliated institution."
+        },
+        "_description": "Institution(s) the contact is affiliated with."
+      },
+      "contact_id": {
+        "_cardinality": "1..n",
+        "_type": "object",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The identifier string (e.g. an ORCID iD)."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["orcid", "isni", "openid"],
+          "_description": "The type of identifier used for the contact (e.g. [ORCID](https://orcid.org) or [ISNI](https://isni.org))."
+        },
+        "_description": "Persistent identifier of the contact person."
+      },
+      "mbox": {
+        "_cardinality": "1",
+        "_type": "email",
+        "_description": "Email address of the contact person."
+      },
+      "name": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Full name of the contact person."
+      },
+      "_chapter_description": "The main point of contact for this DMP: their name, email address, persistent identifier (e.g. ORCID), and institutional affiliation.",
+      "_description": "The person responsible for this DMP."
+    },
+    "contributor": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "affiliation": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "affiliation_id": {
+          "_cardinality": "1",
+          "_type": "object",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The institutional identifier string (e.g. a [ROR](https://ror.org) ID)."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["ror", "grid", "isni"],
+            "_description": "The type of institutional identifier used (e.g. [ROR](https://ror.org), [GRID](https://www.grid.ac), or [ISNI](https://isni.org))."
+          },
+          "_description": "Persistent identifier of the affiliated institution."
+        },
+        "name": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Name of the affiliated institution."
+        },
+        "_description": "Institution(s) the contributor is affiliated with."
+      },
+      "contributor_id": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The identifier string (e.g. an ORCID iD)."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["orcid", "isni", "openid"],
+          "_description": "The type of identifier used for the contributor (e.g. [ORCID](https://orcid.org) or [ISNI](https://isni.org))."
+        },
+        "_description": "Persistent identifier of the contributor."
+      },
+      "mbox": {
+        "_cardinality": "0..1",
+        "_type": "email",
+        "_description": "Email address of the contributor."
+      },
+      "name": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Full name of the contributor."
+      },
+      "role": {
+        "_cardinality": "1..n",
+        "_type": "string",
+        "_suggested_values": [
+          "ContactPerson",
+          "DataCollector",
+          "DataCurator",
+          "DataManager",
+          "Distributor",
+          "Editor",
+          "HostingInstitution",
+          "Producer",
+          "ProjectLeader",
+          "ProjectManager",
+          "ProjectMember",
+          "RegistrationAgency",
+          "RegistrationAuthority",
+          "RelatedPerson",
+          "Researcher",
+          "ResearchGroup",
+          "RightsHolder",
+          "Sponsor",
+          "Supervisor",
+          "WorkPackageLeader",
+          "Other"
+        ],
+        "_description": "Role(s) the contributor plays in the project ([DataCite contributor types](https://datacite-metadata-schema.readthedocs.io/en/4.5/appendices/appendix-1/contributorType/))."
+      },
+      "_chapter_description": "Everyone besides the main contact who contributed to this DMP or the underlying research. For each person, specify their role(s) ([DataCite contributor types](https://datacite-metadata-schema.readthedocs.io/en/4.5/appendices/appendix-1/contributorType/)) and affiliation.",
+      "_description": "People contributing to the project, other than the main contact."
+    },
+    "cost": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "currency_code": {
+        "_cardinality": "0..1",
+        "_type": "currency",
+        "_description": "Currency of the estimated amount ([ISO 4217](https://www.iso.org/iso-4217-currency-codes.html) code, e.g. EUR)."
+      },
+      "description": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "What this cost covers."
+      },
+      "title": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Short title identifying this cost item."
+      },
+      "value": {
+        "_cardinality": "0..1",
+        "_type": "number",
+        "_description": "The estimated amount."
+      },
+      "_chapter_description": "Estimated costs of managing the project's data (e.g. storage, curation, staff time), with an optional currency and amount.",
+      "_description": "An estimated cost associated with managing the project's data."
+    },
+    "created": {
+      "_cardinality": "1",
+      "_type": "datetime",
+      "_description": "Timestamp this DMP was first created ([ISO 8601](https://www.iso.org/iso-8601-date-and-time-format.html) format)."
+    },
+    "dataset": {
+      "_cardinality": "1..n",
+      "_type": "object",
+      "alternate_identifier": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The alternate identifier string."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The type of the alternate identifier."
+        },
+        "_description": "Other identifiers that also refer to this dataset."
+      },
+      "creator": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "affiliation": {
+          "_cardinality": "0..n",
+          "_type": "object",
+          "affiliation_id": {
+            "_cardinality": "1",
+            "_type": "object",
+            "identifier": {
+              "_cardinality": "1",
+              "_type": "string",
+              "_description": "The institutional identifier string (e.g. a [ROR](https://ror.org) ID)."
+            },
+            "type": {
+              "_cardinality": "1",
+              "_type": "string",
+              "_suggested_values": ["ror", "grid", "isni"],
+              "_description": "The type of institutional identifier used (e.g. [ROR](https://ror.org), [GRID](https://www.grid.ac), or [ISNI](https://isni.org))."
+            },
+            "_description": "Persistent identifier of the affiliated institution."
+          },
+          "name": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "Name of the affiliated institution."
+          },
+          "_description": "Institution(s) the creator is affiliated with."
+        },
+        "creator_id": {
+          "_cardinality": "0..n",
+          "_type": "object",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The identifier string (e.g. an ORCID iD)."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["orcid", "isni", "openid", "other"],
+            "_description": "The type of identifier used for the creator (e.g. [ORCID](https://orcid.org) or [ISNI](https://isni.org))."
+          },
+          "_description": "Persistent identifier of the creator (e.g. ORCID)."
+        },
+        "mbox": {
+          "_cardinality": "0..1",
+          "_type": "email",
+          "_description": "Email address of the creator."
+        },
+        "name": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Full name of the creator."
+        },
+        "_description": "The people or organisations who created this dataset."
+      },
+      "data_quality_assurance": {
+        "_cardinality": "0..n",
+        "_type": "string",
+        "_description": "Description of the quality assurance process applied to the data."
+      },
+      "dataset_id": {
+        "_cardinality": "1",
+        "_type": "object",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The identifier string itself (e.g. a DOI or handle)."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["handle", "doi", "ark", "url"],
+          "_description": "The type of identifier used (e.g. doi, handle, ark, url)."
+        },
+        "_description": "The persistent identifier assigned to this dataset."
+      },
+      "description": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "What the dataset contains and how it was produced."
+      },
+      "distribution": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "access_url": {
+          "_cardinality": "0..1",
+          "_type": "url",
+          "_description": "URL where the distribution can be accessed (e.g. a landing page)."
+        },
+        "available_until": {
+          "_cardinality": "0..1",
+          "_type": "date",
+          "_description": "Date after which this distribution will no longer be available, if known."
+        },
+        "byte_size": {
+          "_cardinality": "0..1",
+          "_type": "number",
+          "_description": "Size of the distribution in bytes."
+        },
+        "data_access": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_allowed_values": ["open", "shared", "closed"],
+          "_description": "Who can access this distribution: open, shared, or closed."
+        },
+        "description": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_description": "What this particular distribution provides."
+        },
+        "download_url": {
+          "_cardinality": "0..1",
+          "_type": "url",
+          "_description": "Direct URL where the distribution can be downloaded."
+        },
+        "format": {
+          "_cardinality": "0..n",
+          "_type": "string",
+          "_description": "File format(s) of this distribution (e.g. CSV, NetCDF)."
+        },
+        "host": {
+          "_cardinality": "0..1",
+          "_type": "object",
+          "availability": {
+            "_cardinality": "0..1",
+            "_type": "string",
+            "_description": "Expected availability/uptime of the host (e.g. as a percentage or SLA)."
+          },
+          "backup_frequency": {
+            "_cardinality": "0..1",
+            "_type": "string",
+            "_description": "How often the host performs backups."
+          },
+          "backup_type": {
+            "_cardinality": "0..1",
+            "_type": "string",
+            "_description": "How the host backs up the data (e.g. mirrored, offsite)."
+          },
+          "certified_with": {
+            "_cardinality": "0..1",
+            "_type": "string",
+            "_allowed_values": [
+              "din31644",
+              "dini-zertifikat",
+              "dsa",
+              "iso16363",
+              "iso16919",
+              "trac",
+              "wds",
+              "coretrustseal"
+            ],
+            "_description": "Certification(s) held by the host (e.g. [CoreTrustSeal](https://www.coretrustseal.org))."
+          },
+          "geo_location": {
+            "_cardinality": "0..1",
+            "_type": "country_code",
+            "_description": "Country where the host is physically located ([ISO 3166](https://www.iso.org/iso-3166-country-codes.html) code)."
+          },
+          "host_id": {
+            "_cardinality": "0..n",
+            "_type": "object",
+            "identifier": {
+              "_cardinality": "1",
+              "_type": "string",
+              "_description": "The host's identifier string."
+            },
+            "type": {
+              "_cardinality": "1",
+              "_type": "string",
+              "_suggested_values": ["url"],
+              "_description": "The type of identifier used for the host."
+            },
+            "_description": "Identifier of the host repository, if any."
+          },
+          "pid_system": {
+            "_cardinality": "0..n",
+            "_type": "string",
+            "_allowed_values": [
+              "ark",
+              "arxiv",
+              "bibcode",
+              "doi",
+              "ean13",
+              "eissn",
+              "handle",
+              "igsn",
+              "isbn",
+              "issn",
+              "istc",
+              "lissn",
+              "lsid",
+              "pmid",
+              "purl",
+              "upc",
+              "url",
+              "urn",
+              "other"
+            ],
+            "_description": "Persistent identifier system(s) used by the host to identify datasets (e.g. doi, handle)."
+          },
+          "storage_type": {
+            "_cardinality": "0..1",
+            "_type": "string",
+            "_description": "Type of storage used by the host (e.g. disk, tape, cloud)."
+          },
+          "support_versioning": {
+            "_cardinality": "0..1",
+            "_type": "string",
+            "_allowed_values": ["yes", "no", "unknown"],
+            "_description": "Whether the host supports keeping previous versions of the data."
+          },
+          "title": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "Name of the hosting repository or infrastructure."
+          },
+          "url": {
+            "_cardinality": "1",
+            "_type": "url",
+            "_description": "URL of the hosting repository or infrastructure."
+          },
+          "_description": "Where this distribution is hosted."
+        },
+        "issued": {
+          "_cardinality": "0..1",
+          "_type": "date",
+          "_description": "Date this distribution was made available."
+        },
+        "license": {
+          "_cardinality": "0..n",
+          "_type": "object",
+          "license_ref": {
+            "_cardinality": "1",
+            "_type": "url",
+            "_description": "URL pointing to the license text."
+          },
+          "start_date": {
+            "_cardinality": "1",
+            "_type": "date",
+            "_description": "Date the license takes effect."
+          },
+          "_description": "License(s) under which this distribution is made available."
+        },
+        "title": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Short title identifying this distribution."
+        },
+        "_description": "A way this dataset is made available (a specific file, format, or access point)."
+      },
+      "is_reused": {
+        "_cardinality": "0..1",
+        "_type": "boolean",
+        "_description": "Whether this dataset already exists and is being reused rather than newly created."
+      },
+      "issued": {
+        "_cardinality": "0..1",
+        "_type": "date",
+        "_description": "Date the dataset was published or made available."
+      },
+      "keyword": {
+        "_cardinality": "0..n",
+        "_type": "string",
+        "_description": "Free-text keyword describing the dataset's subject matter."
+      },
+      "language": {
+        "_cardinality": "0..1",
+        "_type": "language",
+        "_description": "Primary language of the dataset content ([ISO 639](https://www.iso.org/iso-639-language-codes.html) code, e.g. eng)."
+      },
+      "metadata": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "description": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_description": "Free-text description of how the metadata standard is applied."
+        },
+        "language": {
+          "_cardinality": "1",
+          "_type": "language",
+          "_description": "Language the metadata is written in ([ISO 639](https://www.iso.org/iso-639-language-codes.html) code)."
+        },
+        "metadata_standard_id": {
+          "_cardinality": "1..n",
+          "_type": "object",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The metadata standard's identifier string."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["doi", "url"],
+            "_description": "The type of identifier used for the metadata standard."
+          },
+          "_description": "Identifier of the metadata standard used."
+        },
+        "_description": "Metadata standard(s) used to describe this dataset."
+      },
+      "personal_data": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_allowed_values": ["yes", "no", "unknown"],
+        "_description": "Whether the dataset contains personal data as defined by [GDPR](https://gdpr-info.eu)."
+      },
+      "preservation_statement": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "Explanation of how and for how long the dataset will be preserved."
+      },
+      "rights": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "Statement of the rights held over the dataset."
+      },
+      "related_identifier": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The identifier of the related resource."
+        },
+        "metadata_scheme": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_description": "Name of the metadata scheme used by the related resource, if any."
+        },
+        "relation_type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": [
+            "IsCitedBy",
+            "Cites",
+            "IsSupplementTo",
+            "IsSupplementedBy",
+            "IsContinuedBy",
+            "Continues",
+            "Describes",
+            "IsDescribedBy",
+            "HasMetadata",
+            "IsMetadataFor",
+            "HasVersion",
+            "IsVersionOf",
+            "IsNewVersionOf",
+            "IsPreviousVersionOf",
+            "IsPartOf",
+            "HasPart",
+            "IsPublishedIn",
+            "IsReferencedBy",
+            "References",
+            "IsDocumentedBy",
+            "Documents",
+            "IsCompiledBy",
+            "Compiles",
+            "IsVariantFormOf",
+            "IsOriginalFormOf",
+            "IsIdenticalTo",
+            "IsReviewedBy",
+            "Reviews",
+            "IsDerivedFrom",
+            "IsSourceOf",
+            "IsRequiredBy",
+            "Requires",
+            "Obsoletes",
+            "IsObsoletedBy",
+            "IsCollectedBy",
+            "Collects"
+          ],
+          "_description": "How the related resource relates to this dataset ([DataCite relationType](https://datacite-metadata-schema.readthedocs.io/en/4.5/appendices/appendix-1/relationType/))."
+        },
+        "resource_type": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_suggested_values": [
+            "Audiovisual",
+            "Award",
+            "Book",
+            "BookChapter",
+            "Collection",
+            "ComputationalNotebook",
+            "ConferencePaper",
+            "ConferenceProceeding",
+            "DataPaper",
+            "Dataset",
+            "Dissertation",
+            "Event",
+            "Image",
+            "Instrument",
+            "InteractiveResource",
+            "Journal",
+            "JournalArticle",
+            "Model",
+            "OutputManagementPlan",
+            "PeerReview",
+            "PhysicalObject",
+            "Preprint",
+            "Project",
+            "Report",
+            "Service",
+            "Software",
+            "Sound",
+            "Standard",
+            "StudyRegistration",
+            "Text",
+            "Workflow",
+            "Other"
+          ],
+          "_description": "The general type of the related resource ([DataCite resourceTypeGeneral](https://datacite-metadata-schema.readthedocs.io/en/4.5/appendices/appendix-1/resourceTypeGeneral/))."
+        },
+        "scheme_type": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_description": "Name of the scheme used for the related identifier's type."
+        },
+        "scheme_uri": {
+          "_cardinality": "0..1",
+          "_type": "url",
+          "_description": "URI of the scheme used for the related identifier."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": [
+            "ARK",
+            "arXiv",
+            "bibcode",
+            "DOI",
+            "EAN13",
+            "EISSN",
+            "Handle",
+            "IGSN",
+            "ISBN",
+            "ISSN",
+            "ISTC",
+            "LISSN",
+            "LSID",
+            "PMID",
+            "PURL",
+            "RRID",
+            "UPC",
+            "URL",
+            "URN",
+            "w3id"
+          ],
+          "_description": "The scheme of the related identifier (e.g. DOI, URL)."
+        },
+        "_description": "Resources related to this dataset (e.g. a publication describing it)."
+      },
+      "security_and_privacy": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "description": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_description": "Description of the security/privacy measure."
+        },
+        "title": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Short title for this security/privacy measure."
+        },
+        "_description": "Security and privacy measures applied to this dataset."
+      },
+      "sensitive_data": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_allowed_values": ["yes", "no", "unknown"],
+        "_description": "Whether the dataset contains sensitive data (e.g. security, environmental, commercial)."
+      },
+      "technical_resource": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "description": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_description": "What the technical resource is used for."
+        },
+        "name": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Name of the technical resource."
+        },
+        "technical_resource_id": {
+          "_cardinality": "0..n",
+          "_type": "object",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The technical resource's identifier string."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["doi", "url", "other"],
+            "_description": "The type of identifier used for the technical resource."
+          },
+          "_description": "Identifier of the technical resource, if any."
+        },
+        "_description": "Technical resources (hardware, software, instruments) needed to access or use the dataset."
+      },
+      "title": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Short descriptive title identifying this dataset."
+      },
+      "type": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "Kind of dataset (e.g. observation, model output, survey)."
+      },
+      "_chapter_description": "Each dataset produced or used by the project. Covers who created it, how it is documented, where and how it is hosted, its license, and any security or technical considerations.",
+      "_description": "One entry per dataset produced or used by the project."
+    },
+    "description": {
+      "_cardinality": "0..1",
+      "_type": "string",
+      "_description": "What this DMP covers and its overall context."
+    },
+    "dmp_id": {
+      "_cardinality": "1",
+      "_type": "object",
+      "identifier": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "The identifier string itself (e.g. a DOI)."
+      },
+      "type": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_suggested_values": ["handle", "doi", "ark", "url"],
+        "_description": "The type of identifier used (e.g. doi, handle, ark, url)."
+      },
+      "_chapter_description": "The persistent identifier assigned to this DMP itself (e.g. a DOI or handle), if one has been minted for it.",
+      "_description": "The persistent identifier of this DMP itself."
+    },
+    "ethical_issues_description": {
+      "_cardinality": "0..1",
+      "_type": "string",
+      "_description": "Description of the ethical issues raised by the project, if any."
+    },
+    "ethical_issues_exist": {
+      "_cardinality": "1",
+      "_type": "string",
+      "_allowed_values": ["yes", "no", "unknown"],
+      "_description": "Whether the project raises ethical issues."
+    },
+    "ethical_issues_report": {
+      "_cardinality": "0..1",
+      "_type": "string",
+      "_description": "URL to a document reporting on the project's ethical issues."
+    },
+    "language": {
+      "_cardinality": "1",
+      "_type": "language",
+      "_description": "Primary language this DMP is written in ([ISO 639](https://www.iso.org/iso-639-language-codes.html) code, e.g. eng)."
+    },
+    "modified": {
+      "_cardinality": "1",
+      "_type": "datetime",
+      "_description": "Timestamp this DMP was last modified ([ISO 8601](https://www.iso.org/iso-8601-date-and-time-format.html) format)."
+    },
+    "project": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "description": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "What the project is about."
+      },
+      "end": {
+        "_cardinality": "0..1",
+        "_type": "date",
+        "_description": "Project end date."
+      },
+      "funding": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "funder_id": {
+          "_cardinality": "1",
+          "_type": "object",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The funder's identifier string (e.g. a Crossref Funder ID)."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["fundref", "url"],
+            "_description": "The type of identifier used for the funder (e.g. fundref from the [Crossref Funder Registry](https://www.crossref.org/services/funder-registry/))."
+          },
+          "_description": "Persistent identifier of the funding organisation (e.g. from the [Crossref Funder Registry](https://www.crossref.org/services/funder-registry/))."
+        },
+        "funding_status": {
+          "_cardinality": "0..1",
+          "_type": "string",
+          "_allowed_values": ["planned", "applied", "granted", "rejected"],
+          "_description": "Current status of this funding (planned, applied, granted, or rejected)."
+        },
+        "grant_id": {
+          "_cardinality": "0..1",
+          "_type": "object",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The grant identifier string."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["doi", "url"],
+            "_description": "The type of identifier used for the grant."
+          },
+          "_description": "Persistent identifier of the grant."
+        },
+        "_description": "Funding source(s) for this project."
+      },
+      "project_id": {
+        "_cardinality": "0..n",
+        "_type": "object",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The identifier string itself."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["doi", "raid", "url"],
+          "_description": "The type of identifier used for the project."
+        },
+        "_description": "Persistent identifier of the project."
+      },
+      "start": {
+        "_cardinality": "0..1",
+        "_type": "date",
+        "_description": "Project start date."
+      },
+      "title": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "Title of the project."
+      },
+      "_chapter_description": "The project(s) this DMP is associated with, including their funder(s) (via the [Crossref Funder Registry](https://www.crossref.org/services/funder-registry/)) and grant identifier(s).",
+      "_description": "A project associated with this DMP."
+    },
+    "related_identifier": {
+      "_cardinality": "0..n",
+      "_type": "object",
+      "identifier": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "The identifier of the related resource."
+      },
+      "metadata_scheme": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "Name of the metadata scheme used by the related resource, if any."
+      },
+      "relation_type": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_suggested_values": [
+          "IsCitedBy",
+          "Cites",
+          "IsSupplementTo",
+          "IsSupplementedBy",
+          "IsContinuedBy",
+          "Continues",
+          "Describes",
+          "IsDescribedBy",
+          "HasMetadata",
+          "IsMetadataFor",
+          "HasVersion",
+          "IsVersionOf",
+          "IsNewVersionOf",
+          "IsPreviousVersionOf",
+          "IsPartOf",
+          "HasPart",
+          "IsPublishedIn",
+          "IsReferencedBy",
+          "References",
+          "IsDocumentedBy",
+          "Documents",
+          "IsCompiledBy",
+          "Compiles",
+          "IsVariantFormOf",
+          "IsOriginalFormOf",
+          "IsIdenticalTo",
+          "IsReviewedBy",
+          "Reviews",
+          "IsDerivedFrom",
+          "IsSourceOf",
+          "IsRequiredBy",
+          "Requires",
+          "Obsoletes",
+          "IsObsoletedBy",
+          "IsCollectedBy",
+          "Collects"
+        ],
+        "_description": "How the related resource relates to this DMP ([DataCite relationType](https://datacite-metadata-schema.readthedocs.io/en/4.5/appendices/appendix-1/relationType/))."
+      },
+      "resource_type": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_suggested_values": [
+          "Audiovisual",
+          "Award",
+          "Book",
+          "BookChapter",
+          "Collection",
+          "ComputationalNotebook",
+          "ConferencePaper",
+          "ConferenceProceeding",
+          "DataPaper",
+          "Dataset",
+          "Dissertation",
+          "Event",
+          "Image",
+          "Instrument",
+          "InteractiveResource",
+          "Journal",
+          "JournalArticle",
+          "Model",
+          "OutputManagementPlan",
+          "PeerReview",
+          "PhysicalObject",
+          "Preprint",
+          "Project",
+          "Report",
+          "Service",
+          "Software",
+          "Sound",
+          "Standard",
+          "StudyRegistration",
+          "Text",
+          "Workflow",
+          "Other"
+        ],
+        "_description": "The general type of the related resource ([DataCite resourceTypeGeneral](https://datacite-metadata-schema.readthedocs.io/en/4.5/appendices/appendix-1/resourceTypeGeneral/))."
+      },
+      "scheme_type": {
+        "_cardinality": "0..1",
+        "_type": "string",
+        "_description": "Name of the scheme used for the related identifier's type."
+      },
+      "scheme_uri": {
+        "_cardinality": "0..1",
+        "_type": "url",
+        "_description": "URI of the scheme used for the related identifier."
+      },
+      "type": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_suggested_values": [
+          "ARK",
+          "arXiv",
+          "bibcode",
+          "DOI",
+          "EAN13",
+          "EISSN",
+          "Handle",
+          "IGSN",
+          "ISBN",
+          "ISSN",
+          "ISTC",
+          "LISSN",
+          "LSID",
+          "PMID",
+          "PURL",
+          "RRID",
+          "UPC",
+          "URL",
+          "URN",
+          "w3id"
+        ],
+        "_description": "The scheme of the related identifier (e.g. DOI, URL)."
+      },
+      "_chapter_description": "Resources related to this DMP, such as a publication describing the project, a related dataset collection, or a project web page.",
+      "_description": "Resources related to this DMP (e.g. a publication describing the project)."
+    },
+    "title": {
+      "_cardinality": "1",
+      "_type": "string",
+      "_description": "Official title of this DMP."
+    }
+  }
+}
