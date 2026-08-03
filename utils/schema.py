@@ -1,10 +1,10 @@
-"""Generic JSON-Schema validation plumbing, shared by ``rules/`` and
-``configs/``.
+"""Generic JSON-Schema validation plumbing, for any package that validates a
+data file against a schema.
 
-Depends only on ``jsonschema`` and on :mod:`utils.errors`, so both packages can
-build on it without coupling to each other. Each keeps its own schema file, its
-own ``…FileError`` subclass, and any domain-specific checks (rules' coherence
-pass); only the mechanics live here.
+Depends only on ``jsonschema`` and on :mod:`utils.errors`, so several packages
+can build on it without coupling to each other. Each keeps its own schema file,
+its own ``…FileError`` subclass, and any domain-specific checks (rules'
+coherence pass); only the mechanics live here.
 """
 
 from __future__ import annotations
