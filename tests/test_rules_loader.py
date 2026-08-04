@@ -59,6 +59,14 @@ def test_syntactically_broken_json_is_a_rules_file_error(tmp_path):
         load_rules_file(path)
 
 
+def test_unreadable_path_is_a_rules_file_error(tmp_path):
+    """Same promise for a path that is not there: whoever resolved it says
+    which standard is missing and what exists instead, but a caller holding
+    this entry point still catches one type and not two."""
+    with pytest.raises(RulesFileError, match="cannot be read"):
+        load_rules_file(tmp_path / "absent" / "1.0.0.json")
+
+
 def test_minimal_valid_doc_loads(tmp_path):
     doc = _minimal_doc(title={"_cardinality": "1", "_type": "string"})
     assert load_rules_file(_write(tmp_path, doc))["standard"] == "test"

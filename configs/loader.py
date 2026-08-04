@@ -58,11 +58,14 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
     """Load one project config (YAML), fully validated.
 
     Returns the parsed document. Raises :class:`ConfigFileError` listing every
-    problem found — syntax included, so that one exception type covers every
-    way a config can be wrong and callers need catch nothing else.
+    problem found — a path that cannot be read and a syntax error included, so
+    that one exception type covers every way a config can be wrong and callers
+    need catch nothing else.
     """
     try:
         doc = yaml.safe_load(Path(path).read_text())
+    except OSError as err:
+        raise ConfigFileError(path, [f"cannot be read: {err.strerror}."]) from err
     except yaml.YAMLError as err:
         raise ConfigFileError(path, [f"invalid YAML: {err}"]) from err
     problems = schema_problems(validator_for(SCHEMA_PATH), doc)

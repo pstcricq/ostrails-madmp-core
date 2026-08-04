@@ -111,11 +111,15 @@ def load_rules_file(path: str | Path) -> dict[str, Any]:
 
     Returns the parsed document (``standard``/``extends``/``dmp`` and the
     optional ``description``). Raises :class:`RulesFileError` listing every
-    problem found — syntax included, so that one exception type covers every
-    way a rules file can be wrong and callers need catch nothing else.
+    problem found — a path that cannot be read and a syntax error included, so
+    that one exception type covers every way a rules file can be wrong and
+    callers need catch nothing else. *Which* files to load is a question this
+    module does not answer: a caller passes a path.
     """
     try:
         doc = json.loads(Path(path).read_text())
+    except OSError as err:
+        raise RulesFileError(path, [f"cannot be read: {err.strerror}."]) from err
     except json.JSONDecodeError as err:
         raise RulesFileError(path, [f"invalid JSON: {err}"]) from err
     # Layers 2 and 3 only once the schema passed, and not only to spare the

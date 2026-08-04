@@ -74,6 +74,13 @@ def test_syntactically_broken_yaml_is_a_config_file_error(tmp_path):
         load_config_file(path)
 
 
+def test_unreadable_path_is_a_config_file_error(tmp_path):
+    """Same promise for a path that is not there: one entry point, one error
+    type, whatever is wrong."""
+    with pytest.raises(ConfigFileError, match="cannot be read"):
+        load_config_file(tmp_path / "absent.yaml")
+
+
 def test_empty_file_rejected(tmp_path):
     """safe_load returns None on an empty file — a non-dict must be rejected by
     the schema, not crash the layout check that follows it."""
