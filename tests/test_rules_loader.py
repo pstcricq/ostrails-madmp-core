@@ -1,4 +1,4 @@
-"""rules/loader.py: the three real rules files load clean, each layer of
+"""rules/loader.py: the real rules files load clean, each layer of
 validation (JSON Schema, then coherence) rejects what it's meant to, every
 problem of a load is reported in one error, and a file's placement in the
 versioned tree is checked against what the file declares."""
@@ -11,7 +11,7 @@ import pytest
 from rules.loader import RulesFileError, load_rules_file
 
 RULES_DIR = Path(__file__).parent.parent / "rules" / "standards"
-REAL_FILES = ["rda_dcs/1.0.0.json", "ostrails/1.0.0.json", "socib/1.0.0.json"]
+REAL_FILES = ["rda_dcs/1.0.0.json", "ostrails/1.0.0.json"]
 
 
 @pytest.mark.parametrize("filename", REAL_FILES)

@@ -27,9 +27,9 @@ arriveront — mais la table des matières ne liste que ce qui existe.*
 > contrôle qualité, sans code et sans possibilité de dérive.
 
 Tout le dépôt découle de cette phrase. Un jeu de règles déclaratives (RDA DMP
-Common Standard + OSTrails Application Profile + extensions SOCIB) est la seule
-source de vérité ; les programmes qui suivent en dérivent mécaniquement le
-questionnaire, le rendu du document, la baseline pré-remplie et la validation.
+Common Standard + OSTrails Application Profile) est la seule source de vérité ;
+les programmes qui suivent en dérivent mécaniquement le questionnaire, le rendu
+du document, la baseline pré-remplie et la validation.
 
 Deux mécanismes rendront la promesse **structurelle** plutôt que disciplinaire
 — c'est-à-dire qu'on ne pourra pas la violer par inattention : la convention
@@ -73,14 +73,9 @@ un vocabulaire strict devient une `OptionsQuestion` sans échappatoire, un
 vocabulaire suggéré une `OptionsQuestion` plus une réponse « Other » ouvrant un
 champ libre. Côté QC, l'un fait échouer, l'autre avertit.
 
-Les `_suggested_values` de SOCIB listent ce qui a été *observé* dans les
-`data_flow.json` des instruments et dans les DMP produits aujourd'hui. Ils sont
-non-stricts exprès : le vocabulaire réel grandira avec les instruments et les
-productions.
-
 ### Un standard n'a qu'une orthographe, et c'est du snake_case
 
-`standard` est un **identifiant de code** : `rda_dcs`, `ostrails`, `socib`. Le
+`standard` est un **identifiant de code** : `rda_dcs`, `ostrails`. Le
 schéma l'impose (`^[a-z][a-z0-9_]*$`), et c'est exactement, au caractère près,
 le nom du répertoire où le fichier vit **et** ce qu'un pin de config écrit :
 
@@ -98,7 +93,7 @@ L'alternative — déclarer le nom humain (`"RDA DCS"`) et en dériver le
 répertoire par un slug — a été essayée puis abandonnée. Elle marche, mais elle
 fait vivre deux espaces de noms reliés par une transformation qui n'est
 inversible que dans un sens : `RDA DCS` → `rda_dcs` se calcule, l'inverse
-non (`.title()` ne rend ni `OSTrails` ni `SOCIB`). Et surtout elle laissait un
+non (`.title()` ne rend pas `OSTrails`). Et surtout elle laissait un
 trou : l'unicité des standards se vérifiait sur le **nom déclaré** pendant que
 le rangement se vérifiait sur le **slug**, si bien que `"RDA DCS"` et
 `"RDA_DCS"` — deux noms « uniques » — tombaient dans le même répertoire et

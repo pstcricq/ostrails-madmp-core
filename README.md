@@ -20,10 +20,12 @@ and the loader that refuses a malformed one.
 ## What it is
 
 `rules/standards/<standard>/<version>.json` holds the maDMP rules as data.
-Three files are present: `rda_dcs` (the RDA DMP Common Standard, the base),
-plus `ostrails` and `socib` as extensions. Each declares its own `standard`
-and `version`, and the `rules` CI job checks that both agree with the path the
-file sits at.
+Two files are present: `rda_dcs` (the RDA DMP Common Standard, the base), plus
+`ostrails` as an extension. Nothing caps that number: no code here enumerates
+the standards — a standard is a directory, and the loader is handed one file
+at a time. Each file declares its own `standard` and `version`, and the
+`rules` CI job checks that
+both agree with the path the file sits at.
 
 A standard has one spelling, snake_case, and it is the same string everywhere
 it matters: the directory name, the declaration inside the file, and what a
