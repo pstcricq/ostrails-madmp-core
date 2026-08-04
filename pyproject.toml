@@ -18,10 +18,11 @@ description = "Declarative maDMP rules with an explicit meta-schema, merged into
 requires-python = ">=3.10"
 dependencies = [
     "jsonschema>=4",     # rules/*.json validated against rules/rules.schema.json
+    "pyyaml",            # project configs (configs/projects/*.yaml)
 ]
 
 [tool.setuptools.packages.find]
-include = ["rules", "utils"]
+include = ["rules", "configs", "utils"]
 
 [dependency-groups]
 dev = [

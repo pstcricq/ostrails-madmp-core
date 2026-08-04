@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "maDMP project config",
+  "description": "One self-contained project config (configs/projects/<id>.yaml — the filename must be the declared id). Strict: every field required, none extra — a typo like `rule:` or a missing `rules` fails validation at load time instead of deep in generation. Fields are grouped as the config file reads them: the project's own facts, then the rules it is built from, then what the generated DSW packages carry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "version",
+    "author",
+    "license",
+    "rules",
+    "organizationId",
+    "description",
+    "references",
+    "auto_timestamps"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,64}$",
+      "description": "The project's one machine name, declared once and repeated nowhere: the filename this config sits at, its destination folder in the dmp-registry (and the ?project= routing key), and what the KM, the document template, the seed and the DSW baseline project are named after."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What a reader sees, and only that: the DSW package name, the KM title, and the registry meta.yaml. Free-form on purpose — deriving it from `id` would give `Socib Hf Radar`."
+    },
+    "version": { "type": "string", "minLength": 1 },
+    "author": { "type": "string", "minLength": 1 },
+    "license": { "type": "string", "minLength": 1 },
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Pinned rules versions, base first: [{standard: version}, ...] -> rules/standards/<standard>/<version>.json.",
+      "items": {
+        "type": "object",
+        "minProperties": 1,
+        "maxProperties": 1,
+        "additionalProperties": { "type": "string" }
+      }
+    },
+    "organizationId": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["label", "url"],
+        "properties": {
+          "label": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "auto_timestamps": { "type": "boolean" }
+  }
+}

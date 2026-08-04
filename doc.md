@@ -42,6 +42,53 @@ Le reste — la fusion stricte, la validation au chargement, le report exhaustif
 des erreurs — sert à ce que les données de règles restent éditables par
 quelqu'un qui ne lit pas Python, sans que la moindre faute de frappe passe.
 
+### L'unité de déploiement, c'est le fichier de config
+
+Un `configs/projects/<id>.yaml` porte **tout** ce qui définit un projet : ses
+propres faits, les versions de règles qu'il épingle, et ce que les paquets DSW
+générés annoncent. De lui seul découleront un Knowledge Model, un Document
+Template, une baseline, une route de soumission et un dossier de registre.
+
+Conséquence voulue : un projet ne bouge **que** si son propre fichier change et
+que sa `version` est incrémentée. Rien n'est partagé à l'exécution, rien ne
+dérive dans le dos d'un projet parce qu'un autre a été modifié.
+
+Le fichier se lit de haut en bas en trois blocs — le projet, ses règles, DSW —
+et l'ordre n'est pas décoratif : il va du plus stable au plus éditorial. Il n'y
+a **pas** de bloc `instruments` : le concept est parti avec le standard `socib`,
+et un champ qu'aucun code ne lit vaut moins que son absence. Le schéma étant
+fermé, une config qui en épingle encore un est refusée au chargement plutôt
+qu'ignorée en silence.
+
+### Un projet a un nom machine et un nom humain, et rien entre les deux
+
+`id` est le **seul** identifiant. C'est le nom du fichier, le nom du dossier de
+destination dans le registre (donc la clé de routage `?project=`), et ce dont
+héritent le KM, le template, la seed et le projet DSW. Le motif
+`^[a-z0-9-]{1,64}$` l'impose, pour que ces noms ne dépendent jamais de la façon
+dont il a été tapé.
+
+**Trois identifiants nommaient le même projet**, et deux d'entre eux le
+nommaient avec deux chaînes différentes : `id: socib-glider` d'un côté,
+`github.folder: glider` de l'autre, plus le nom du fichier. Les fondre supprime
+la question « lequel des deux ce générateur-ci utilise-t-il ? ». Il reste une
+redondance, inévitable puisqu'un fichier a forcément un nom : le loader la
+vérifie, sinon renommer une config publierait le projet ailleurs, sans un mot.
+
+`name` est l'exception à la règle du §2 — *ce qu'un lecteur voit est dérivé,
+jamais déclaré* — et l'exception est raisonnée. Pour un standard, la forme
+affichable est une fonction **totale** de l'identifiant : mettre en majuscules
+marche toujours. Pour un projet, non : `socib-hf-radar` donnerait
+`Socib Hf Radar`, et la liste des cas qu'une règle mécanique raterait n'est pas
+bornée — sigles, accents, majuscules internes. Une dérivation qu'on doit
+pouvoir contourner rend le champ de contournement obligatoire ; autant déclarer
+le nom directement.
+
+Ce qui protège de la dérive, ce n'est donc pas ici la dérivation, c'est le
+**périmètre** : `name` ne nomme rien. Aucun identifiant, aucun chemin, aucun
+paquet n'en dépend, et il peut changer à chaque version sans qu'une seule
+référence bouge. C'est du texte, et le schéma n'en exige que d'être non vide.
+
 ---
 
 ## 2. Le format des règles
@@ -201,8 +248,8 @@ l'éditer — c'est leur seule fonction, et elle suffit à justifier qu'on les t
 
 `[tool.setuptools.packages.find]` déclare les paquets, mais setuptools
 n'embarque que les `.py` tant que le reste n'est pas déclaré à part. Une roue
-construite depuis une copie vierge, sans cache, ne contient donc **aucun
-JSON** : elle s'importe, puis meurt au premier appel réel sur
+construite depuis une copie vierge, sans cache, ne contient donc **ni JSON ni
+YAML** : elle s'importe, puis meurt au premier appel réel sur
 `FileNotFoundError: .../site-packages/rules/rules.schema.json`.
 
 **Latent, pas actif :** rien ici ne consomme de roue aujourd'hui. Ça mordra le
@@ -218,11 +265,12 @@ setuptools **ne nettoie jamais `build/`** entre deux constructions, donc des
 fichiers d'un empaquetage antérieur survivent dans les roues suivantes ; et
 `uv build` sans `--no-cache` rend une roue antérieure au changement.
 
-### Le format des fichiers JSON n'est pas vérifié
+### Le format des fichiers de données n'est pas vérifié
 
-`ruff format` ne touche pas au JSON, donc rien en CI ne contrôle la mise en
-forme de `rules/standards/*.json` — seulement leur contenu, via
-`scripts/validate_rules.py`.
+`ruff format` ne touche ni au JSON ni au YAML, donc rien en CI ne contrôle la
+mise en forme de `rules/standards/*.json` ni de `configs/projects/*.yaml` —
+seulement leur contenu, via `scripts/validate_rules.py` et
+`scripts/validate_configs.py`.
 
 **Pourquoi on n'ajoute pas `prettier --check` :** il faudrait Node dans une CI
 purement Python — donc un `package.json`, un lockfile npm et un cache, un

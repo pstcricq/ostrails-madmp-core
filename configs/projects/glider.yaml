@@ -1,0 +1,50 @@
+# ONE self-contained config per project: it carries everything needed to
+# generate and publish that project's own stack — KM, Document Template,
+# baseline Project Template, and (on publish) its submission service. Nothing
+# is shared at runtime; the project evolves only when THIS file is edited and
+# its `version` bumped.
+#
+# Read top to bottom: who this project is, which rules it is built from, and
+# what the generated DSW packages carry.
+
+# --- Project: its own facts ---
+# `id` is THE machine name, declared once: this file is named after it, so is
+# the project's folder in the dmp-registry, and so are the KM, the document
+# template, the seed and the DSW baseline project. Nothing repeats it.
+# `name` is what a reader sees, and only that: the DSW package name, the KM
+# title, and the registry meta.yaml.
+id: glider
+name: "SOCIB Glider"
+version: "1.0.0" # bump to publish a change
+author: "Pierre St-Cricq dit Lompre ([SOCIB](https://www.socib.es))"
+license: "CC BY 4.0"
+
+# --- Rules: the exact files this project is built from ---
+# Pinned versions, base first -> rules/standards/<standard>/<version>.json
+rules:
+  - rda_dcs: "1.0.0"
+  - ostrails: "1.0.0"
+
+# --- DSW: what the generated packages carry beyond the project itself ---
+organizationId: socib
+
+description: |-
+  Implements the **RDA DMP Common Standard v1.2 (maDMP)**, extended with the
+  **OSTrails Application Profile**, in [DS Wizard](https://ds-wizard.org).
+  Every field of the standards is asked to the researcher. Developed by
+  [SOCIB](https://www.socib.es) (Balearic Islands Coastal Observing and
+  Forecasting System) as part of the [OSTrails](https://ostrails.eu) project,
+  which aims to connect research infrastructures through FAIR and
+  machine-actionable DMPs.
+references:
+  - label: "RDA DMP Common Standard specification"
+    url: "https://github.com/RDA-DMP-Common/RDA-DMP-Common-Standard"
+  - label: "RDA DCS DOI"
+    url: "http://doi.org/10.15497/rda00039"
+  - label: "OSTrails project"
+    url: "https://ostrails.eu"
+  - label: "SOCIB"
+    url: "https://www.socib.es"
+auto_timestamps: true
+# dmp_id needs no config — the template derives it from the DSW render context
+# (ctx.config.clientUrl + /projects/<uuid>); the webhook rewrites it on commit.

@@ -14,18 +14,23 @@ today and how to run it.
 **Where it stands.** The repository is built one slice at a time; each slice
 adds one package, the tests that cover it, the dependencies its code actually
 imports, and the CI job that checks it. Everything documented below is
-present and checked in CI. Current slice: **`rules/`** — the rules as data,
-and the loader that refuses a malformed one.
+present and checked in CI. Current slice: **`configs/`** — one self-contained
+config per project, and the loader that refuses a malformed one.
 
 ## What it is
+
+Two packages, and they are the same shape: data, the schema beside it, a
+loader that reads and validates one file, and nothing else. Neither knows the
+other exists.
+
+### `rules/` — the standards
 
 `rules/standards/<standard>/<version>.json` holds the maDMP rules as data.
 Two files are present: `rda_dcs` (the RDA DMP Common Standard, the base), plus
 `ostrails` as an extension. Nothing caps that number: no code here enumerates
 the standards — a standard is a directory, and the loader is handed one file
 at a time. Each file declares its own `standard` and `version`, and the
-`rules` CI job checks that
-both agree with the path the file sits at.
+`rules` CI job checks that both agree with the path the file sits at.
 
 A standard has one spelling, snake_case, and it is the same string everywhere
 it matters: the directory name, the declaration inside the file, and what a
@@ -33,7 +38,26 @@ project's pin writes. Whatever a reader ends up seeing — a DSW tag, a line in
 a QC report — is the upper-case form of it, derived where it is displayed, so
 there is never a second spelling to keep in step.
 
-The code beside the data reads it, and refuses anything malformed at the door:
+### `configs/` — the projects
+
+`configs/projects/<id>.yaml` holds one self-contained config per project: it
+carries everything needed to generate and publish that project's own DSW
+stack, and nothing is shared between projects at runtime. It reads in three
+blocks — the project's own facts, the rules it is built from, and what the
+generated DSW packages carry.
+
+A project has one machine name, `id`, declared once: it is what the file is
+called, its destination folder in the registry, and what the generated
+packages are named after. `name` is the only other name, and it is never used
+as an identifier — it is the prose a reader sees. The `configs` CI job checks
+that every config validates and that its filename agrees with the `id` it
+declares.
+
+That a config's pins name rules files which *exist* is not checked yet:
+crossing the two packages is a third job, and it arrives with the code that
+resolves a pin.
+
+### The code beside the data
 
 - `rules/loader.py` — `load_rules_file` reads one rules file and validates it
   three ways, reporting every problem of all three in one error: against
@@ -41,15 +65,18 @@ The code beside the data reads it, and refuses anything malformed at the door:
   contain), against three coherence constraints kept in Python because JSON
   Schema cannot say *which* field is wrong, and against its own path — a file
   must declare the standard and the version it is filed under.
-- `utils/schema.py` — the JSON-Schema plumbing the loader sits on: compile a
+- `configs/loader.py` — `load_config_file` reads one project config and
+  validates it two ways, again in one error: against
+  `configs/config.schema.json` (strict — every field required, none extra), and
+  against its own filename.
+- `utils/schema.py` — the JSON-Schema plumbing both loaders sit on: compile a
   schema once, report every violation of a document at once.
 - `utils/errors.py` — `ProblemsError`, the one error shape for the whole
   repository: a subject, and every problem found with it.
 
-`rules/` knows nothing about projects. It is handed a path and hands back a
-validated document. Merging several of them into one typed model is the
-*application* of the rules, and arrives with the slice that does it; which
-versions a project pins is project data, and arrives with its own.
+Neither package interprets what it reads. Merging several rules files into one
+typed model, and resolving a config's pins against the files they name, are
+the *application* of this data, and arrive with the slice that does it.
 
 ## Usage
 
@@ -59,11 +86,12 @@ uv run ruff check .
 uv run ruff format .
 uv run pytest
 uv run python scripts/validate_rules.py
+uv run python scripts/validate_configs.py
 ```
 
 `uv sync` creates `.venv` from the committed `uv.lock` and installs the
-package in editable mode, so `rules` and `utils` import without any path
-juggling.
+package in editable mode, so `rules`, `configs` and `utils` import without any
+path juggling.
 
 ## Layout
 
@@ -72,23 +100,27 @@ juggling.
 | `rules/standards/` | the rules themselves, one JSON file per standard version |
 | `rules/rules.schema.json` | the meta-schema every rules file is validated against |
 | `rules/loader.py` | load one rules file, fully validated |
+| `configs/projects/` | the project configs, one YAML per project |
+| `configs/config.schema.json` | the schema every project config is validated against |
+| `configs/loader.py` | load one project config, fully validated |
 | `utils/schema.py`, `utils/errors.py` | shared JSON-Schema plumbing, and the one error shape |
-| `scripts/validate_rules.py` | the content check the `rules` CI job runs |
+| `scripts/validate_rules.py`, `scripts/validate_configs.py` | the content checks the `rules` and `configs` CI jobs run |
 | `tests/` | the test suite |
 | `doc.md` | the design decisions, and what was turned down (French) |
 
 ## CI
 
-Two jobs, in parallel, both installing from the lockfile with
+Three jobs, in parallel, all installing from the lockfile with
 `uv sync --frozen`:
 
 - **checks** — `ruff check` (ruff's default rule set, which includes import
   order), `ruff format --check`, then `pytest`. Anything about the shape of
   the Python.
 - **rules** — every file under `rules/standards/` is loaded, which is what
-  validates it: schema, coherence, and placement. Anything about the shape of
-  the content.
+  validates it: schema, coherence, and placement.
+- **configs** — every file under `configs/projects/` is loaded, which is what
+  validates it: schema, and filename.
 
 They are split because they fail for different reasons and get fixed by
-different people: one is a Python change, the other is a rules change. A red
-badge names which of the two it was without opening the log.
+different people: a Python change, a rules change, a new project. A red badge
+names which of the three it was without opening the log.
