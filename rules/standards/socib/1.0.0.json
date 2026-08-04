@@ -2,7 +2,7 @@
   "standard": "socib",
   "version": "1.0.0",
   "extends": true,
-  "description": "Mandatory-field, type/format, and controlled-vocabulary checks for SOCIB's own extensions to the RDA DCS + OSTrails AP. There is no separate written specification: this file *is* the current specification of what SOCIB's pipeline produces beyond the two standards above. As in ostrails/1.0.0.json, structural parent nodes already defined by RDA DCS/OSTrails (dataset, distribution, project, project.funding, contributor) are redeclared here only with the cardinality and type needed to reach SOCIB's own new fields; the RDA/OSTrails-level checks on those entities remain the other two files' responsibility, and the merge collapses the duplication into one tree at load time.\n'_suggested_values' on facility_area, dataflow_step, status, dataset.mode and data_flow.type / deployment_id.type / deployment.deployment_id.type list the values observed in the instruments' data_flow.json and in the DMPs generated today. They are deliberately non-strict (a mismatch is a warning, not a failure) because the real vocabulary is expected to grow as instruments and productions are added.\ndataset.distribution.type_input/type_output are lists (1..n) even when a step produces a single value (e.g. ['raw']), so every distribution carries them with one consistent shape; some data flow steps (e.g. Processing) produce several at once (['L0','L1','L2']).\nThe placeholder-resolution recipes stay in the instrument's data_flow.json and are never written into a DMP at any level: the instrument builds leave them out of the baseline and the project DMP, and the deployment fill reads them from data_flow.json to substitute real values. No rules field describes them, on purpose.",
+  "description": "Mandatory-field, type/format, and controlled-vocabulary checks for SOCIB's own extensions to the RDA DCS + OSTrails AP. There is no separate written specification: this file *is* the current specification of what SOCIB's pipeline produces beyond the two standards above. As in ostrails/1.0.0.json, structural parent nodes already defined by RDA DCS/OSTrails (dataset, distribution, project, project.funding, contributor) are redeclared here only with the cardinality and type needed to reach SOCIB's own new fields; the RDA/OSTrails-level checks on those entities remain the other two files' responsibility, and the merge collapses the duplication into one tree at load time.\n'instruments' is where everything about one instrument lives: its kind, where its data flow is described, where its productions are listed, and — in a DMP generated for one of them — that production's own facts. A DMP template carries no 'production': its presence is the one thing that tells a production DMP from the template it was derived from, and it is also what makes an unresolved {placeholder} in a download_url readable as normal (template) or as a fill that never ran (production).\nThe four scalar fields of 'production' — code, platform_name, instrument_name, initial_date — are the resolution context: an instrument's placeholder recipes name them and nothing else.\n'_suggested_values' on dataflow_step, status, dataset.mode, instruments.type and the several identifier 'type' fields list the values observed in the instruments' data flows and in the DMPs generated today. They are deliberately non-strict (a mismatch is a warning, not a failure) because the real vocabulary is expected to grow as instruments and productions are added.\nWhat a distribution says about the pipeline is kept to the minimum a DMP needs: which step produced it, and whether the data exists yet. An instrument description carries more — what the step consumed, which product type it wrote, which tools it used, which facility area owns it — and none of that reaches a DMP for now. In particular a step's output type still splits one step into several distributions, and still substitutes {type_output} into their paths, without being a field of its own: two distributions of one step differ by their download_url alone.\nThe placeholder-resolution recipes stay in the instrument description and are never written into a DMP at any level: the instrument builds leave them out of the baseline and the project DMP, and the production fill reads them to substitute real values. No rules field describes them, on purpose.",
   "dmp": {
     "acknowledgments": {
       "_cardinality": "0..1",
@@ -22,28 +22,6 @@
           "Dissemination"
         ],
         "_description": "The data lifecycle stage(s) this contributor was involved in."
-      }
-    },
-    "data_flow": {
-      "_cardinality": "0..n",
-      "_type": "object",
-      "_chapter_description": "The SOCIB data flows this DMP was generated from: for each, its identifier, type, and a URL to its definition. A DMP covering several instruments carries one per instrument.",
-      "_description": "A SOCIB data flow this DMP was generated from.",
-      "identifier": {
-        "_cardinality": "1",
-        "_type": "string",
-        "_description": "Identifier of the data flow this DMP is generated from."
-      },
-      "type": {
-        "_cardinality": "1",
-        "_type": "string",
-        "_suggested_values": ["socib"],
-        "_description": "The type/source of the data flow identifier."
-      },
-      "url": {
-        "_cardinality": "1",
-        "_type": "url",
-        "_description": "A URL pointing to the data flow definition."
       }
     },
     "dataset": {
@@ -66,122 +44,108 @@
           ],
           "_description": "The data flow step that produced this distribution."
         },
-        "facility_area": {
-          "_cardinality": "1",
-          "_type": "string",
-          "_suggested_values": ["GLF", "DC"],
-          "_description": "The SOCIB facility area responsible for this distribution."
-        },
-        "format_input": {
-          "_cardinality": "1..n",
-          "_type": "string",
-          "_description": "The format(s) of the input data consumed to produce this distribution."
-        },
-        "path_input": {
-          "_cardinality": "1",
-          "_type": "string",
-          "_description": "The path or location of the input data consumed to produce this distribution."
-        },
-        "platform_instrument": {
-          "_cardinality": "1",
-          "_type": "string",
-          "_description": "The platform/instrument that produced the underlying data."
-        },
         "status": {
           "_cardinality": "1",
           "_type": "string",
           "_suggested_values": ["present", "missing"],
-          "_description": "The current status of this distribution."
-        },
-        "technical_resource": {
-          "_cardinality": "0..n",
-          "_type": "object",
-          "_description": "Technical resources (hardware/software) used to produce this distribution.",
-          "description": {
-            "_cardinality": "0..1",
-            "_type": "string",
-            "_description": "What this technical resource is or does."
-          },
-          "name": {
-            "_cardinality": "1",
-            "_type": "string",
-            "_description": "Name of the technical resource used to produce this distribution."
-          }
-        },
-        "type_input": {
-          "_cardinality": "1..n",
-          "_type": "string",
-          "_description": "The data type(s) of the input consumed to produce this distribution (e.g. L0)."
-        },
-        "type_output": {
-          "_cardinality": "1..n",
-          "_type": "string",
-          "_description": "The data type(s) produced by this distribution (e.g. L1, L2)."
+          "_description": "The current status of this distribution. 'missing' is the normal state of a baseline: the pipeline step is described, the data it will produce does not exist yet."
         }
+      },
+      "instrument": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_description": "The instrument this dataset comes from: equal to the 'type' of one of this DMP's instruments. Not suggested-valued here on purpose — the list of admissible values is this DMP's own instruments, and repeating it would be a second source of truth able to disagree with the first. Without this field a DMP cannot say which instrument produced which dataset, and a production fill cannot tell which datasets to keep."
       },
       "mode": {
         "_cardinality": "1",
         "_type": "string",
-        "_suggested_values": ["track", "rt", "dt", "dm"],
+        "_suggested_values": ["track", "real_time", "delayed_time", "delayed_mode"],
         "_description": "The acquisition mode for this dataset (e.g. real-time, delayed-time)."
       }
     },
-    "deployment": {
-      "_cardinality": "0..1",
+    "instruments": {
+      "_cardinality": "0..n",
       "_type": "object",
-      "_chapter_description": "The specific instrument deployment this DMP was generated for: its code, identifier, dates, instrument, and platform.",
-      "_description": "The specific instrument deployment this DMP was generated for.",
-      "code": {
+      "_chapter_description": "The instruments this project's data comes from. One entry per instrument: what kind it is, where its data flow is described, and where its productions are listed. A DMP generated for one specific production also carries that production's own facts.",
+      "_description": "An instrument this project's data comes from.",
+      "type": {
         "_cardinality": "1",
         "_type": "string",
-        "_description": "The deployment's code/short identifier."
+        "_suggested_values": ["glider", "mooring", "hf_radar", "vessel", "drifter"],
+        "_description": "What kind of instrument this is."
       },
-      "deployment_id": {
+      "data_flow": {
         "_cardinality": "1",
         "_type": "object",
-        "_description": "Persistent identifier of this deployment.",
+        "_description": "Where this instrument's data flow is described.",
         "identifier": {
           "_cardinality": "1",
           "_type": "string",
-          "_description": "The deployment's identifier string."
+          "_description": "Identifier of this instrument's data flow definition."
         },
         "type": {
           "_cardinality": "1",
           "_type": "string",
-          "_suggested_values": ["socib"],
-          "_description": "The type/source of the deployment identifier."
+          "_suggested_values": ["url", "socib"],
+          "_description": "The type/source of the data flow identifier."
         }
       },
-      "initial_date": {
-        "_cardinality": "1",
-        "_type": "datetime",
-        "_description": "The deployment's start date and time."
+      "productions": {
+        "_cardinality": "0..1",
+        "_type": "object",
+        "_description": "Where this instrument's productions are listed.",
+        "identifier": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Identifier of the list of this instrument's productions."
+        },
+        "type": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_suggested_values": ["url", "socib"],
+          "_description": "The type/source of the productions identifier."
+        }
       },
-      "instrument_name": {
-        "_cardinality": "1",
-        "_type": "string",
-        "_description": "Name of the instrument deployed."
-      },
-      "platform_name": {
-        "_cardinality": "1",
-        "_type": "string",
-        "_description": "Name of the platform the instrument was deployed on."
-      }
-    },
-    "deployments": {
-      "_cardinality": "0..1",
-      "_type": "object",
-      "_chapter_description": "Summary of all deployments associated with this DMP's project: their count and a URL to the full list.",
-      "_description": "Summary of all deployments associated with this DMP's project.",
-      "count": {
-        "_cardinality": "1",
-        "_type": "number",
-        "_description": "The number of deployments associated with this DMP."
-      },
-      "url": {
-        "_cardinality": "1",
-        "_type": "url",
-        "_description": "A URL pointing to the list of deployments."
+      "production": {
+        "_cardinality": "0..1",
+        "_type": "object",
+        "_description": "The specific production this DMP was generated for (a glider deployment, a mooring campaign...). Absent from a DMP template: its presence is what tells a production DMP from the template it was derived from.",
+        "production_id": {
+          "_cardinality": "1",
+          "_type": "object",
+          "_description": "Persistent identifier of this production.",
+          "identifier": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_description": "The production's identifier string."
+          },
+          "type": {
+            "_cardinality": "1",
+            "_type": "string",
+            "_suggested_values": ["socib"],
+            "_description": "The type/source of the production identifier."
+          }
+        },
+        "code": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "The production's code/short identifier."
+        },
+        "initial_date": {
+          "_cardinality": "1",
+          "_type": "datetime",
+          "_description": "The production's start date and time."
+        },
+        "instrument_name": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Name of the instrument unit this production used (the serial-level identity, not the kind: 'sldeep004', not 'glider')."
+        },
+        "platform_name": {
+          "_cardinality": "1",
+          "_type": "string",
+          "_description": "Name of the platform that carried the instrument for this production."
+        }
       }
     },
     "project": {
