@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["rules", "configs", "utils"]
+include = ["rules", "configs", "project", "utils"]
 
 [dependency-groups]
 dev = [

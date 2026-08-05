@@ -44,16 +44,16 @@ class RulesFileError(SchemaFileError):
     """A rules file is malformed (schema or coherence)."""
 
 
-def _field_children(node: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+def field_children(node: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     """A field node's declared child fields: every key not starting with ``_``."""
     return [(k, v) for k, v in node.items() if not k.startswith("_")]
 
 
 def _coherence_problems(tree: dict[str, Any], prefix: str, depth: int = 1) -> list[str]:
     problems = []
-    for key, node in _field_children(tree):
+    for key, node in field_children(tree):
         path = f"{prefix}.{key}"
-        if _field_children(node) and node.get("_type") != "object":
+        if field_children(node) and node.get("_type") != "object":
             problems.append(
                 f"{path}: declares child fields but has _type "
                 f"{node.get('_type')!r}, only 'object' fields may have children."

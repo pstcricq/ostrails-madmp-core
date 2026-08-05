@@ -17,6 +17,7 @@ arriveront — mais la table des matières ne liste que ce qui existe.*
 
 1. [Le principe](#1-le-principe)
 2. [Le format des règles](#2-le-format-des-règles)
+3. [La fusion « tighten-only »](#3-la-fusion--tighten-only-)
 14. [Limites connues](#14-limites-connues)
 
 ---
@@ -242,7 +243,111 @@ l'éditer — c'est leur seule fonction, et elle suffit à justifier qu'on les t
 
 ---
 
+## 3. La fusion « tighten-only »
+
+Exactement un fichier est la base (`extends: false`). Les extensions peuvent
+redéclarer un champ que la base définit déjà, dans deux cas seulement :
+
+- **à l'identique** — le cas courant : répéter un parent structurel uniquement
+  pour atteindre ses propres feuilles en dessous ;
+- **en resserrant** — rendre obligatoire un champ optionnel (`0..1 -> 1`,
+  `0..n -> 1..n`), restreindre un vocabulaire à un sous-ensemble, ou fermer un
+  champ ouvert avec un vocabulaire à soi.
+
+Elles ne peuvent **jamais** relâcher ni reformer : affaiblir une cardinalité,
+transformer une valeur simple en liste (ou l'inverse), changer un type, élargir
+un vocabulaire sont des conflits.
+
+### L'invariant, et pourquoi il est le bon
+
+> Un document valide sous le modèle fusionné doit rester valide sous chaque
+> standard pris isolément.
+
+Relâcher casserait cette propriété : un DMP conforme à notre modèle pourrait
+violer le RDA DCS, et on aurait produit un format qui *dit* implémenter un
+standard sans le faire. Le sens de la contrainte est donc une conséquence, pas
+une préférence.
+
+### La provenance des resserrements
+
+Chaque resserrement est enregistré sur le champ (`Tightening`) avec le standard
+qui l'a imposé. C'est ce qui permettra au QC de dire « obligatoire selon
+OSTrails, optionnel dans RDA DCS » au lieu d'accuser silencieusement le
+standard de base.
+
+**Le compte de resserrements sur le modèle réel est aujourd'hui zéro** :
+`rda_dcs` + `ostrails` n'en produit aucun — OSTrails ajoute 17 champs à lui et
+ne restreint rien de la base. La machinerie est construite et testée sur des
+fixtures. À ne pas confondre avec du code mort : c'est du code sans utilisateur
+*pour l'instant*, et la distinction est délibérée.
+
+### Trois questions, trois modules
+
+Le paquet `project/` répond à « ce projet, résolu, c'est quoi ? », en trois
+étapes qui **se composent sans s'appeler** :
+
+| | croise | rend |
+|---|---|---|
+| `resolve_pins` | une déclaration × une arborescence | des chemins |
+| `merge_rules` | N documents entre eux | un `Model` |
+| `assemble_project` | une config × son modèle | un `Project` |
+
+`merge_rules` ne connaît ni épingle ni config : on lui donne des chemins.
+Ce n'est pas de la pureté gratuite — c'est ce qui permet au contrôle qualité de
+fusionner les épingles enregistrées dans le `meta.yaml` d'un DMP soumis **sans
+construire de projet du tout**. Si `merge_rules` appelait `resolve_pins`, ce
+chemin demanderait le paquet des configs pour un fichier qui n'en est pas une.
+
+Symétriquement, `assemble_project` ne fait que fixer l'ordre. C'est peu, et
+c'est le point : si chaque générateur enchaînait les deux lui-même, deux
+d'entre eux finiraient par ne pas être d'accord sur ce que « ce projet » veut
+dire. L'ordre, lui, est **forcé** — il n'y a rien à fusionner avant que les
+épingles ne résolvent, le même ordre que `merge_rules` s'impose en interne
+entre « cet ensemble est-il bien formé » et « fusionne-t-il ».
+
+### La convention `<standard>/<version>.json`, tenue par les deux bouts
+
+`resolve_pins` **fabrique** le chemin depuis l'épingle ; la couche 3 de
+`rules/loader.py` **vérifie** que le fichier déclare le standard et la version
+de son chemin. Aucun des deux ne suffit : le premier trouverait un fichier mal
+rangé, le second ne saurait pas qu'on le cherchait.
+
+Il n'y a **pas de dérivation** entre les deux espaces de noms, parce qu'il n'y
+en a qu'un : un standard s'écrit en snake_case, et la même chaîne est le nom du
+répertoire, la déclaration dans le fichier et ce qu'un pin écrit (§2). La
+version se verrouille au passage : le chemin étant construit depuis l'épingle,
+un répertoire concordant fait du `<version>.json` la version épinglée par
+construction.
+
+### Le piège YAML des épingles
+
+`ostrails: 1.0` est un **flottant** en YAML, contrairement à `1.0.0` qui est
+une chaîne. Le schéma de config l'attrape (`additionalProperties: {"type":
+"string"}`), donc une config ne peut pas le porter jusqu'ici.
+
+`resolve_pins` ne revérifie pas la forme d'une épingle — c'est écrit dans son
+module comme une **précondition**, pas comme un oubli. Le prix est nommé en
+[§14](#14-limites-connues) : des épingles venant d'ailleurs qu'une config
+validée, et le `meta.yaml` du registre est exactement ce cas.
+
+---
+
 ## 14. Limites connues
+
+### Une épingle non validée casse `resolve_pins` en `TypeError`
+
+`resolve_pins` tient la forme d'une épingle pour acquise : `config.schema.json`
+exige déjà une liste de mappings à une clé dont les valeurs sont des chaînes.
+Mesuré : `resolve_pins([{"ostrails": 1.0}], ...)` lève un `TypeError` nu
+(`argument should be a str or an os.PathLike object`), pas une
+`UnresolvedPinsError`.
+
+**Latent, pas actif :** le seul appelant est `assemble_project`, qui charge la
+config d'abord. Ça mordra à la tranche du contrôle qualité, qui lira les
+épingles du `meta.yaml` d'un dossier de registre — un fichier qui n'a **aucun
+schéma** et que personne ne valide en entrant. Le correctif se décide là, avec
+son appelant sous les yeux : une passe de forme dans `resolve_pins`, ou un
+schéma pour le sidecar.
 
 ### La roue n'embarque aucun fichier de données
 

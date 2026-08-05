@@ -5,16 +5,21 @@
 #             meta-schema, its own coherence rules, and the path it sits at)
 #   configs — the shape of the project content (every project config against
 #             its schema, and against the id it declares)
+#   projects — the one job that crosses them: every config's pins resolved
+#             against the rules they name, and those rules merged. The set is
+#             a property no per-file job can see.
 #
 # They are separate jobs rather than steps of one so that the check list on a
 # pull request names the culprit: a Python change, a rules change and a new
 # project are made by different people and fixed in different files. Each pays
 # its own setup, but they run concurrently, so wall-clock is the slowest of
-# the three.
+# the four.
 #
-# No job crosses two of them — that a config's pins name rules files that
-# exist is a property no per-file job can see, and it arrives with the code
-# that resolves them.
+# `projects` has no `needs:` on purpose. It could only be held back to spare a
+# second red check when a file is also malformed, and that trade is the wrong
+# way round: a project whose pins do not resolve is broken whether or not
+# something else is, and finding out on the next push costs more than one
+# extra red mark.
 #
 # They all install with `uv sync --frozen`: the committed lockfile decides the
 # versions, and a transitive release cannot turn CI red on its own.
@@ -71,3 +76,16 @@ jobs:
         run: uv sync --frozen
       - name: Validate every project config against its schema
         run: uv run python scripts/validate_configs.py
+
+  projects:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install the locked environment
+        run: uv sync --frozen
+      - name: Resolve and merge what every project pins
+        run: uv run python scripts/validate_projects.py
