@@ -244,9 +244,12 @@ uv run python -m dsw.publish template configs/projects/glider.yaml
 
 `all` runs the three targets in order — `submission` needs the uuid of the
 template just published. That last one also needs `SUBMISSION_URL` (the
-webhook's address *as DSW reaches it*), optionally `SUBMISSION_TOKEN`, and the
-registry variables above, since it refuses to advertise a route to a folder
-that is not registered.
+webhook's address *as DSW reaches it*), `SUBMISSION_TOKEN` (the shared secret
+it checks, without which it rejects every submission), and the registry
+variables above, since it refuses to advertise a route to a folder that is not
+registered. It rewrites the service only when it would say something else: the
+call carries the tenant's whole configuration, so a run with nothing to change
+sends nothing.
 
 ## Layout
 

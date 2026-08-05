@@ -27,6 +27,14 @@ configuration: mutable, upserted by id, sitting beside other projects' entries.
 Two different objects, two different ways of being idempotent, which is why
 they are three targets and not one.
 
+All three ask the instance before they act, and the third has its own reason
+to: the API has no endpoint for one service, so writing it means sending the
+tenant's *entire* configuration back — organisation, authentication, look and
+feel, everything. Anything changed in the console between the read and the
+write is silently reverted. So this compares what the service should say with
+what it says, and sends nothing when they agree; the window then opens only on
+the runs that had something to change.
+
 Registering the project's folder in the registry is **not** here — it is
 :mod:`registry`, and it runs in CI long before anything is published. What is
 here is the guarantee that used to depend on the order of these targets:
@@ -34,10 +42,9 @@ here is the guarantee that used to depend on the order of these targets:
 
 Every coordinate comes from the environment, and **none has a default**: where
 a program writes is not something it may assume. ``DSW_API_URL``, ``DSW_EMAIL``
-and ``DSW_PASSWORD`` say which instance and as whom; ``SUBMISSION_URL`` is the
-webhook's address as *DSW* reaches it, and is asked for only by the target that
-needs it; ``SUBMISSION_TOKEN`` is the shared secret the webhook checks, and is
-the one name that may be absent.
+and ``DSW_PASSWORD`` say which instance and as whom; ``SUBMISSION_URL`` and
+``SUBMISSION_TOKEN`` are the webhook's address as *DSW* reaches it and the
+secret it checks, and are asked for by the one target that needs them.
 """
 
 from __future__ import annotations
@@ -136,28 +143,42 @@ def instance_from_env() -> Instance:
     )
 
 
-def submission_url_from_env() -> str:
-    """Where a submission service sends the document — the fixed webhook, as
-    **DSW** reaches it: a compose service name locally, a public URL in a
-    deployment. Asked for by the ``submission`` target alone, because it is not
-    a coordinate of the instance: publishing a KM must not require knowing
-    where documents will one day be sent.
+@dataclass(frozen=True)
+class Webhook:
+    """Where a submission service sends the document, and the secret it sends
+    with it.
+
+    The address is the fixed webhook as **DSW** reaches it: a compose service
+    name locally, a public URL in a deployment. Both names are asked for by the
+    ``submission`` target alone, because neither is a coordinate of the
+    instance: publishing a KM must not require knowing where documents will one
+    day be sent.
+
+    The secret is as required as the address. The webhook answers 500 when it
+    holds none and 401 when the header does not match, so a service written
+    without one is a Submit button that fails every time — and it would be
+    written *over* a service that worked, on nothing more than one name missing
+    from one run.
     """
-    return _required_env(
-        ("SUBMISSION_URL",),
-        {"SUBMISSION_URL": "says where DSW sends a submitted document"},
-    )[0]
+
+    url: str
+    token: str
 
 
-def submission_token_from_env() -> str | None:
-    """The shared secret the webhook checks, or ``None``.
-
-    Absent, it is not an error: a webhook deployed without one accepts
-    unauthenticated calls, and refusing to configure the service would be
-    refusing a deployment that works. The service is then created with no
-    ``Authorization`` header, which is visible in what this prints.
-    """
-    return os.environ.get("SUBMISSION_TOKEN")
+def webhook_from_env() -> Webhook:
+    """Where submitted documents go, or every name it is missing at once."""
+    return Webhook(
+        *_required_env(
+            ("SUBMISSION_URL", "SUBMISSION_TOKEN"),
+            {
+                "SUBMISSION_URL": "says where DSW sends a submitted document",
+                "SUBMISSION_TOKEN": (
+                    "is the shared secret the webhook checks, without which it "
+                    "rejects every submission"
+                ),
+            },
+        )
+    )
 
 
 # Talking to DSW
@@ -365,8 +386,7 @@ def submission_service(
     config: dict[str, Any],
     template_uuid: str,
     tenant_uuid: str,
-    submission_url: str,
-    submission_token: str | None,
+    webhook: Webhook,
 ) -> dict[str, Any]:
     """One project's Document Submission entry.
 
@@ -381,6 +401,10 @@ def submission_service(
     which is the *only* routing input the webhook has, and ``supportedFormats``
     naming this project's own template — so the Submit menu offers this service
     for this project's documents and for nothing else.
+
+    Being pure is also what lets the caller compare it to what the instance
+    already holds: two calls with the same inputs give the same document, so an
+    equal one means there is nothing to write.
     """
     folder = config["id"]
     return {
@@ -389,14 +413,10 @@ def submission_service(
         "description": "",
         "props": [],
         "request": {
-            "headers": (
-                {"Authorization": f"Bearer {submission_token}"}
-                if submission_token
-                else {}
-            ),
+            "headers": {"Authorization": f"Bearer {webhook.token}"},
             "method": "POST",
             "multipart": {"enabled": False, "fileName": ""},
-            "url": f"{submission_url}?project={folder}",
+            "url": f"{webhook.url}?project={folder}",
         },
         "supportedFormats": [
             {
@@ -452,11 +472,16 @@ def _require_registered(config: dict[str, Any]) -> None:
 
 def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> None:
     """Create or refresh this project's submission service. An upsert by
-    service id: other projects' services are left untouched. The template's
-    uuid changes on every publish, so this has to run after ``template``."""
+    service id: other projects' services are left untouched. A new template
+    version gets a new uuid, so this has to run after ``template``.
+
+    The write is skipped when the service already says exactly this and
+    submissions are enabled — the ``PUT`` carries the whole tenant
+    configuration, so not making it is how a run that changes nothing cannot
+    revert anything either.
+    """
     _require_registered(config)
-    submission_url = submission_url_from_env()
-    submission_token = submission_token_from_env()
+    webhook = webhook_from_env()
 
     folder = config["id"]
     template_uuid = _find_package_uuid(
@@ -464,20 +489,22 @@ def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> N
     )
     tenant = client.get("/tenants/current/config")
     submission = tenant.setdefault("submission", {})
-    submission["enabled"] = True
     services = submission.setdefault("services", [])
     tenant_uuid = next(
         (s["tenantUuid"] for s in services if s.get("tenantUuid")), NIL_UUID
     )
-    service = submission_service(
-        config, template_uuid, tenant_uuid, submission_url, submission_token
-    )
+    service = submission_service(config, template_uuid, tenant_uuid, webhook)
+    current = next((s for s in services if s.get("id") == folder), None)
+    if current == service and submission.get("enabled"):
+        print(f"Submission service {folder!r} unchanged (template {template_uuid}).")
+        return
+
+    submission["enabled"] = True
     services[:] = [s for s in services if s.get("id") != folder] + [service]
     client.put("/tenants/current/config", tenant)
-    secured = "with" if submission_token else "without"
     print(
         f"Submission service {folder!r} -> {service['request']['url']} "
-        f"({secured} a shared secret, template {template_uuid})"
+        f"(template {template_uuid})"
     )
 
 

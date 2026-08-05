@@ -814,8 +814,20 @@ webhook dispose — jamais la lecture du document ; et `supportedFormats` nomman
 le template de ce projet, pour que le menu Submit propose ce service aux
 documents de ce projet et à rien d'autre.
 
-Sans secret partagé, **pas d'en-tête `Authorization`** plutôt qu'un `Bearer`
-vide : un jeton vide n'authentifie rien tout en ayant l'air de le faire.
+### Le service n'est réécrit que s'il dirait autre chose
+
+Décidé le 05/08/2026. L'API n'a pas de point de terminaison pour *un* service :
+écrire le nôtre, c'est renvoyer la configuration **entière** du tenant —
+organisation, authentification, apparence. Tout ce qui a changé dans la console
+entre la lecture et l'écriture est donc réverti sans un mot. `submission_service()`
+étant pure, la comparer à ce que l'instance détient déjà suffit : égale et les
+soumissions activées, on n'envoie rien. La fenêtre ne s'ouvre plus que sur les
+exécutions qui avaient quelque chose à changer — et l'écrasante majorité n'a
+rien à changer, une version de template inchangée gardant le même uuid.
+
+L'état `enabled` compte dans la comparaison : un service que personne ne peut
+joindre parce que les soumissions sont désactivées, c'est un bouton Submit qui
+n'est pas là.
 
 ### Publier consomme l'artefact, il ne régénère pas
 
@@ -837,10 +849,20 @@ rien en aval — elle accepte le paquet, et personne n'en sait rien.
 
 `DSW_API_URL` / `DSW_EMAIL` / `DSW_PASSWORD` disent quelle instance et en tant
 que qui : les trois sont exigés ensemble, et l'erreur les nomme **tous d'un
-coup**. `SUBMISSION_URL` n'est pas une coordonnée de l'instance mais l'adresse
-du webhook, donc seule la cible qui en a besoin le réclame — publier un KM ne
-doit pas exiger de savoir où les documents seront un jour envoyés.
-`SUBMISSION_TOKEN` est le seul qui puisse manquer.
+coup**. `SUBMISSION_URL` et `SUBMISSION_TOKEN` ne sont pas des coordonnées de
+l'instance mais celles du webhook, donc seule la cible qui en a besoin les
+réclame — publier un KM ne doit pas exiger de savoir où les documents seront un
+jour envoyés.
+
+Le secret est exigé autant que l'adresse, corrigé le 05/08/2026. Le code le
+disait facultatif au motif qu'« un webhook déployé sans secret accepte les
+appels non authentifiés » : ce déploiement n'existe pas. Le webhook de
+`dsw-test` répond **500** quand il n'en détient aucun et **401** quand l'en-tête
+ne correspond pas ([`submission/app.py`]). Un service écrit sans secret est donc
+un bouton Submit qui échoue à tous les coups — et il serait écrit *par-dessus*
+un service qui marchait, sur la seule absence d'un nom dans une exécution. Même
+faute que le repli sur `GITHUB_TOKEN` : un cas d'usage justifié par un mécanisme
+inexistant.
 
 ---
 

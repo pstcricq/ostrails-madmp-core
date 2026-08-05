@@ -14,16 +14,20 @@ from pathlib import Path
 import pytest
 import yaml
 
+from dsw.common import package_id
 from dsw.publish import (
     JSON_FORMAT_UUID,
+    NIL_UUID,
+    DswClient,
     Instance,
     PublishError,
+    Webhook,
     _require_registered,
     instance_from_env,
+    publish_submission,
     published_ids,
     submission_service,
-    submission_token_from_env,
-    submission_url_from_env,
+    webhook_from_env,
 )
 
 GLIDER_CONFIG = Path(__file__).parent.parent / "configs" / "projects" / "glider.yaml"
@@ -64,20 +68,24 @@ def test_a_missing_coordinate_names_every_missing_one_at_once(no_env):
     assert "DSW_API_URL" in str(err.value) and "DSW_PASSWORD" in str(err.value)
 
 
-def test_publishing_a_package_does_not_require_the_webhook_address(no_env):
-    """`SUBMISSION_URL` is the webhook's address, not a coordinate of the
-    instance: the target that needs it is the only one that asks."""
+def test_publishing_a_package_does_not_require_the_webhook(no_env):
+    """The webhook's two names are not coordinates of the instance: the target
+    that needs them is the only one that asks."""
     for name, value in zip(DSW_NAMES, ("http://dsw/api", "a@b.c", "pw"), strict=True):
         no_env.setenv(name, value)
     instance_from_env()
     with pytest.raises(PublishError, match="SUBMISSION_URL"):
-        submission_url_from_env()
+        webhook_from_env()
 
 
-def test_a_missing_shared_secret_is_not_an_error(no_env):
-    """A webhook deployed without one accepts unauthenticated calls; refusing
-    to configure the service would be refusing a deployment that works."""
-    assert submission_token_from_env() is None
+def test_the_shared_secret_is_as_required_as_the_address(no_env):
+    """The webhook answers 500 holding no secret and 401 on a mismatch, so a
+    service written without one is a Submit button that fails every time — and
+    it would be written over a service that worked."""
+    with pytest.raises(PublishError) as err:
+        webhook_from_env()
+    assert len(err.value.problems) == 2
+    assert "SUBMISSION_TOKEN" in str(err.value)
 
 
 # Which package is already published
@@ -109,19 +117,28 @@ def test_a_listing_is_read_as_the_three_names_of_one_package():
 # What a submission service says
 
 
+WEBHOOK = Webhook("http://w", "s3cret")
+
+
 def test_the_service_routes_by_folder_and_only_by_folder(config):
     """The folder in the URL is the only routing input the webhook has: which
     project a submission belongs to is decided there, never by reading the
     document."""
-    service = submission_service(config, "template-uuid", "tenant-uuid", "http://w", "")
+    service = submission_service(config, "template-uuid", "tenant-uuid", WEBHOOK)
     assert service["id"] == "glider"
     assert service["request"]["url"] == "http://w?project=glider"
+
+
+def test_the_service_carries_the_shared_secret(config):
+    """What DSW sends is what the webhook compares against its own copy."""
+    service = submission_service(config, "template-uuid", "tenant-uuid", WEBHOOK)
+    assert service["request"]["headers"] == {"Authorization": "Bearer s3cret"}
 
 
 def test_the_service_is_scoped_to_this_project_s_own_template(config):
     """So the Submit menu offers it for this project's documents and for
     nothing else."""
-    service = submission_service(config, "template-uuid", "tenant-uuid", "http://w", "")
+    service = submission_service(config, "template-uuid", "tenant-uuid", WEBHOOK)
     assert service["supportedFormats"] == [
         {
             "serviceId": "glider",
@@ -132,18 +149,104 @@ def test_the_service_is_scoped_to_this_project_s_own_template(config):
     ]
 
 
+# Writing it: only when it would say something else
+
+
+class _Instance(DswClient):
+    """A DSW instance reduced to what `publish_submission` reads: one published
+    document template, and a tenant configuration it may rewrite. Subclassing
+    the client rather than faking it keeps the paging and the id reconciliation
+    under test — those are what decide which uuid the service names."""
+
+    def __init__(self, config, services, enabled=True):
+        super().__init__("http://dsw/api", "a-token")
+        org, template_id, version = package_id(config).split(":")
+        self.template = {
+            "organizationId": org,
+            "templateId": template_id,
+            "version": version,
+            "uuid": "tpl-uuid",
+        }
+        self.tenant = {
+            "organization": {"name": "SOCIB"},
+            "submission": {"enabled": enabled, "services": list(services)},
+        }
+        self.puts = []
+
+    def get(self, path):
+        if path.startswith("/document-templates"):
+            return {
+                "_embedded": {"documentTemplates": [self.template]},
+                "page": {"totalPages": 1},
+            }
+        return self.tenant
+
+    def put(self, path, payload):
+        self.puts.append(payload)
+
+
+@pytest.fixture
+def submission_env(monkeypatch):
+    """Registered, and told where to submit: the two things the target checks
+    before it looks at the instance at all."""
+    monkeypatch.setenv("SUBMISSION_URL", "http://w")
+    monkeypatch.setenv("SUBMISSION_TOKEN", "s3cret")
+    monkeypatch.setenv("REGISTRY_TOKEN", "a-token")
+    monkeypatch.setenv("REGISTRY_OWNER", "owner")
+    monkeypatch.setenv("REGISTRY_REPO", "dmp-registry")
+    monkeypatch.setattr("dsw.publish.folder_status", _Registry("registered"))
+    return monkeypatch
+
+
+def _current(config):
+    """The service the instance would already hold, published from this very
+    config against this very template."""
+    return submission_service(config, "tpl-uuid", NIL_UUID, WEBHOOK)
+
+
+def test_a_service_that_already_says_this_is_not_written_again(config, submission_env):
+    """The PUT carries the tenant's whole configuration, so a run with nothing
+    to change must not make it: that is what stops it from reverting a setting
+    edited in the console since the GET."""
+    client = _Instance(config, [_current(config)])
+    publish_submission(client, config, package_id(config))
+    assert client.puts == []
+
+
 @pytest.mark.parametrize(
-    "token, headers",
+    "existing, enabled",
     [
-        (None, {}),
-        ("", {}),
-        ("s3cret", {"Authorization": "Bearer s3cret"}),
+        pytest.param([], True, id="no service yet"),
+        pytest.param(
+            [{"id": "glider", "request": {"url": "http://old"}}],
+            True,
+            id="a service saying something else",
+        ),
+        pytest.param(None, False, id="the right service, submissions turned off"),
     ],
 )
-def test_no_shared_secret_means_no_authorization_header(config, token, headers):
-    """An empty Bearer would authenticate nothing and read as if it did."""
-    service = submission_service(config, "t", "n", "http://w", token)
-    assert service["request"]["headers"] == headers
+def test_anything_else_is_written(config, submission_env, existing, enabled):
+    """Equal is not enough on its own: a service nobody can reach because
+    submissions are disabled is a Submit button that is not there."""
+    services = [_current(config)] if existing is None else existing
+    client = _Instance(config, services, enabled=enabled)
+    publish_submission(client, config, package_id(config))
+    assert len(client.puts) == 1
+    written = client.puts[0]["submission"]
+    assert written["enabled"] is True
+    assert [s["id"] for s in written["services"]] == ["glider"]
+    assert written["services"][0]["supportedFormats"][0]["templateUuid"] == "tpl-uuid"
+
+
+def test_other_projects_services_are_left_untouched(config, submission_env):
+    """An upsert by service id: this repository publishes one project at a
+    time into a tenant that hosts them all."""
+    other = {"id": "hf-radar", "request": {"url": "http://w?project=hf-radar"}}
+    client = _Instance(config, [other])
+    publish_submission(client, config, package_id(config))
+    services = client.puts[0]["submission"]["services"]
+    assert other in services
+    assert [s["id"] for s in services] == ["hf-radar", "glider"]
 
 
 # The refusal that protects the researcher
