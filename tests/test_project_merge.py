@@ -174,7 +174,10 @@ def test_extension_may_close_an_open_field(tmp_path):
     assert tightening.before is None
 
 
-def test_base_description_wins_but_gaps_are_filled(tmp_path):
+def test_an_extension_fills_a_missing_description_and_may_repeat_one(tmp_path):
+    """Describing a field the base left undescribed is the useful case, and
+    repeating a description word for word is what redeclaring a structural
+    parent looks like. Neither is a disagreement."""
     model = _merge(
         tmp_path,
         {
@@ -182,13 +185,32 @@ def test_base_description_wins_but_gaps_are_filled(tmp_path):
             "language": dict(STRING_01),
         },
         {
-            "title": {**STRING_1, "_description": "Ext says."},
+            "title": {**STRING_1, "_description": "Base says."},
             "language": {**STRING_01, "_description": "Ext fills the gap."},
         },
     )
     by_path = {f.dotted_path: f for f in model.walk()}
     assert by_path["dmp.title"].description == "Base says."
     assert by_path["dmp.language"].description == "Ext fills the gap."
+
+
+def test_two_files_describing_one_field_differently_is_a_conflict(tmp_path):
+    """It used to be a silent drop — the base's wording kept, the extension's
+    discarded without a word. Which is the fault `_chapter_description` has a
+    coherence check for: prose the generators ignore in silence, where the
+    author has every reason to believe it was taken.
+
+    Whether an extension should be able to *replace* a description is a
+    question this merge does not answer. Refusing is what says so."""
+    with pytest.raises(RulesConflictError) as raised:
+        _merge(
+            tmp_path,
+            {"title": {**STRING_1, "_description": "Base says."}},
+            {"title": {**STRING_1, "_description": "Ext says."}},
+        )
+    (problem,) = raised.value.problems
+    assert "dmp.title" in problem and "_description" in problem
+    assert "base" in problem and "ext" in problem
 
 
 def test_all_conflicts_reported_at_once(tmp_path):

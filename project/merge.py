@@ -14,7 +14,10 @@ Merge semantics — on a field the base already defines, an extension may:
   with a vocabulary of its own. Each tightening is recorded on the field
   (:class:`Tightening`) with the standard that imposed it;
 - never **loosen** or reshape it: a weaker cardinality, single <-> list, a
-  different type, or a wider vocabulary are conflicts.
+  different type, or a wider vocabulary are conflicts;
+- describe what the base left undescribed, or repeat what it says — but not
+  say something else, which is a conflict too. Prose constrains nothing, and
+  is still nobody's to overwrite in silence.
 
 The asymmetry is the point, and doc.md ("La fusion tighten-only") says
 why. Every conflict across all files is collected into one
@@ -41,8 +44,12 @@ _VOCABULARY_ASPECTS = {
     "_allowed_values": "allowed_values",
     "_suggested_values": "suggested_values",
 }
-# Descriptive metadata is adopted from whichever file provides it first
-# (base wins if both do), it documents the field, it doesn't constrain it.
+# Descriptive metadata documents a field, it does not constrain it, so an
+# extension may supply what the base left out — and may repeat what the base
+# says, which is what redeclaring a structural parent looks like. Saying
+# something *else* is a conflict rather than a silent drop: prose an author
+# wrote and nothing carries is the fault `_chapter_description` already has a
+# coherence check for.
 _DESCRIPTIVE_KEYS = ("_description", "_chapter_description")
 
 
@@ -222,8 +229,16 @@ def _merge_meta(
         _merge_vocabulary(node, raw, key, origin, dotted, conflicts)
 
     for key in _DESCRIPTIVE_KEYS:
-        if key in raw and key not in meta:
+        if key not in raw:
+            continue
+        if key not in meta:
             meta[key] = raw[key]
+        elif raw[key] != meta[key]:
+            conflicts.append(
+                f"{dotted}: {key} differs between {node.origin} and {origin}; "
+                f"an extension may describe a field the base left undescribed, "
+                f"or repeat what it says, but not replace it."
+            )
 
 
 def _merge_children(

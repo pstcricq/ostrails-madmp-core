@@ -318,6 +318,25 @@ Elles ne peuvent **jamais** relâcher ni reformer : affaiblir une cardinalité,
 transformer une valeur simple en liste (ou l'inverse), changer un type, élargir
 un vocabulaire sont des conflits.
 
+### La prose suit la même règle, et pour la même raison
+
+`_description` et `_chapter_description` ne contraignent rien, mais elles ne
+sont pas pour autant en roue libre. Une extension peut **décrire un champ que
+la base a laissé sans description**, et peut **répéter** ce que la base dit —
+c'est à quoi ressemble un parent structurel redéclaré. En dire *autre chose*
+est un conflit.
+
+Auparavant, la base gagnait en silence : la prose de l'extension était jetée
+sans un mot. C'est exactement la faute que le contrôle de cohérence sur
+`_chapter_description` existe pour attraper — du texte qu'un auteur a écrit,
+que les générateurs ignorent, et dont rien ne le prévient. Le même mal appelle
+le même remède.
+
+Est-ce qu'une extension *devrait* pouvoir remplacer une description ? La
+question n'est pas tranchée, et c'est bien pour ça qu'on refuse : un refus le
+dit, un silence le cache. Zéro occurrence dans les fichiers actuels — mesuré
+avant d'écrire la règle.
+
 ### L'invariant, et pourquoi il est le bon
 
 > Un document valide sous le modèle fusionné doit rester valide sous chaque
