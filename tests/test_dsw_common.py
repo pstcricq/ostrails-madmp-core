@@ -7,12 +7,14 @@ covered here, from a field built for it, rather than from whichever fields the
 glider rules happen to contain.
 """
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import yaml
 
 from dsw.common import (
+    FIELD_KINDS,
     computed_fields_from_config,
     field_kind,
     needs_a_synthetic_escape,
@@ -25,7 +27,9 @@ from dsw.common import (
     top_level_split,
     utc_timestamp,
 )
-from project import Field, assemble_project
+from dsw.generate_km import build_km_bundle
+from dsw.generate_template import build_template_bundle
+from project import Field, Model, Project, assemble_project
 
 GLIDER_CONFIG = Path(__file__).parent.parent / "configs" / "projects" / "glider.yaml"
 
@@ -66,6 +70,60 @@ def _field(name="title", path=None, cardinality="0..1", type="string", **kw) -> 
 )
 def test_every_kind_a_field_can_be(expected, field):
     assert field_kind(field, computed_fields=set()) == expected
+
+
+_ONE_OF_EACH_KIND = {
+    "computed": _field(name="dmp_id"),
+    "value": _field(),
+    "value_multi": _field(cardinality="0..n"),
+    "boolean": _field(type="boolean"),
+    "options_strict": _field(allowed_values=("a", "b")),
+    "options_suggested": _field(suggested_values=("a", "b")),
+    "options_strict_multi": _field(cardinality="0..n", allowed_values=("a",)),
+    "options_suggested_multi": _field(cardinality="0..n", suggested_values=("a",)),
+    "object_inline": _field(type="object", cardinality="1"),
+    "object_gated": _field(type="object", cardinality="0..1"),
+    "list": _field(type="object", cardinality="0..n"),
+}
+
+
+def test_the_kinds_are_declared_where_the_generators_read_them():
+    """`FIELD_KINDS` is what a generator dispatches over, so it has to be the
+    whole of what `field_kind` can answer — a kind returned but not listed is
+    one nothing had to handle."""
+    assert set(FIELD_KINDS) == set(_ONE_OF_EACH_KIND)
+    for kind, field in _ONE_OF_EACH_KIND.items():
+        assert field_kind(field, {"dmp_id"}) == kind
+
+
+@pytest.mark.parametrize("kind", FIELD_KINDS)
+def test_both_generators_know_what_to_do_with_every_kind(kind):
+    """The pair's third failure mode, after a drifted UUID and a chain read
+    from the wrong parent: a kind added here and handled by one generator
+    only. Both used to end their dispatch on a default, so the forgotten kind
+    came out as a plain value question on one side and something else on the
+    other — two packages that cannot be filled, and nothing red.
+
+    A field of each kind, through both, on a model of one field: neither may
+    raise, and each must put something in its artifact."""
+    field = _ONE_OF_EACH_KIND[kind]
+    if field.type == "object":
+        field = replace(
+            field, children=(_field(name="leaf", path=(*field.path, "leaf")),)
+        )
+    config = yaml.safe_load(GLIDER_CONFIG.read_text())
+    model = Model(
+        base_standard="synthetic",
+        extension_standards=(),
+        fields=(field,),
+        standard_versions=(("synthetic", "1.0.0"),),
+    )
+    project = Project(config=config, model=model)
+
+    km = build_km_bundle(project, created_at="2026-01-01T00:00:00.000Z")
+    assert km["packages"][0]["events"], "the KM emitted nothing at all"
+    template = build_template_bundle(project, created_at="2026-01-01T00:00:00.000Z")
+    assert template["files"][0]["content"]
 
 
 def test_a_strict_vocabulary_wins_over_a_suggested_one():

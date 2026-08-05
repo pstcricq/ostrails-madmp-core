@@ -476,8 +476,13 @@ class KmBuilder:
             self.emit_multi_value_question(field, parent_uuid)
         elif kind == "boolean":
             self.emit_options_question(field, parent_uuid, ["yes", "no"], escape=False)
-        else:
+        elif kind == "value":
             self.emit_value_question(field, parent_uuid)
+        else:
+            # Named rather than defaulted: a kind this generator does not know
+            # emitted as a plain value question is a KM that looks fine and a
+            # template that reads something else.
+            raise ValueError(f"{field.dotted_path}: no DSW entity for kind {kind!r}")
 
     def emit_chapters(self, general: list[Field], chapters: list[Field]) -> None:
         general_uuid = chapter_uuid("general")

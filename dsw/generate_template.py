@@ -246,8 +246,15 @@ class TemplateBuilder:
                 condition=condition,
                 is_object=True,
             )
-        else:
+        elif kind == "value":
             value_expr = f"jv({own_path})"
+        else:
+            # Named rather than defaulted, for the reason `generate_km` gives:
+            # a kind rendered as a plain value is a document that reads a
+            # question the KM asked as something else. "computed" lands here
+            # too — reaching it means a caller forgot to fill it from the
+            # render context.
+            raise ValueError(f"{field.dotted_path}: nothing renders kind {kind!r}")
 
         condition = f"{own_path} in r and r[{own_path}]|reply_str_value"
         return OutputField(
@@ -483,7 +490,11 @@ def build_template_bundle(
             if expr is not None:
                 root_fields.append(OutputField(field.name, expr, required=True))
             continue
-        root_fields.append(builder.build_scalar_field(field, general_chain))
+        # Through the same door as a chapter field, not straight to the scalar
+        # builder: a top-level field is a scalar by definition of the split,
+        # but a scalar can still be a list through its cardinality, and this
+        # one used to render as a single value while the KM asked for a list.
+        root_fields.append(builder.build_any_field(field, general_chain, depth=2))
 
     for field in chapters:
         if field.name in builder.computed_fields:

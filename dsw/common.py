@@ -121,15 +121,33 @@ def top_level_split(model: Model) -> tuple[list[Field], list[Field]]:
     return general, chapters
 
 
+#: Every value :func:`field_kind` can return. A generator dispatches on the
+#: kind and must name each of these, refusing what it does not know instead of
+#: falling through to a default — a kind added here and forgotten in one
+#: generator would otherwise be emitted as something else, quietly, and the
+#: pair would be unfillable with nothing red to show for it.
+FIELD_KINDS = (
+    "computed",
+    "list",
+    "object_gated",
+    "object_inline",
+    "options_strict",
+    "options_suggested",
+    "options_strict_multi",
+    "options_suggested_multi",
+    "boolean",
+    "value",
+    "value_multi",
+)
+
+
 def field_kind(field: Field, computed_fields: set[str]) -> str:
     """What DSW entity a rules field becomes — the single decision every
     generator defers to, so that none of them can disagree.
 
-    One of ``"computed"``, ``"list"`` (a list of objects), ``"object_gated"``
-    (a ``0..1`` object behind a Yes/No gate), ``"object_inline"``,
-    ``"options_strict"``, ``"options_suggested"``, ``"options_strict_multi"``,
-    ``"options_suggested_multi"``, ``"boolean"``, ``"value"``, or
-    ``"value_multi"`` (a scalar repeated through its cardinality).
+    One of :data:`FIELD_KINDS`: ``"list"`` is a list of objects,
+    ``"object_gated"`` a ``0..1`` object behind a Yes/No gate, and
+    ``"value_multi"`` a scalar repeated through its cardinality.
     """
     if len(field.path) == 1 and field.name in computed_fields:
         return "computed"
