@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Any
 
 from dsw.common import (
-    BUILD_DIR,
     computed_fields_from_config,
     field_kind,
     needs_a_synthetic_escape,
@@ -40,6 +39,7 @@ from dsw.common import (
     rules_provenance_line,
     standard_label,
     strip_markdown,
+    template_path,
     top_level_split,
     utc_timestamp,
 )
@@ -55,8 +55,6 @@ from dsw.uuids import (
     u,
 )
 from project import Field, Project, assemble_project
-
-OUTPUT_DIR = BUILD_DIR / "template"
 
 # The DSW document-template metamodel version — a separate concept from the
 # KM's own metamodelVersion (20). Tied to the DSW instance, not the project.
@@ -650,11 +648,7 @@ def main(argv: list[str] | None = None) -> int:
     project = assemble_project(args.config)
     bundle = build_template_bundle(project)
 
-    out = (
-        Path(args.out)
-        if args.out
-        else OUTPUT_DIR / f"{project.config['id']}_template.json"
-    )
+    out = Path(args.out) if args.out else template_path(project.config["id"])
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(bundle, indent=2, ensure_ascii=False))
     print(f"Generated template bundle -> {out}")

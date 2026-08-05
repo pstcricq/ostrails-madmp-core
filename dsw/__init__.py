@@ -11,10 +11,11 @@ Four kinds of module, each answering to a rule that can refuse an addition:
   field path. It is the whole UUID convention, frozen: every DSW entity of
   every artifact takes its identity from here, which is what lets two
   generators reference each other's entities without sharing a table.
-- ``common.py`` is what the generators must answer *identically*. It never
-  opens a file: loading is ``project/``'s job, writing is a generator's.
-  Something used by a single generator is not common — it belongs in that
-  generator.
+- ``common.py`` is what two modules here must answer *identically*, and would
+  be a fault to disagree on: what a rules field becomes, in both generators,
+  and where an artifact lands, between the generator that writes it and the
+  publisher that reads it back. It opens no file and reaches no instance.
+  Something one module alone uses is not common — it belongs in that module.
 - ``generate_*.py`` are the only modules that write under ``build/``. Each
   owns one artifact and ignores the other.
 - ``publish.py`` is the only module that talks to a DSW instance. It builds

@@ -167,9 +167,12 @@ generated, which is why it comes straight after validation.
   would mean a generator's job has leaked in.
 - `dsw/uuids.py` — the whole UUID convention, and nothing else: the standard
   library and the shape of a field path. No config, no model, no DSW payload.
-- `dsw/common.py` — what the generators must answer identically: `field_kind`,
-  the package identifier, the chapter split, the README head and tail, and the
-  upper-case form a standard is shown in. It opens no file.
+- `dsw/common.py` — what two modules here must answer identically, and would
+  be a fault to disagree on: `field_kind` and `needs_a_synthetic_escape` for
+  the generators, `km_path` and `template_path` between a generator and the
+  publisher that reads what it wrote, plus the package identifier, the chapter
+  split, the README head and tail, and the upper-case form a standard is shown
+  in. It opens no file and reaches no instance.
 - `dsw/generate_km.py` — the model walked into a DSW event bundle. Emission
   order is load-bearing: DSW infers the order of sibling entities from the
   order of the events, so the order questions are emitted in is the order a
@@ -272,7 +275,7 @@ sends nothing.
 | `configs/config.schema.json` | the schema every project config is validated against |
 | `configs/loader.py` | load one project config, fully validated |
 | `project/pins.py`, `project/merge.py`, `project/assemble.py` | resolve a config's pins, merge the rules they name, hold the two together |
-| `dsw/uuids.py`, `dsw/common.py` | the frozen UUID convention, and what the generators must answer identically |
+| `dsw/uuids.py`, `dsw/common.py` | the frozen UUID convention, and what two modules here must answer identically |
 | `dsw/generate_km.py`, `dsw/generate_template.py` | a project into a DSW Knowledge Model, and into a Document Template |
 | `dsw/publish.py` | the three targets, and the wizard-api client that reaches them |
 | `build/` | where the generators write; never committed, uploaded by CI |

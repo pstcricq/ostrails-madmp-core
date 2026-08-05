@@ -63,7 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from configs import ConfigFileError, load_config_file
-from dsw.common import BUILD_DIR, package_id
+from dsw.common import km_path, package_id, template_path
 from dsw.uuids import u
 from registry import (
     GitHubClient,
@@ -74,9 +74,6 @@ from registry import (
     token_from_env,
 )
 from utils.errors import ProblemsError
-
-KM_DIR = BUILD_DIR / "km"
-TEMPLATE_DIR = BUILD_DIR / "template"
 
 # The JSON output format of the generated document template (see
 # generate_template.FORMATS): the format a submitted document is rendered in,
@@ -508,8 +505,14 @@ def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> N
     )
 
 
-def _artifact(directory: Path, name: str, generator: str) -> Path:
-    path = directory / name
+def _artifact(path: Path, generator: str) -> Path:
+    """One generated bundle, or the name of the generator that writes it.
+
+    Where it is, is :mod:`dsw.common`'s answer and not this module's: this one
+    reads what the other wrote, in another run and — in CI — on another
+    machine, so a path spelled twice would go wrong here and look like a
+    generator that never ran.
+    """
     if not path.exists():
         raise PublishError([f"not found: {path} — run {generator} first"])
     return path
@@ -546,7 +549,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
             else:
                 publish_km(
-                    client, _artifact(KM_DIR, f"{artifact_id}_km.km", "dsw.generate_km")
+                    client,
+                    _artifact(km_path(artifact_id), "dsw.generate_km"),
                 )
 
         if args.target in ("template", "all"):
@@ -560,11 +564,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 publish_template(
                     client,
-                    _artifact(
-                        TEMPLATE_DIR,
-                        f"{artifact_id}_template.json",
-                        "dsw.generate_template",
-                    ),
+                    _artifact(template_path(artifact_id), "dsw.generate_template"),
                 )
 
         if args.target in ("submission", "all"):

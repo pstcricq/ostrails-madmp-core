@@ -1,15 +1,23 @@
-"""What the generators must answer identically.
+"""What two modules of this package must answer identically.
 
-Two of them turn the same project into two DSW artifacts — a Knowledge Model
-and a Document Template — and they only reference each other's entities
-because they agree, question by question, on what a rules field becomes.
-:func:`field_kind` is that agreement, and the reason this module exists: a
-field the KM asks as a list and the template renders as a single value is a
-pair of packages that cannot be filled.
+Three modules turn one project into what DSW consumes — two generators and the
+publisher — and each pair of them has something it may not disagree about. The
+generators reference each other's entities, so they agree question by question
+on what a rules field becomes: :func:`field_kind` and
+:func:`needs_a_synthetic_escape` are that agreement, and a field the KM asks as
+a list while the template renders a single value is a pair of packages that
+cannot be filled. The publisher never meets a rules field, but it has to find
+on disk exactly what a generator wrote, so :func:`km_path` and
+:func:`template_path` are that agreement.
 
-Nothing here reads or writes a file. Loading is ``project/``'s job and writing
-is a generator's; what is left in between is decisions, and a decision used by
-a single generator is not shared — it belongs in that generator.
+**The rule this module refuses an addition by:** something here is answered the
+same way by more than one module *and* would be a fault if they diverged.
+Something one module alone uses belongs in that module, however tempting the
+name of this one.
+
+Nothing here reads or writes a file, and nothing here reaches an instance.
+Loading is ``project/``'s job, writing is a generator's, uploading is
+``publish.py``'s; what is left in between is decisions.
 """
 
 from __future__ import annotations
@@ -21,9 +29,10 @@ from typing import Any
 
 from project import Field, Model
 
-# Every generated artifact lands under build/, one subdirectory per kind.
-# Nothing in this repository reads them back: CI uploads that directory as a
-# workflow artifact, and that is the whole of their afterlife here.
+# Every generated artifact lands under build/, one subdirectory per kind. CI
+# uploads that directory as a workflow artifact, and `publish.py` reads it back
+# — which is the whole reason the two functions below exist rather than each
+# module spelling a path of its own.
 BUILD_DIR = Path(__file__).resolve().parents[1] / "build"
 
 # The dmp fields filled from the render context instead of a reply. `created`
@@ -37,6 +46,25 @@ _DMP_ID_FIELD = {"dmp_id"}
 # here rather than declared per rules file: no file needs to say it yet, and a
 # second way to spell one convention is what this is here to prevent.
 ESCAPE_VALUE = "other"
+
+
+def km_path(project_id: str) -> Path:
+    """Where a project's Knowledge Model bundle is written, and therefore
+    where it is read back from.
+
+    One generator writes it and the publisher looks for it, in different runs
+    and — in CI — on different machines through an uploaded artifact. Each
+    spelling its own path would not fail on the day they diverge but on the
+    first publish afterwards, as "not found: run dsw.generate_km first", which
+    is the one thing that would not have gone wrong.
+    """
+    return BUILD_DIR / "km" / f"{project_id}_km.km"
+
+
+def template_path(project_id: str) -> Path:
+    """Where a project's Document Template bundle is written and read back.
+    See :func:`km_path`."""
+    return BUILD_DIR / "template" / f"{project_id}_template.json"
 
 
 def package_id(config: dict[str, Any]) -> str:

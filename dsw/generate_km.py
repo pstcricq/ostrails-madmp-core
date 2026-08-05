@@ -25,9 +25,9 @@ from pathlib import Path
 from typing import Any
 
 from dsw.common import (
-    BUILD_DIR,
     computed_fields_from_config,
     field_kind,
+    km_path,
     needs_a_synthetic_escape,
     package_id,
     readme_head,
@@ -51,8 +51,6 @@ from dsw.uuids import (
     u,
 )
 from project import Field, Model, Project, assemble_project
-
-OUTPUT_DIR = BUILD_DIR / "km"
 
 # The DSW metamodel schema version this bundle targets. Tied to the DSW
 # instance and not to the project (20 for DSW v4.31): see
@@ -607,7 +605,7 @@ def main(argv: list[str] | None = None) -> int:
     project = assemble_project(args.config)
     bundle = build_km_bundle(project)
 
-    out = Path(args.out) if args.out else OUTPUT_DIR / f"{project.config['id']}_km.km"
+    out = Path(args.out) if args.out else km_path(project.config["id"])
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(bundle, indent=2, ensure_ascii=False))
     print(f"Generated {len(bundle['packages'][0]['events'])} events -> {out}")

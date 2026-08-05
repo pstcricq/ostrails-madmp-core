@@ -28,7 +28,7 @@ import json
 import sys
 from pathlib import Path
 
-from dsw.common import BUILD_DIR, utc_timestamp
+from dsw.common import BUILD_DIR, km_path, template_path, utc_timestamp
 from dsw.generate_km import build_km_bundle
 from dsw.generate_template import build_template_bundle
 from project import assemble_project
@@ -101,8 +101,8 @@ def main() -> int:
             continue
 
         project_id = project.config["id"]
-        _write(BUILD_DIR / "km" / f"{project_id}_km.km", km)
-        _write(BUILD_DIR / "template" / f"{project_id}_template.json", template)
+        _write(km_path(project_id), km)
+        _write(template_path(project_id), template)
 
         events = len(km["packages"][0]["events"])
         chars = len(template["files"][0]["content"])
