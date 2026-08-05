@@ -748,6 +748,32 @@ initialisé n'a pas d'épingles et qu'un DMP déposé là serait orphelin.
 Le partage des rôles est celui-là et pas un autre : ce qui *dispose* connaît la
 config, ce qui *dépose* ne connaît que le nom du dossier reçu en paramètre.
 
+**Ce qui garantit ce partage, c'est le portail `meta.yaml`, pas les
+`.gitkeep`.** Git ne stockant pas de répertoire, `template/` apparaîtrait de
+toute façon au moment où le webhook y écrit le DMP. Ce que les `.gitkeep`
+achètent est autre chose, et c'est délibéré : la forme du dossier **préexiste
+et se voit**, avant qu'aucun DMP n'arrive. Un dossier enregistré ressemble à ce
+qu'il sera.
+
+### Un dossier, c'est les trois morceaux — pour les deux verbes
+
+`converge` disposait trois choses et `folder_status` n'en lisait qu'une. Un
+`.gitkeep` disparu donnait donc : `folder_status` → `registered`, puis
+`converge` → **`unchanged` en envoyant un commit**. Le verbe répondait pour
+`meta.yaml`, pas pour le dossier.
+
+Les deux verbes lisent désormais les trois morceaux, et `converge` rend son
+verbe **d'après ce qu'il a envoyé**. Un sous-répertoire manquant rend `stale`
+côté lecture et `updated` côté écriture. Ce n'est pas de la minutie : c'est ce
+qui fait que les deux parlent du même objet, sans quoi le contrôle annonce
+« rien à faire » sur un dossier que la synchro va modifier.
+
+C'est aussi ce qui rend **vraie** la phrase sur laquelle repose le job de
+synchro — « rien n'est envoyé quand rien n'a changé » —, écrite ici, dans
+`ci.yml` et dans le README du registre. Un test la figeait à l'envers
+(`unchanged` *plus* des écritures, décrit comme deux écritures indépendantes) :
+une promesse contredite par le test censé la tenir.
+
 ### Où écrire ne se devine pas
 
 `REGISTRY_OWNER` et `REGISTRY_REPO` sont lus **sans valeur par défaut**, et

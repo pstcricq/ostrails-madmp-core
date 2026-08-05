@@ -132,11 +132,15 @@ DMP and a `productions/` for the deployment DMPs derived from it. Laying that
 out is this package's job — the webhook writes one document into a folder and
 creates nothing, and refuses a folder with no `meta.yaml`.
 
-Two verbs, and only one of them writes. `folder_status` reads and says where a
-project stands: `missing`, `registered`, `stale` or `collision`. Only a
+Two verbs, and only one of them writes, but both about the same folder — all
+three of `meta.yaml`, `template/` and `productions/`, so that what reads
+cannot call a folder settled and then watch the other change it.
+`folder_status` reads and says where a project stands: `missing`, `registered`,
+`stale` or `collision`, naming everything out of date in one go. Only a
 collision — a folder carrying another project's `id` — is a fault; the rest is
 a step not taken yet. `converge` makes the registry say what the config says
-and reports what that took: `created`, `updated` or `unchanged`. It never
+and reports what that took, from what it actually sent: `created`, `updated`
+or `unchanged` — so a run that reports `unchanged` left no commit. It never
 deletes, never overwrites another project's folder, and touches no key it does
 not own: `id` and `rules` are this repository's, and anything else the file
 carries is written by the registry's own CI, carried across untouched, and

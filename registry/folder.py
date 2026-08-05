@@ -8,9 +8,14 @@ question about the project that anyone can ask from any branch.
 researcher clicking Submit in DSW is turned away, because the webhook refuses
 a folder with no ``meta.yaml``.
 
+Separate, but **about the same folder**: a folder is ``meta.yaml`` *and* its
+two subdirectories, and both verbs read all three. One that read less would
+call a folder registered and then quietly change it.
+
 Converging is idempotent, and **observably** so: nothing is sent when nothing
 changed, so a job running on every push to the default branch leaves no commit
-behind every time.
+behind every time — and the verb it returns says what it sent, not what it
+looked at first.
 """
 
 from __future__ import annotations
@@ -166,10 +171,34 @@ def _read_meta(
     return entry, yaml.safe_load(entry.content)
 
 
+def keep_path(config: dict[str, Any], subdir: str) -> str:
+    """Where a subdirectory's ``.gitkeep`` lives. Git stores no empty
+    directory, so this file is what makes the subdirectory exist — and both
+    verbs below name it through here, which is what keeps the one that reads
+    and the one that writes talking about the same folder."""
+    return f"{folder_path(config)}/{subdir}/.gitkeep"
+
+
+def _absent_subdirs(
+    gh: GitHubClient, registry: Registry, config: dict[str, Any]
+) -> list[str]:
+    return [
+        sub
+        for sub in SUBDIRS
+        if gh.get_file(registry.owner, registry.repo, keep_path(config, sub)) is None
+    ]
+
+
 def folder_status(
     gh: GitHubClient, registry: Registry, config: dict[str, Any]
 ) -> FolderStatus:
-    """Read this project's folder and say where it stands. Writes nothing."""
+    """Read this project's folder and say where it stands. Writes nothing.
+
+    It reads everything :func:`converge` writes, and that is the point rather
+    than thoroughness: a read that looked only at ``meta.yaml`` would call a
+    folder registered and then watch the sync change it, so the two verbs would
+    not be answering about the same thing.
+    """
     folder = config["id"]
     _, current = _read_meta(gh, registry, config)
     if current is None:
@@ -183,19 +212,32 @@ def folder_status(
             f"{folder_path(config)}/ belongs to project {current.get('id')!r}, "
             f"not {config['id']!r}.",
         )
+
+    # Everything out of date at once, as everywhere else here: both are fixed
+    # by the same sync, and one of them hiding the other would cost a run.
+    outdated = []
     if meta_document(config, current) != current:
+        outdated.append("meta.yaml no longer says what the config says")
+    if absent := _absent_subdirs(gh, registry, config):
+        outdated.append(f"{', '.join(sub + '/' for sub in absent)} not laid out")
+    if outdated:
         return FolderStatus(
             folder,
             "stale",
-            "meta.yaml no longer says what the config says; it is updated on "
-            "the default branch.",
+            f"{'; '.join(outdated)}; brought up to date on the default branch.",
         )
-    return FolderStatus(folder, "registered", "meta.yaml says what the config says.")
+    return FolderStatus(folder, "registered", "the folder says what the config says.")
 
 
 def converge(gh: GitHubClient, registry: Registry, config: dict[str, Any]) -> str:
     """Make the registry say what the config says, and return what that took:
     ``"created"``, ``"updated"`` or ``"unchanged"``.
+
+    The verb answers for the **folder**, from what was actually sent — a
+    ``.gitkeep`` put back is an update, whatever ``meta.yaml`` had to say. A
+    run reporting ``unchanged`` and leaving a commit behind would make the one
+    claim this job rests on unfalsifiable, and it is the claim a reader of the
+    registry's history checks first.
 
     Never deletes and never overwrites another project: a collision raises
     rather than clobbering a folder somebody else's DMPs land in.
@@ -218,14 +260,8 @@ def converge(gh: GitHubClient, registry: Registry, config: dict[str, Any]) -> st
         )
 
     wanted = meta_document(config, current)
-    if current is None:
-        verb = "created"
-    elif wanted == current:
-        verb = "unchanged"
-    else:
-        verb = "updated"
-
-    if verb != "unchanged":
+    sent = False
+    if current is None or wanted != current:
         gh.put_file(
             registry.owner,
             registry.repo,
@@ -234,14 +270,17 @@ def converge(gh: GitHubClient, registry: Registry, config: dict[str, Any]) -> st
             f"register: {config['id']} meta.yaml",
             sha=entry.sha if entry else None,
         )
-    for sub in SUBDIRS:
-        keep = f"{folder_path(config)}/{sub}/.gitkeep"
-        if gh.get_file(registry.owner, registry.repo, keep) is None:
-            gh.put_file(
-                registry.owner,
-                registry.repo,
-                keep,
-                b"",
-                f"register: {config['id']} {sub}/",
-            )
-    return verb
+        sent = True
+    for sub in _absent_subdirs(gh, registry, config):
+        gh.put_file(
+            registry.owner,
+            registry.repo,
+            keep_path(config, sub),
+            b"",
+            f"register: {config['id']} {sub}/",
+        )
+        sent = True
+
+    if current is None:
+        return "created"
+    return "updated" if sent else "unchanged"

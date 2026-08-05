@@ -161,10 +161,33 @@ def test_a_bumped_pin_makes_the_folder_stale():
 
 def test_a_missing_subdir_is_created_without_touching_meta():
     """The two writes are independent: a folder whose meta.yaml is right but
-    whose directories were removed gets them back, and nothing else."""
+    whose directories were removed gets them back, and nothing else.
+
+    And it is reported as what it is. The verb answers for the folder, not for
+    `meta.yaml` alone — a run that says `unchanged` and leaves a commit behind
+    is the one claim the sync job is not allowed to get wrong."""
     fake = registry_with(meta_document(CONFIG), keeps=False)
-    assert converge(fake, REGISTRY, CONFIG) == "unchanged"
+    assert converge(fake, REGISTRY, CONFIG) == "updated"
     assert fake.writes == KEEPS
+
+
+def test_a_folder_missing_a_subdir_is_stale():
+    """Reading and writing must agree on what a folder is. `converge` lays out
+    three things, so a read that looked at one would call a folder registered
+    and then quietly change it."""
+    fake = registry_with(meta_document(CONFIG), keeps=False)
+    status = folder_status(fake, REGISTRY, CONFIG)
+    assert (status.state, status.is_fault) == ("stale", False)
+    assert "template" in status.detail and "productions" in status.detail
+
+
+def test_a_stale_folder_names_everything_that_is_stale_about_it():
+    """One read, the whole list — a folder both out of date and half laid out
+    says so in one go, the way every other check in this repository reports."""
+    fake = registry_with({"id": "glider", "rules": [{"rda_dcs": "0.9.0"}]}, keeps=False)
+    detail = folder_status(fake, REGISTRY, CONFIG).detail
+    assert "meta.yaml" in detail
+    assert "template" in detail and "productions" in detail
 
 
 def test_key_order_alone_is_not_a_change():
