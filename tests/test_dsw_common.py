@@ -136,8 +136,14 @@ def test_a_standard_is_shown_in_upper_case():
 
 
 def test_the_package_id_is_the_three_fields_dsw_reads():
+    """Three fields, joined in the order DSW reads them — said on a config of
+    its own, where all three values differ and a swap would show. The real
+    project only has to agree on the two that are not meant to move: pinning
+    its version here would make publishing a correction start with a red
+    test."""
+    assert package_id({"organizationId": "o", "id": "p", "version": "9"}) == "o:p:9"
     config = yaml.safe_load(GLIDER_CONFIG.read_text())
-    assert package_id(config) == "socib:glider:1.0.0"
+    assert package_id(config) == f"socib:glider:{config['version']}"
 
 
 def test_the_provenance_line_names_every_standard_and_version():

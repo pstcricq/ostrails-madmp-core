@@ -67,7 +67,7 @@ def _children_of(events, parent_uuid):
 def test_the_bundle_names_the_project_and_the_metamodel(project, events):
     bundle = build_km_bundle(project, created_at="2026-01-01T00:00:00.000Z")
     package = bundle["packages"][0]
-    assert bundle["id"] == "socib:glider:1.0.0"
+    assert bundle["id"] == f"socib:glider:{project.config['version']}"
     assert bundle["kmId"] == "glider"
     assert bundle["metamodelVersion"] == METAMODEL_VERSION
     assert package["id"] == bundle["id"]
