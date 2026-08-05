@@ -57,9 +57,30 @@ dérive dans le dos d'un projet parce qu'un autre a été modifié.
 Le fichier se lit de haut en bas en trois blocs — le projet, ses règles, DSW —
 et l'ordre n'est pas décoratif : il va du plus stable au plus éditorial. Il n'y
 a **pas** de bloc `instruments` : le concept est parti avec le standard `socib`,
-et un champ qu'aucun code ne lit vaut moins que son absence. Le schéma étant
-fermé, une config qui en épingle encore un est refusée au chargement plutôt
-qu'ignorée en silence.
+et un champ dont le lecteur a disparu vaut moins que son absence. Le schéma
+étant fermé, une config qui en épingle encore un est refusée au chargement
+plutôt qu'ignorée en silence.
+
+### Le schéma de config décrit un projet complet, pas ce que le code lit
+
+À ce stade, le code ne lit que trois champs : `id` et `version` pour rendre
+compte, `rules` pour résoudre les épingles. Les sept autres — `name`, `author`,
+`license`, `organizationId`, `description`, `references`, `auto_timestamps` —
+n'ont aucun lecteur, et sont pourtant tous `required`. C'est délibéré, et ça
+n'est **pas** une entorse à la règle « les dépendances se gagnent » : celle-ci
+porte sur ce que le code importe, pas sur ce qu'une donnée déclare.
+
+Un schéma de config est un contrat avec **l'auteur du fichier**, pas avec le
+programme. Il dit à un humain ce qu'il faut écrire pour qu'un projet soit
+complet, et cette liste est connue d'avance : chacun des sept est consommé par
+la génération DSW, une tranche plus loin. Les rendre optionnels aujourd'hui
+pour les remettre `required` demain obligerait à repasser sur chaque config,
+pour n'avoir rien vérifié entre-temps.
+
+La distinction avec `instruments` tient donc en un mot : là, le lecteur avait
+disparu ; ici, il est daté. Un champ dont personne n'aura besoin ne s'écrit
+pas ; un champ dont le lecteur arrive à la tranche suivante s'exige tout de
+suite, sinon les données arrivent en retard sur le code qui les attend.
 
 ### Un projet a un nom machine et un nom humain, et rien entre les deux
 
@@ -343,11 +364,16 @@ Mesuré : `resolve_pins([{"ostrails": 1.0}], ...)` lève un `TypeError` nu
 `UnresolvedPinsError`.
 
 **Latent, pas actif :** le seul appelant est `assemble_project`, qui charge la
-config d'abord. Ça mordra à la tranche du contrôle qualité, qui lira les
-épingles du `meta.yaml` d'un dossier de registre — un fichier qui n'a **aucun
-schéma** et que personne ne valide en entrant. Le correctif se décide là, avec
-son appelant sous les yeux : une passe de forme dans `resolve_pins`, ou un
-schéma pour le sidecar.
+config d'abord.
+
+**Déclencheur pour rejuger :** le premier appelant qui passe des épingles ne
+venant *pas* d'une config validée. L'enregistrement au registre n'en est pas
+un — il écrit les épingles dans `meta.yaml` et ne les relit jamais. Le candidat
+reste le contrôle qualité, qui lira celles du `meta.yaml` d'un dossier de
+registre — un fichier sans **aucun** schéma, que personne ne valide en entrant
+— mais il est repoussé sans date, et le correctif se décide avec son appelant
+sous les yeux : une passe de forme dans `resolve_pins`, ou un schéma pour le
+sidecar.
 
 ### La roue n'embarque aucun fichier de données
 
@@ -357,13 +383,17 @@ construite depuis une copie vierge, sans cache, ne contient donc **ni JSON ni
 YAML** : elle s'importe, puis meurt au premier appel réel sur
 `FileNotFoundError: .../site-packages/rules/rules.schema.json`.
 
-**Latent, pas actif :** rien ici ne consomme de roue aujourd'hui. Ça mordra le
-jour où on conteneurise, où on publie sur un index, ou où on installe depuis
-git sans `-e`. Le correctif tient en deux lignes
+**Latent, et destiné à le rester.** L'unité d'exécution est le **dépôt cloné**,
+pas la roue : la CI fait `uv sync --frozen` dans le checkout, et le code y lit
+ses fichiers de données là où ils sont, sur le disque. Le déploiement Codespaces
+fera pareil — décidé le 05/08/2026 en constatant que « le jour où on
+conteneurise » était le prochain jalon, et qu'aucun consommateur de roue n'y
+apparaissait pour autant.
+
+**Déclencheur pour rejuger :** publier sur un index, ou installer depuis git
+sans `-e`. Le correctif tient alors en deux lignes
 (`[tool.setuptools.package-data]`, avec un glob par niveau de répertoire car
-ils ne les traversent pas), mais il se décide à la tranche où un consommateur
-de la roue existe — c'est là qu'on saura si la roue est la bonne unité de
-distribution.
+ils ne les traversent pas).
 
 **Deux pièges pour qui vérifiera**, tous deux donnant un faux succès :
 setuptools **ne nettoie jamais `build/`** entre deux constructions, donc des

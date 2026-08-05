@@ -70,11 +70,17 @@ def _versions_in(directory: Path) -> str:
     return ", ".join(sorted(p.stem for p in directory.glob(f"*{SUFFIX}"))) or "nothing"
 
 
-def _resolve(pins: list[Pin], root: Path) -> list[Path]:
-    """Every pin resolved to its file, or every unresolved one reported at
-    once. Resolution never stops at the first miss: a config is fixed faster
+def resolve_pins(pins: list[Pin], rules_dir: str | Path) -> list[Path]:
+    """The rules files a config's ``rules:`` pins name, in the order the pins
+    are written — the order the merge records tightenings in. Feeds
+    :func:`project.merge.merge_rules`.
+
+    Every pin is resolved, or every unresolved one is reported at once:
+    resolution never stops at the first miss, because a config is fixed faster
     from the whole list, and the available names are read off the disk so a
-    typo is corrected without going to look."""
+    typo is corrected without going to look.
+    """
+    root = Path(rules_dir)
     paths, problems = [], []
     for pin in pins:
         ((name, version),) = pin.items()
@@ -100,10 +106,3 @@ def _resolve(pins: list[Pin], root: Path) -> list[Path]:
     if problems:
         raise UnresolvedPinsError(problems)
     return paths
-
-
-def resolve_pins(pins: list[Pin], rules_dir: str | Path) -> list[Path]:
-    """The rules files a config's ``rules:`` pins name, in the order the pins
-    are written — the order the merge records tightenings in. Feeds
-    :func:`project.merge.merge_rules`."""
-    return _resolve(pins, Path(rules_dir))
