@@ -125,7 +125,7 @@ def _required_env(names: tuple[str, ...], what: dict[str, str]) -> list[str]:
     values = [os.environ.get(name) for name in names]
     missing = [name for name, value in zip(names, values, strict=True) if not value]
     if missing:
-        raise PublishError([f"{name} is not set; it {what[name]}." for name in missing])
+        raise PublishError([f"{name} is not set, it {what[name]}." for name in missing])
     return values
 
 
