@@ -32,6 +32,12 @@ BUILD_DIR = Path(__file__).resolve().parents[1] / "build"
 _TIMESTAMP_FIELDS = {"created", "modified"}
 _DMP_ID_FIELD = {"dmp_id"}
 
+# What a vocabulary calls "none of those listed", compared case-insensitively
+# so that RDA DCS's `other` and DataCite's `Other` are one convention. Written
+# here rather than declared per rules file: no file needs to say it yet, and a
+# second way to spell one convention is what this is here to prevent.
+ESCAPE_VALUE = "other"
+
 
 def package_id(config: dict[str, Any]) -> str:
     """The DSW package identifier of a project — the one name its KM and its
@@ -60,6 +66,30 @@ def standard_label(standard: str) -> str:
     this module means.
     """
     return standard.upper()
+
+
+def needs_a_synthetic_escape(field: Field) -> bool:
+    """Whether the generators must add an "Other" answer of their own beside a
+    field's declared values, opening a free-text follow-up.
+
+    Only where the vocabulary admits values it does not list, *and* names no
+    escape of its own. RDA DCS and DataCite both end several vocabularies with
+    one — spelled ``other`` by the first, ``Other`` by the second — and neither
+    gives a field beside it to say which value was meant. It is a value, not a
+    door, and a field that has one does not get a second: two escapes for one
+    notion is how the declared value came to be dropped from the list a
+    researcher is shown.
+
+    Here rather than in either generator because both must answer it the same
+    way. On a vocabulary spelling it in lower case they have no choice: a UUID
+    derives from the value, so the declared answer and the synthetic one *are*
+    the same entity, and only one of them can be emitted.
+    """
+    if field.allowed_values is not None:
+        return False
+    if field.suggested_values is None:
+        return False
+    return not any(value.lower() == ESCAPE_VALUE for value in field.suggested_values)
 
 
 def computed_fields_from_config(config: dict[str, Any]) -> set[str]:

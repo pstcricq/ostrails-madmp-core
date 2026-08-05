@@ -33,6 +33,7 @@ from dsw.common import (
     BUILD_DIR,
     computed_fields_from_config,
     field_kind,
+    needs_a_synthetic_escape,
     package_id,
     readme_head,
     readme_tail,
@@ -203,10 +204,9 @@ class TemplateBuilder:
         own_chain = chain + [q(question_uuid(field.path))]
         own_path = reply_path_expr(own_chain)
 
-        if kind == "options_suggested":
+        if kind == "options_suggested" and needs_a_synthetic_escape(field):
             for value in field.suggested_values:
-                if value.lower() != "other":
-                    self.answer_labels[answer_uuid(field.path, value)] = value
+                self.answer_labels[answer_uuid(field.path, value)] = value
             other_chain = chain + [
                 q(question_uuid(field.path)),
                 q(other_answer_uuid(field.path)),
@@ -222,8 +222,11 @@ class TemplateBuilder:
                 f"{other_path} in r and r[{other_path}]|reply_str_value) "
                 f"else av({own_path}, '')"
             )
-        elif kind == "options_strict":
-            for value in field.allowed_values:
+        elif kind in ("options_strict", "options_suggested"):
+            # A closed vocabulary, or a suggested one naming its own escape:
+            # either way every value is an answer of its own, so there is no
+            # sentinel to detect and the label table carries the lot.
+            for value in field.allowed_values or field.suggested_values:
                 self.answer_labels[answer_uuid(field.path, value)] = value
             # Default to '', never to a vocabulary value: 'unknown' is a
             # legitimate answer for ethical_issues_exist, personal_data and
@@ -258,17 +261,16 @@ class TemplateBuilder:
         self, field: Field, chain: list[str], depth: int
     ) -> OutputField:
         """An ``options_*_multi`` field: a JSON array of every chosen label,
-        the suggested case appending the one manually-entered value from its
-        "other" follow-up when filled."""
-        kind = field_kind(field, self.computed_fields)
+        appending the one manually-entered value from an "other" follow-up
+        where the field was given one.
+
+        Which vocabulary the values come from is all this needs of the kind:
+        both multi kinds render the same array, and whether a follow-up exists
+        is :func:`dsw.common.needs_a_synthetic_escape`'s answer, not the
+        kind's."""
         own_path = reply_path_expr(chain + [q(question_uuid(field.path))])
 
-        strict = kind == "options_strict_multi"
-        values = (
-            list(field.allowed_values)
-            if strict
-            else [v for v in field.suggested_values if v.lower() != "other"]
-        )
+        values = list(field.allowed_values or field.suggested_values)
         for value in values:
             self.answer_labels[answer_uuid(field.path, value)] = value
 
@@ -279,7 +281,7 @@ class TemplateBuilder:
         )
 
         other_var = None
-        if not strict:
+        if needs_a_synthetic_escape(field):
             other_path = reply_path_expr(chain + [q(other_followup_uuid(field.path))])
             other_var = f"{item_var}_other"
             preamble += (

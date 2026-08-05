@@ -15,6 +15,7 @@ import yaml
 from dsw.common import (
     computed_fields_from_config,
     field_kind,
+    needs_a_synthetic_escape,
     package_id,
     readme_head,
     readme_tail,
@@ -72,6 +73,27 @@ def test_a_strict_vocabulary_wins_over_a_suggested_one():
     list; the constraint that binds is the one that decides."""
     field = _field(allowed_values=("a",), suggested_values=("a", "b"))
     assert field_kind(field, set()) == "options_strict"
+
+
+def test_only_a_suggested_vocabulary_naming_no_escape_of_its_own_gets_one():
+    """RDA DCS and DataCite both end several vocabularies with a value meaning
+    "none of those listed" — spelled `other` by one, `Other` by the other —
+    and neither gives a field beside it to say which. It is a value, not a
+    door.
+
+    So a synthetic "Other" answer is added only where the vocabulary admits
+    values it does not list *and* names no escape itself. Both generators read
+    this one answer: a KM offering the synthetic answer where the template
+    reads the declared value is a pair nobody can fill — and on a vocabulary
+    spelling it in lower case the two are the same entity, a UUID being
+    derived from the value."""
+    assert needs_a_synthetic_escape(_field(suggested_values=("ror", "grid")))
+    assert not needs_a_synthetic_escape(_field(suggested_values=("orcid", "other")))
+    assert not needs_a_synthetic_escape(_field(suggested_values=("Doer", "Other")))
+    # A closed vocabulary admits nothing else, whether or not it names one.
+    assert not needs_a_synthetic_escape(_field(allowed_values=("url", "other")))
+    assert not needs_a_synthetic_escape(_field(allowed_values=("a", "b")))
+    assert not needs_a_synthetic_escape(_field())
 
 
 def test_computed_applies_to_top_level_fields_only():

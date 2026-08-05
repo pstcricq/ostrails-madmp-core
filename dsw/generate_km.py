@@ -28,6 +28,7 @@ from dsw.common import (
     BUILD_DIR,
     computed_fields_from_config,
     field_kind,
+    needs_a_synthetic_escape,
     package_id,
     readme_head,
     readme_tail,
@@ -228,11 +229,15 @@ class KmBuilder:
         )
 
     def emit_options_question(
-        self, field: Field, parent_uuid: str, values: list[str], strict: bool
+        self, field: Field, parent_uuid: str, values: list[str], escape: bool
     ) -> None:
-        """An ``OptionsQuestion`` with one answer per value. When the
-        vocabulary is only suggested, an extra "Other" answer opens a
-        free-text follow-up."""
+        """An ``OptionsQuestion`` with one answer per value, plus — when
+        ``escape`` — an extra "Other" answer opening a free-text follow-up.
+
+        ``escape`` is :func:`dsw.common.needs_a_synthetic_escape`'s call, never
+        this method's: a vocabulary naming an escape of its own is emitted with
+        it and given nothing else, which is also what keeps the synthetic
+        answer from claiming a UUID the declared one already has."""
         q_uuid = question_uuid(field.path)
         self.emit(
             q_uuid,
@@ -248,8 +253,6 @@ class KmBuilder:
                 "answerUuids": [],
             },
         )
-        if not strict:
-            values = [v for v in values if v.lower() != "other"]
         for value in values:
             self.emit(
                 answer_uuid(field.path, value),
@@ -262,7 +265,7 @@ class KmBuilder:
                     "metricMeasures": [],
                 },
             )
-        if not strict:
+        if escape:
             other_uuid = other_answer_uuid(field.path)
             self.emit(
                 other_uuid,
@@ -450,24 +453,29 @@ class KmBuilder:
                 self.process_field(child, parent_uuid)
         elif kind == "options_strict":
             self.emit_options_question(
-                field, parent_uuid, list(field.allowed_values), strict=True
+                field, parent_uuid, list(field.allowed_values), escape=False
             )
         elif kind == "options_suggested":
             self.emit_options_question(
-                field, parent_uuid, list(field.suggested_values), strict=False
+                field,
+                parent_uuid,
+                list(field.suggested_values),
+                escape=needs_a_synthetic_escape(field),
             )
         elif kind == "options_strict_multi":
             self.emit_multi_choice_question(
                 field, parent_uuid, list(field.allowed_values)
             )
         elif kind == "options_suggested_multi":
-            values = [v for v in field.suggested_values if v.lower() != "other"]
-            self.emit_multi_choice_question(field, parent_uuid, values)
-            self.emit_other_followup(field, parent_uuid)
+            self.emit_multi_choice_question(
+                field, parent_uuid, list(field.suggested_values)
+            )
+            if needs_a_synthetic_escape(field):
+                self.emit_other_followup(field, parent_uuid)
         elif kind == "value_multi":
             self.emit_multi_value_question(field, parent_uuid)
         elif kind == "boolean":
-            self.emit_options_question(field, parent_uuid, ["yes", "no"], strict=True)
+            self.emit_options_question(field, parent_uuid, ["yes", "no"], escape=False)
         else:
             self.emit_value_question(field, parent_uuid)
 

@@ -44,12 +44,17 @@ def answer_uuid(path: FieldPath, value: str) -> str:
 
 
 def other_answer_uuid(path: FieldPath) -> str:
-    """The "Other" answer entity of a suggested-values question.
+    """The synthetic "Other" answer of a suggested-values question.
 
-    By construction this is :func:`answer_uuid` of the value ``"other"``: a
-    vocabulary listing that word literally would give its answer the same
-    identity as the synthetic one. No standard does today, and the convention
-    is frozen, so this is a hazard to know rather than a bug to fix.
+    By construction this is :func:`answer_uuid` of the value ``"other"``, so a
+    vocabulary listing that word gives its own answer the same identity. Six
+    fields of the RDA DCS and DataCite vocabularies do list it — this was once
+    written here as something no standard did, which was never true.
+
+    Nothing has to be done about it, because the two can no longer be asked at
+    once: :func:`dsw.common.needs_a_synthetic_escape` withholds the synthetic
+    answer from any vocabulary naming an escape of its own. One entity, one
+    meaning — which is what the shared identity was saying all along.
     """
     return u(*path, "answer", "other")
 

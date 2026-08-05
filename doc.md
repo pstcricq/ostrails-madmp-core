@@ -143,9 +143,43 @@ arbitrer, à la fusion, entre `_type: list` et `_cardinality: 0..n`. Séparer
 - `_suggested_values` — recommandation, un écart est un **WARNING** seulement.
 
 La distinction n'est pas cosmétique : elle traverse toute la chaîne. Côté DSW,
-un vocabulaire strict devient une `OptionsQuestion` sans échappatoire, un
-vocabulaire suggéré une `OptionsQuestion` plus une réponse « Other » ouvrant un
-champ libre. Côté QC, l'un fait échouer, l'autre avertit.
+un vocabulaire strict devient une `OptionsQuestion` sans échappatoire ; un
+vocabulaire suggéré en reçoit une — une réponse « Other » ouvrant un champ
+libre — **sauf s'il en nomme déjà une**. Côté QC, l'un fait échouer, l'autre
+avertit.
+
+### Un vocabulaire qui nomme son échappatoire garde le monopole
+
+Le RDA DCS termine plusieurs vocabulaires par `other`, DataCite par `Other`.
+C'est une **valeur**, pas une porte : elle dit que le type est hors liste, et
+ni l'un ni l'autre ne prévoit de champ à côté pour dire lequel. Un champ qui en
+déclare une est donc interrogé comme un vocabulaire fermé — sa valeur, dans sa
+graphie, et rien d'autre à côté.
+
+**Pourquoi c'est une règle et pas un détail.** Deux échappatoires pour une
+seule notion, c'est ce qui faisait disparaître la valeur déclarée de la liste
+montrée au chercheur. Sur `dmp.contributor[].role[]` — vocabulaire **contrôlé
+et requis** — la valeur DataCite `Other` était absente des vingt cases à
+cocher, récupérable seulement en la tapant à la main dans la question voisine
+« Role (specify) ». Et sur les vocabulaires qui l'écrivent en minuscules, les
+deux n'avaient même pas le choix d'être distinctes : un uuid dérive de la
+valeur, donc la réponse déclarée et la réponse synthétique **sont la même
+entité**.
+
+La décision vit dans `dsw/common.needs_a_synthetic_escape`, avec `field_kind`,
+parce que les deux générateurs doivent y répondre pareil : un KM qui propose la
+réponse synthétique là où le template lit la valeur déclarée est une paire que
+personne ne peut remplir.
+
+Le prix, assumé : ces champs-là n'ont plus de saisie libre. Un identifiant de
+créateur de type `viaf` se répond `other`, et l'information « viaf » n'est pas
+écrite. C'est le standard qui a tranché en nommant sa propre sortie ; nous ne
+lui en ajoutons pas une seconde.
+
+La valeur d'échappement est **écrite dans le code** (`ESCAPE_VALUE`), pas
+déclarée par fichier de règles : aucun fichier n'a besoin de la dire, et une
+seconde façon d'orthographier une même convention est exactement ce que cette
+règle sert à supprimer.
 
 ### Un standard n'a qu'une orthographe, et c'est du snake_case
 
@@ -444,7 +478,7 @@ Les correspondances :
 | règle | entité DSW |
 |---|---|
 | `_allowed_values` | `OptionsQuestion` stricte, sans échappatoire |
-| `_suggested_values` | `OptionsQuestion` + réponse « Other » ouvrant un champ libre |
+| `_suggested_values` | `OptionsQuestion` + réponse « Other » ouvrant un champ libre — sauf si le vocabulaire nomme déjà son échappatoire |
 | variantes `1..n`/`0..n` des deux | `MultiChoiceQuestion` |
 | objet `0..1` | portillon Oui/Non, enfants sous la réponse « Yes » |
 | objet `1` | enfants émis en ligne |
@@ -549,11 +583,17 @@ d'une réponse** : `unknown` est une réponse légitime pour `ethical_issues_exi
 conséquence du DMP, l'absence de réponse passerait pour un « je ne sais pas »
 assumé.
 
-Pour les vocabulaires suggérés, `'other'` **reste le sentinelle qui détecte la
-réponse « Other »** : son uuid est délibérément absent de la table de libellés
-`AL`, et c'est le repli du lookup sur `'other'` qui l'identifie. Lui donner un
-libellé ferait taire le repli et perdrait la valeur saisie à la main. Seule la
-valeur finalement émise retombe sur `''`.
+Pour un vocabulaire suggéré **qui a reçu une réponse « Other » synthétique**,
+`'other'` est le sentinelle qui la détecte : son uuid est délibérément absent
+de la table de libellés `AL`, et c'est le repli du lookup sur `'other'` qui
+l'identifie. Lui donner un libellé ferait taire le repli et perdrait la valeur
+saisie à la main. Seule la valeur finalement émise retombe sur `''`.
+
+Un vocabulaire qui **nomme lui-même** son échappatoire n'a pas de sentinelle :
+sa valeur est une réponse comme les autres, présente dans `AL`, et le template
+la lit sans détour. C'était le trou — le sentinelle occupait la place, et un
+chercheur qui répondait « Other » sans rien préciser produisait `""` au lieu de
+la valeur du standard.
 
 Le pendant côté contrôle qualité — `""` compte comme une absence — arrivera avec
 lui. Les deux moitiés doivent bouger ensemble.

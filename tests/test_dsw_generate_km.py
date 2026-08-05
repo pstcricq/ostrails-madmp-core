@@ -38,6 +38,10 @@ NIL = "00000000-0000-0000-0000-000000000000"
 GATED = ("dataset", "distribution", "host")
 SUGGESTED = ("contact", "affiliation", "affiliation_id", "type")
 MULTI_VALUE = ("dataset", "data_quality_assurance")
+# Two vocabularies that spell the escape value themselves: RDA DCS writes it
+# `other`, DataCite writes it `Other`.
+OWN_OTHER = ("dataset", "creator", "creator_id", "type")
+OWN_OTHER_MULTI = ("contributor", "role")
 
 
 @pytest.fixture(scope="module")
@@ -183,15 +187,45 @@ def test_an_optional_object_is_asked_behind_a_yes_no_gate(events, by_entity):
 
 
 def test_a_suggested_vocabulary_gets_an_other_answer_and_a_follow_up(events, by_entity):
-    """And the literal value "other" is dropped from the list, or the
-    vocabulary's own entry would collide with the synthetic answer."""
+    """A suggested vocabulary admits values it does not list, so one that does
+    not name an escape of its own is given one: an "Other" answer opening a
+    free-text follow-up."""
     answers = _children_of(events, question_uuid(SUGGESTED))
     labels = [a["content"]["label"] for a in answers]
-    assert labels.count("Other") == 1
-    assert [label for label in labels if label.lower() == "other"] == ["Other"]
+    assert labels == ["ror", "grid", "isni", "Other"]
     follow_up = by_entity[other_followup_uuid(SUGGESTED)]
     assert follow_up["parentUuid"] == other_answer_uuid(SUGGESTED)
     assert follow_up["content"]["valueType"] == "StringQuestionValueType"
+
+
+def test_a_vocabulary_that_names_its_own_escape_keeps_it_and_gets_no_second(
+    events, by_entity
+):
+    """`other` is a *value* of the RDA DCS vocabulary, not a door: it says the
+    identifier scheme is outside the list, and the standard offers no field to
+    say which. So a field that names one is asked like a closed vocabulary —
+    its own value, offered in its own spelling, and nothing beside it.
+
+    Two escapes for one notion is what made this worth writing down: the
+    synthetic answer took the declared value's place, and its UUID with it."""
+    labels = [
+        a["content"]["label"] for a in _children_of(events, question_uuid(OWN_OTHER))
+    ]
+    assert labels == ["orcid", "isni", "openid", "other"]
+    assert other_followup_uuid(OWN_OTHER) not in by_entity
+
+
+def test_a_multi_choice_vocabulary_keeps_the_escape_it_names(events, by_entity):
+    """DataCite ends contributorType with `Other`, and a multi-choice question
+    has no answer to hang a follow-up off — so dropping it left a *required*
+    controlled vocabulary missing one of its own values, reachable only by
+    typing it into the free-text question next door."""
+    labels = [
+        a["content"]["label"]
+        for a in _children_of(events, question_uuid(OWN_OTHER_MULTI))
+    ]
+    assert labels[-1] == "Other"
+    assert other_followup_uuid(OWN_OTHER_MULTI) not in by_entity
 
 
 def test_a_repeated_scalar_becomes_a_list_of_one_value_question(events, by_entity):

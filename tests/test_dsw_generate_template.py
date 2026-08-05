@@ -24,7 +24,7 @@ from dsw.generate_template import (
     TEMPLATE_METAMODEL_VERSION,
     build_template_bundle,
 )
-from dsw.uuids import chapter_uuid, other_answer_uuid, question_uuid
+from dsw.uuids import answer_uuid, chapter_uuid, other_answer_uuid, question_uuid
 from project import Project, assemble_project, merge_rules, resolve_pins
 
 ROOT = Path(__file__).parent.parent
@@ -33,6 +33,16 @@ STAMP = "2026-01-01T00:00:00.000Z"
 
 # The suggested-vocabulary field whose "Other" sentinel must stay out of AL.
 SUGGESTED = ("contact", "affiliation", "affiliation_id", "type")
+
+# A vocabulary that names its own escape value, the way RDA DCS does on every
+# identifier type.
+OWN_ESCAPE = {
+    "id_type": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_suggested_values": ["orcid", "isni", "other"],
+    }
+}
 
 # An object every standard is entitled to declare: nothing about it is
 # required, so the template is handed no key it may emit unconditionally.
@@ -165,6 +175,17 @@ def test_the_answer_table_translates_what_the_km_stores(project, body):
     }
     al = body.split("{%- set AL = ", 1)[1].split(" -%}", 1)[0]
     assert _uuids_in(al) <= km_entities
+
+
+def test_a_vocabulary_that_names_its_own_escape_can_render_that_value(tmp_path):
+    """Picking it must put the word in the document. It used to put nothing
+    there: the declared value was dropped and its UUID reused by the synthetic
+    "Other", whose label is deliberately absent from AL — so the lookup fell
+    back, and a DMP that should have said `other` said `""` instead."""
+    body = _body_from_rules(tmp_path, OWN_ESCAPE)
+    asked = f"{chapter_uuid('general')}.{question_uuid(('id_type',))}"
+    chosen = answer_uuid(("id_type",), "other")
+    assert _render(body, {asked: chosen})["dmp"]["id_type"] == "other"
 
 
 def test_the_other_sentinel_is_kept_out_of_the_answer_table(body):
