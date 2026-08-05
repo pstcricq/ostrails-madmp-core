@@ -7,10 +7,11 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 
-# Where the generators write: KM bundles, template bundles, project seeds.
-# Built from the configs, the rules and the instruments, so never versioned —
-# a committed artifact drifts from the sources that should produce it, and
-# nothing would say so. (setuptools also scratches here on `uv build`.)
+# Where the generators write: KM bundles and document template bundles. Built
+# from the configs and the rules, so never versioned — a committed artifact
+# drifts from the sources that should produce it, and nothing would say so.
+# CI uploads this directory as a workflow artifact instead.
+# (setuptools also scratches here on `uv build`.)
 build/
 
 # Editor settings (personal)

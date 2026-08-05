@@ -18,6 +18,10 @@ arriveront — mais la table des matières ne liste que ce qui existe.*
 1. [Le principe](#1-le-principe)
 2. [Le format des règles](#2-le-format-des-règles)
 3. [La fusion « tighten-only »](#3-la-fusion--tighten-only-)
+4. [La convention d'UUID déterministe](#4-la-convention-duuid-déterministe)
+5. [Le point de décision unique](#5-le-point-de-décision-unique)
+6. [Le questionnaire (Knowledge Model)](#6-le-questionnaire-knowledge-model)
+7. [Le template de document](#7-le-template-de-document)
 10. [Le registre, et la publication](#10-le-registre-et-la-publication)
 14. [Limites connues](#14-limites-connues)
 
@@ -354,6 +358,200 @@ validée, et le `meta.yaml` du registre est exactement ce cas.
 
 ---
 
+## 4. La convention d'UUID déterministe
+
+Chaque entité DSW — chapitre, question, réponse, portillon Oui/Non — reçoit un
+UUID dérivé par `uuid5` du **chemin du champ** pour lequel elle a été générée.
+
+**Ce que ça achète :** le KM et le template sont produits par deux programmes
+indépendants qui n'échangent **aucune table de correspondance**, et référencent
+pourtant les mêmes entités. Un template ne peut structurellement pas pointer
+vers une question que son KM n'a pas — là où une table tenue à la main aurait
+dérivé au premier oubli. C'est aussi ce qui permet de tester l'accord des deux
+sans sortie attendue : on génère les deux et on vérifie que tout UUID lu par le
+template est une entité émise par le KM.
+
+### La contrainte qui en découle
+
+Le namespace et les chaînes de parties sont **gelés à vie une fois un KM
+publié**. Les changer changerait tous les UUID dérivés et casserait toutes les
+références existantes dans DSW. C'est le prix de la garantie, et il est assumé.
+
+Ce n'est pas une consigne mais un test : `tests/test_dsw_uuids.py` tient neuf
+valeurs dérivées, une par genre d'entité, contre ce qui a déjà été publié. Ce
+ne sont pas des tests d'algorithme — `uuid5` n'en a pas besoin — mais la garde
+sur des valeurs qui n'ont pas le droit de bouger.
+
+### Ce qui est identité et ce qui est affichage
+
+Le tag d'un standard dérive son UUID du nom **de code** (`rda_dcs`) et affiche
+la forme majuscule (§2). Les deux ne se croisent jamais : changer ce qu'un
+lecteur voit ne déplace aucune entité.
+
+---
+
+## 5. Le point de décision unique
+
+`field_kind()` répond à une seule question : ce champ, logiquement, c'est quoi ?
+La réponse est l'une de onze — `computed`, `list`, `object_gated`,
+`object_inline`, `options_strict`, `options_suggested`, `options_strict_multi`,
+`options_suggested_multi`, `boolean`, `value`, `value_multi`.
+
+Les générateurs interrogent **cette fonction et aucune autre**. Le risque
+classique — deux générateurs qui divergent sur un cas limite — est éliminé par
+construction et non par discipline : un champ que le KM demande en liste et que
+le template rend en valeur simple est une paire de paquets impossible à
+remplir, et aucun test de l'un ou de l'autre pris seul ne le verrait.
+
+C'est la règle de `dsw/common.py` en entier : ce qui doit rester littéralement
+identique entre les générateurs vit là, et **ce qu'un seul utilise n'y a pas sa
+place** — ça appartient à ce générateur-là.
+
+### La règle du découpage en chapitres
+
+Un champ `dmp` de premier niveau devient **son propre chapitre** si et seulement
+si c'est un objet (simple ou liste) ; tous les scalaires de premier niveau vont
+dans un unique chapitre général partagé.
+
+C'est un découpage, pas un filtre : **tout champ déclaré est demandé**, parce
+que les règles sont le questionnaire en entier. Seuls les champs *calculés* sont
+sautés, par les générateurs eux-mêmes.
+
+### Les champs calculés
+
+Trois champs ne sont jamais demandés au chercheur, parce que leur valeur vient
+entièrement du contexte de rendu :
+
+- `dmp_id` — **toujours** calculé, sans rien à déclarer : son identifiant est
+  l'URL courante du DMP dans DSW (`ctx.config.clientUrl` + `/projects/<uuid>`),
+  résolue au rendu. Le webhook de soumission la réécrit ensuite vers
+  l'emplacement dmp-registry au moment du commit ;
+- `created` / `modified` — optionnels, activés par `auto_timestamps` dans la
+  config.
+
+Un champ calculé de premier niveau ne reçoit **aucun chapitre**, pas un chapitre
+vide. Et le test qui compte est celui du champ imbriqué : `computed` ne
+s'applique qu'à la profondeur 1, donc un `dmp_id` sous un objet reste une
+question comme une autre.
+
+---
+
+## 6. Le questionnaire (Knowledge Model)
+
+Le générateur parcourt le modèle et émet un bundle d'événements DSW complet.
+Les correspondances :
+
+| règle | entité DSW |
+|---|---|
+| `_allowed_values` | `OptionsQuestion` stricte, sans échappatoire |
+| `_suggested_values` | `OptionsQuestion` + réponse « Other » ouvrant un champ libre |
+| variantes `1..n`/`0..n` des deux | `MultiChoiceQuestion` |
+| objet `0..1` | portillon Oui/Non, enfants sous la réponse « Yes » |
+| objet `1` | enfants émis en ligne |
+| liste d'objets | `ListQuestion` |
+| scalaire répété | `ListQuestion` avec un unique `ValueQuestion` modèle d'item |
+
+**L'ordre des événements est l'ordre de lecture** : DSW déduit l'ordre des
+frères de la séquence des événements sous un même `parentUuid`. Il n'y a pas de
+champ d'ordre à maintenir — et une seule invariante à tenir, vraie pour
+n'importe quel projet : aucun événement ne référence un parent que personne n'a
+émis. DSW applique les événements dans l'ordre sur un modèle vide, donc un
+parent qui arrive plus tard est une entité qui disparaît sans bruit.
+
+### Un tag par standard, dérivé et non câblé
+
+Les tags de standard sont dérivés de la déclaration `standard` de chaque fichier
+de règles. Ajouter un fichier ne demande donc jamais de câbler son tag à la
+main. Ils s'affichent en majuscules, à côté de `REQUIRED`, `OPTIONAL` et
+`CONTROLLED VOCABULARY` qui le sont aussi.
+
+Le tag `REQUIRED` et la phase ne créditent **pas** le standard de base pour
+toute exigence : ils nomment le standard qui impose réellement la contrainte,
+extensions comprises — c'est `origin` qui le dit, et il vient de la fusion (§3).
+
+### Les annotations `rules_path`
+
+Chaque question porte une annotation qui la retrace jusqu'à son champ de règles,
+pour qu'un consommateur puisse relier une réponse au chemin qu'elle remplit.
+C'est ce dont le contrôle qualité aura besoin pour lire un DMP soumis. Seuls les
+modèles d'items en sont volontairement dépourvus : ils n'ont pas de chemin
+propre.
+
+### La version de métamodèle est gelée à la main
+
+`METAMODEL_VERSION = 20` (KM) et `TEMPLATE_METAMODEL_VERSION = "18.0"` (document
+template) sont deux concepts distincts, liés à **l'instance DSW** et non au
+projet (20 correspond à DSW 4.31). Référence :
+<https://github.com/ds-wizard/dsw-schemas/tree/main/schemas/km-package>.
+
+Ce que le dépôt ne fait pas, c'est vérifier que l'instance visée les accepte :
+c'est écrit en [§14](#14-limites-connues).
+
+---
+
+## 7. Le template de document
+
+Le template est un Jinja2 qui produit un export JSON simple. DSW le rend contre
+les réponses d'un projet pour produire le maDMP final. Il ne fait **que** rendre
+des réponses : aucun contenu ne s'y incorpore.
+
+### L'assemblage en texte JSON littéral
+
+Les clés requises sont jointes par des **virgules littérales** ; chaque clé
+optionnelle est enveloppée dans son propre bloc `{%- if ... %}`.
+
+**La contrainte qui en découle, et qu'il ne faut pas casser :** chaque bloc
+optionnel commençant par une virgule, il faut **au moins une clé
+inconditionnelle comme ancre** dans chaque objet. C'est la raison pour laquelle
+un champ requis est toujours émis, même sans réponse.
+
+Le test qui la tient rend le template avec **zéro réponse** et parse le
+résultat en JSON : c'est là que l'ancre manquante casse, et nulle part ailleurs.
+
+### Le repli d'un champ non répondu : `''`, jamais une valeur de vocabulaire
+
+Un champ sans réponse retombe sur la chaîne vide, y compris pour un vocabulaire.
+Retomber sur une valeur du vocabulaire rendrait une non-réponse **indiscernable
+d'une réponse** : `unknown` est une réponse légitime pour `ethical_issues_exist`,
+`personal_data` et `sensitive_data` — sur les trois champs les plus lourds de
+conséquence du DMP, l'absence de réponse passerait pour un « je ne sais pas »
+assumé.
+
+Pour les vocabulaires suggérés, `'other'` **reste le sentinelle qui détecte la
+réponse « Other »** : son uuid est délibérément absent de la table de libellés
+`AL`, et c'est le repli du lookup sur `'other'` qui l'identifie. Lui donner un
+libellé ferait taire le repli et perdrait la valeur saisie à la main. Seule la
+valeur finalement émise retombe sur `''`.
+
+Le pendant côté contrôle qualité — `""` compte comme une absence — arrivera avec
+lui. Les deux moitiés doivent bouger ensemble.
+
+### L'UUID de fichier est dérivé, pas tiré au sort
+
+DSW indexe le contenu d'un fichier par cet UUID. Deux exigences s'opposent en
+apparence : il ne doit pas être **réutilisé** d'une version publiée à l'autre,
+sinon l'ancien contenu est servi pour le nouveau paquet ; et il ne doit pas être
+**aléatoire**, sinon deux générations d'un même projet diffèrent sans raison
+visible.
+
+Le dériver de l'identifiant de paquet satisfait les deux : l'identifiant porte
+la `version` du projet, qu'une publication oblige justement à incrémenter.
+
+### Les formats de sortie
+
+`FORMATS` est la source de vérité unique pour les `formats` du bundle **et** pour
+le tableau des formats du README. Seules les entrées `available: true`
+deviennent un vrai format DSW. JSON-LD y figure en `available: false` : déclaré,
+honnêtement non implémenté.
+
+### Markdown et texte brut
+
+DSW rend le `readme` d'un paquet en Markdown mais sa `description` en texte
+brut, alors que les deux dérivent de la même prose de config. D'où
+`strip_markdown()`.
+
+---
+
 ## 10. Le registre, et la publication
 
 *Seule la moitié « registre » est écrite : elle arrive avec `registry/`. La
@@ -596,6 +794,26 @@ ils ne les traversent pas).
 setuptools **ne nettoie jamais `build/`** entre deux constructions, donc des
 fichiers d'un empaquetage antérieur survivent dans les roues suivantes ; et
 `uv build` sans `--no-cache` rend une roue antérieure au changement.
+
+### Rien ne confronte les artefacts générés à une vraie instance DSW
+
+Deux constantes décrivent l'instance visée et non le projet :
+`METAMODEL_VERSION = 20` et `TEMPLATE_METAMODEL_VERSION = "18.0"` (§6). Rien
+dans le dépôt ne vérifie qu'une instance donnée les accepte, ni que le Jinja
+émis se rend réellement : les tests demandent à Jinja lui-même s'il **parse**,
+et rendent le template avec les trois filtres de DSW (`reply_path`,
+`reply_str_value`, `reply_items`) **remplacés par des doublures**. Un désaccord
+sur ce que fait un de ces filtres ne se verrait donc qu'à l'exécution, dans
+DSW, devant un chercheur.
+
+**Pourquoi on s'en tient là :** la seule vérification qui vaudrait mieux
+demande une instance DSW joignable, ce qu'un runner GitHub n'est pas
+aujourd'hui.
+
+**Déclencheur pour rejuger :** le déploiement Codespaces, qui rend une instance
+atteignable depuis la CI. C'est le même jalon qui débloque la publication, et à
+ce moment-là la question devient « publier puis rendre un DMP de test » plutôt
+que « imiter les filtres mieux ».
 
 ### Le format des fichiers de données n'est pas vérifié
 

@@ -6,7 +6,9 @@
 #
 # Dependencies are earned: a package is declared when code in this repository
 # imports it, and not before. Today that is jsonschema, for the meta-schema
-# rules files are validated against.
+# rules files are validated against, and pyyaml, the one thing the config
+# format costs. The DSW generators add nothing — they emit JSON and Jinja
+# source with the standard library alone.
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
@@ -22,12 +24,17 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["rules", "configs", "project", "registry", "utils"]
+include = ["rules", "configs", "project", "dsw", "registry", "utils"]
 
 [dependency-groups]
 dev = [
     "pytest",
     "ruff",
+    # dsw/generate_template.py emits Jinja and nothing else in the pipeline
+    # can say whether it parses — DSW would, at render time, in front of a
+    # researcher. The test suite asks Jinja itself rather than counting
+    # braces. A dev tool only: the generator writes Jinja, it never runs it.
+    "jinja2",
 ]
 
 # Caches go inside .venv rather than at the root: they are as disposable as

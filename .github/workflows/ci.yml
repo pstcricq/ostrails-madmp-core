@@ -8,6 +8,9 @@
 #   projects — the one job that crosses them: every config's pins resolved
 #             against the rules they name, and those rules merged. The set is
 #             a property no per-file job can see.
+#   generate — every project through both generators. The tests generate one
+#             project deeply; this is the only place the others are generated
+#             at all. It is also what produces the artifacts, below.
 #   registry — every project's destination in the registry, read: free, or
 #             already its own.
 #
@@ -15,7 +18,7 @@
 # pull request names the culprit: a Python change, a rules change and a new
 # project are made by different people and fixed in different files. Each pays
 # its own setup, but they run concurrently, so wall-clock is the slowest of
-# the five.
+# the six.
 #
 # `projects` has no `needs:` on purpose. It could only be held back to spare a
 # second red check when a file is also malformed, and that trade is the wrong
@@ -24,18 +27,27 @@
 # extra red mark. The same goes for `registry`: a folder taken by another
 # project is taken whatever else is wrong.
 #
+# `generate` uploads what it built. One definition of "what this commit
+# produces", kept in one place: a reviewer downloads it to see what a rules
+# change did to the questionnaire, and the publish step will ship those exact
+# bytes rather than regenerate its own. It uploads on a pull request too,
+# where nothing is ever published — which is what the artifact means: what
+# this commit produces, not what was published. Committing it instead would
+# add a third answer, and the only one that can silently go stale.
+#
 # Where the registry is, is written here rather than defaulted in the code:
 # this workflow *is* this deployment, so its coordinates belong in it, in the
 # open, where a diff shows them. `REGISTRY_TOKEN` is the one thing that cannot
 # be, and it is a repository secret.
 #
 # The line is not "before or after validation", it is **report or act**. The
-# five jobs above only ever report, so they run concurrently and each names
-# its own culprit. `registry-sync` is the only job that writes anything
-# outside this repository, so it is the only one with `needs:` — it waits for
-# every verdict, and runs on the default branch alone. On a pull request it
-# appears as `skipped`, which is what makes its abstention readable rather
-# than silent.
+# six jobs above only ever report, so they run concurrently and each names its
+# own culprit — `generate` included: an uploaded artifact is scoped to its own
+# run and reaches nothing. `registry-sync` is the only job that writes
+# anything outside this repository, so it is the only one with `needs:` — it
+# waits for every verdict, and runs on the default branch alone. On a pull
+# request it appears as `skipped`, which is what makes its abstention readable
+# rather than silent.
 #
 # They all install with `uv sync --frozen`: the committed lockfile decides the
 # versions, and a transitive release cannot turn CI red on its own.
@@ -106,6 +118,28 @@ jobs:
       - name: Resolve and merge what every project pins
         run: uv run python scripts/validate_projects.py
 
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install the locked environment
+        run: uv sync --frozen
+      - name: Build every project's KM and document template
+        run: uv run python scripts/validate_generation.py
+      # Short retention: the artifact is a convenience for whoever is looking
+      # at this run, not a store. What is durable is the commit that produces
+      # it, and the published package in DSW.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dsw-artifacts
+          path: build/
+          retention-days: 14
+          if-no-files-found: error
+
   registry:
     runs-on: ubuntu-latest
     steps:
@@ -132,7 +166,7 @@ jobs:
     # The only job that writes outside this repository, so the only one that
     # waits for every verdict — a project is registered from a config that
     # loads, pins that resolve and rules that merge, or it is not registered.
-    needs: [checks, rules, configs, projects, registry]
+    needs: [checks, rules, configs, projects, generate, registry]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
