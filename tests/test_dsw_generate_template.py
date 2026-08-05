@@ -1,15 +1,20 @@
-"""The Document Template, and the one thing that binds it to its KM.
+"""The Document Template, and what binds it to its KM.
 
-A template is only useful if every UUID it reads is a UUID the KM emitted:
-they are published as two packages and DSW never checks that they agree. The
-test that matters here builds both from the same project and confronts them —
-it needs no expected output and holds for any project.
+The two are published as separate packages and DSW never checks that they
+agree, so the tests that matter here build both from one project and confront
+them. Agreement has two halves, and each needs its own: every UUID the
+template reads must be one the KM emitted, *and* must be read from where the
+KM hangs it — a reply path is a chain of parenthood, so the right entity
+sought under the wrong parent finds nothing. Neither needs an expected output,
+and both hold for any project.
 
 The rest is what has a specification: the template body must be Jinja that
-parses, the answer-label table must translate what the KM stores, and the
-bundle must name the KM it is allowed to render.
+parses, it must render to a document that parses, the answer-label table must
+translate what the KM stores, and the bundle must name the KM it is allowed to
+render.
 """
 
+import itertools
 import json
 import re
 from pathlib import Path
@@ -82,34 +87,66 @@ class _Ctx:
         self.__dict__.update(attrs)
 
 
+#: The one list item every list question is given, standing in for a UUID DSW
+#: would mint at runtime. It is not an entity of the KM.
+ITEM = "item-0"
+
+
+class _AnyValue(str):
+    """A reply that equals whatever it is compared against.
+
+    A gate opens only when its stored answer equals its own "Yes" UUID, and a
+    test naming each of those would be rebuilding the chains it means to check.
+    Agreeing with every comparison opens all of them at once, so a render walks
+    the whole tree rather than the part that needs no key to unlock.
+    """
+
+    def __eq__(self, other: object) -> bool:
+        return True
+
+    def __ne__(self, other: object) -> bool:
+        return False
+
+    __hash__ = str.__hash__
+
+
 class _Answered:
     """Replies that answer every path asked of them, whatever it is.
 
     Which paths a template reads is the template's own business, and a test
     that listed them would be rebuilding the chain logic it is meant to check.
-    Saying yes to all of them opens every conditional block without knowing one
-    — every scalar and every list. A gate stays shut, since opening it takes
-    its own "Yes" answer's UUID and not just any value.
+    Saying yes to all of them opens every conditional block without knowing one.
     """
 
     def __contains__(self, path: str) -> bool:
         return True
 
-    def __getitem__(self, path: str) -> str:
-        return "answered"
+    def __getitem__(self, path: str) -> _AnyValue:
+        return _AnyValue("answered")
 
 
-def _render(body: str, replies) -> dict:
+def _render(body: str, replies, chains: list[list[str]] | None = None) -> dict:
     """The template run by Jinja itself, and the document it produced.
 
     DSW's three reply filters are stubbed: ``reply_path`` joins a chain of
     UUIDs into one key, ``reply_str_value`` hands back the stored reply, and
     ``reply_items`` gives a list question one item to iterate.
+
+    ``chains`` collects every path the template asks ``reply_path`` for, each
+    flattened to its UUIDs — a chain built on another chain arrives already
+    joined, since that is what the filter returned the first time.
     """
     env = jinja2.Environment()
-    env.filters["reply_path"] = lambda parts: ".".join(str(p) for p in parts)
+
+    def reply_path(parts) -> str:
+        flat = [uuid_ for part in parts for uuid_ in str(part).split(".")]
+        if chains is not None:
+            chains.append(flat)
+        return ".".join(flat)
+
+    env.filters["reply_path"] = reply_path
     env.filters["reply_str_value"] = lambda reply: reply
-    env.filters["reply_items"] = lambda reply: ["item-0"]
+    env.filters["reply_items"] = lambda reply: [ITEM]
     ctx = _Ctx(
         project=_Ctx(
             replies=replies,
@@ -147,14 +184,54 @@ def _body_from_rules(tmp_path: Path, dmp: dict) -> str:
 
 
 def test_every_uuid_the_template_reads_is_an_entity_the_km_emits(project, body):
-    """The pair's whole invariant. They are published as two packages and
-    nothing in DSW checks they agree: a UUID drifting on either side is a
-    question whose answer silently never reaches the document."""
+    """Half of the pair's invariant, the half about identity. They are
+    published as two packages and nothing in DSW checks they agree: a UUID
+    drifting on either side is a question whose answer silently never reaches
+    the document. The other half — where each of those entities hangs — is
+    below."""
     km_entities = {
         event["entityUuid"]
         for event in build_km_bundle(project, created_at=STAMP)["packages"][0]["events"]
     }
     assert _uuids_in(body) - km_entities == set()
+
+
+def test_the_template_reads_every_question_where_the_km_hangs_it(project, body):
+    """The other half, and the one an existing UUID cannot cover: a reply path
+    *is* a chain of parenthood, so reading the right entity from the wrong
+    place finds nothing. Both generators build those chains from `dsw.uuids`,
+    but they build them separately, in code that never meets — nothing before
+    this compared the two.
+
+    Rendering is how the chains are collected rather than parsed: DSW hands
+    `reply_path` the very list the template assembled, so the filter sees what
+    the instance would see. The list item DSW would mint at runtime is not an
+    entity, so it drops out and the question beneath a list answers to the
+    list itself.
+
+    It holds in both directions. Every chapter and question the KM asks is
+    read, so no answer is stranded in a questionnaire nothing exports; and
+    nothing is read that the KM never emitted."""
+    chains: list[list[str]] = []
+    _render(body, _Answered(), chains)
+    events = build_km_bundle(project, created_at=STAMP)["packages"][0]["events"]
+    parent = {event["entityUuid"]: event["parentUuid"] for event in events}
+    asked = {
+        event["entityUuid"]
+        for event in events
+        if event["content"]["eventType"] in ("AddQuestionEvent", "AddChapterEvent")
+    }
+
+    read = {entity for chain in chains for entity in chain if entity != ITEM}
+    assert asked - read == set(), "the KM asks questions the template never reads"
+    assert read - set(parent) == set(), "the template reads what the KM never emitted"
+
+    for chain in chains:
+        steps = [entity for entity in chain if entity != ITEM]
+        for anchor, entity in itertools.pairwise(steps):
+            assert parent[entity] == anchor, (
+                f"{entity} is read under {anchor}, the KM hangs it on {parent[entity]}"
+            )
 
 
 def test_the_template_is_allowed_to_render_exactly_its_own_km(project, bundle):

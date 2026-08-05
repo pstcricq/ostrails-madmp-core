@@ -81,7 +81,8 @@ the two artifacts DSW takes: a **Knowledge Model**, the questions themselves,
 and a **Document Template**, the Jinja that turns a researcher's replies into
 a maDMP JSON document. They are published as two separate packages and DSW
 never checks that they agree — so what makes them agree is that neither holds
-a table of its own.
+a table of its own, and what checks it is a test that renders the template and
+confronts every path it reads with the KM that has to answer it.
 
 Both derive every entity's UUID from `dsw/uuids.py`, by `uuid5` over the path
 of the rules field it was generated for. Same field, same UUID, in both
@@ -90,11 +91,13 @@ it is the identity of every entity in every package already published, and the
 tests hold nine derived values against what was published for exactly that
 reason.
 
-Both also defer to one function, `dsw.common.field_kind`, for what a rules
-field *becomes* — a list, a gated object, a strict vocabulary, a repeated
-scalar. It is the single decision point on purpose: a field the KM asks as a
-list and the template renders as a single value is a pair of packages that
-cannot be filled, and no test of either alone would catch it.
+Both also defer to `dsw/common.py` for what a rules field *becomes* —
+`field_kind` for the entity (a list, a gated object, a strict vocabulary, a
+repeated scalar) and `needs_a_synthetic_escape` for whether an "Other" answer
+is added beside the field's own values. They are single decision points on
+purpose: a field the KM asks as a list and the template renders as a single
+value is a pair of packages that cannot be filled, and no test of either alone
+would catch it.
 
 The generators write under `build/`, which is never committed. CI's `generate`
 job builds every project and uploads that directory as a workflow artifact —
