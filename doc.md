@@ -497,16 +497,48 @@ des réponses : aucun contenu ne s'y incorpore.
 
 ### L'assemblage en texte JSON littéral
 
-Les clés requises sont jointes par des **virgules littérales** ; chaque clé
-optionnelle est enveloppée dans son propre bloc `{%- if ... %}`.
+Chaque clé porte sa virgule **devant elle**, requise comme optionnelle, et
+chaque clé optionnelle est enveloppée dans son propre bloc `{%- if ... %}`. Le
+corps d'un objet est capturé par un `{% set %}` de bloc, et la virgule de celle
+qui s'est retrouvée première est retirée au rendu.
 
-**La contrainte qui en découle, et qu'il ne faut pas casser :** chaque bloc
-optionnel commençant par une virgule, il faut **au moins une clé
-inconditionnelle comme ancre** dans chaque objet. C'est la raison pour laquelle
-un champ requis est toujours émis, même sans réponse.
+**Aucune clé n'a donc besoin d'être inconditionnelle.** C'est le point : un
+standard a parfaitement le droit de déclarer un objet dont tous les enfants
+sont optionnels — `cost { type?, unit? }` est une forme ordinaire — et fermer
+cet objet est le problème du générateur, pas celui des règles. L'exiger d'elles
+reviendrait à demander qu'un fichier de règles mente sur son standard pour
+arranger notre émetteur.
 
-Le test qui la tient rend le template avec **zéro réponse** et parse le
-résultat en JSON : c'est là que l'ancre manquante casse, et nulle part ailleurs.
+**Ce que ça remplace, et pourquoi.** Les clés requises étaient auparavant
+jointes par des virgules littérales et émises en premier, ce qui obligeait
+chaque objet à posséder au moins une clé inconditionnelle comme **ancre**. Cette
+contrainte n'était écrite nulle part ailleurs que dans une docstring, et rien ne
+la vérifiait : un objet sans ancre produisait `{,` et donc un document que
+personne ne peut parser — sans qu'aucun job de CI ne rougisse, le Jinja émis
+étant, lui, parfaitement valide.
+
+L'ordre requis-d'abord est conservé, mais il ne décide plus que de la **lecture**
+du document. Vérifié au moment du changement : sur `glider`, le document rendu
+est identique octet pour octet, avec zéro réponse comme avec toutes.
+
+**Le test qui tient tout ça** rend le template avec deux jeux de réponses, et
+c'est le second qui compte. Avec **zéro réponse** aucun bloc optionnel ne
+s'ouvre, donc aucune virgule ne peut être orpheline : c'est le seul état sous
+lequel la faute ne peut pas se produire. Il faut un objet **rempli** pour la
+voir.
+
+### Un champ requis est émis même sans réponse — et c'est maintenant un choix
+
+Avant, ce comportement était **forcé** par l'ancre de virgules. L'ancre partie,
+il n'a plus de raison mécanique, et il aurait disparu à la première passe de
+simplification si celle-ci n'était pas écrite. La voici : un requis vide est
+**visible** dans le document (`"title": ""`), un requis absent ne l'est pas. Un
+DMP à qui il manque un champ obligatoire doit le dire, pas se taire.
+
+Le prix est connu et assumé : `""` veut dire « fourni, vide » là où l'absence
+veut dire « pas fourni », et c'est ce mécanisme qui produit les `title` vides
+des DMP issus d'une baseline. La moitié qui manque est côté contrôle qualité,
+juste en dessous.
 
 ### Le repli d'un champ non répondu : `''`, jamais une valeur de vocabulaire
 

@@ -168,8 +168,11 @@ generated, which is why it comes straight after validation.
   order of the events, so the order questions are emitted in is the order a
   researcher reads them.
 - `dsw/generate_template.py` — the same model into Jinja that emits JSON as
-  literal text. Every object needs one unconditional key as a comma anchor,
-  which is why a required field is emitted even when nothing answered it.
+  literal text. Every key carries its comma in front of it and each object's
+  body is captured so the first one can be dropped, which is what lets a
+  standard declare an object with nothing required in it. A required field is
+  still emitted when nothing answered it, now as a choice rather than a
+  constraint: a required field that is empty says so, an absent one does not.
 - `dsw/publish.py` — the three targets, and `DswClient`, the wizard-api calls
   this needs. Standard library only, like the GitHub client. One asymmetry
   between the two: the registry's token is read from the environment, DSW's is

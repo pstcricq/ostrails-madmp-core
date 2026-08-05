@@ -24,7 +24,7 @@ from dsw.generate_template import (
     TEMPLATE_METAMODEL_VERSION,
     build_template_bundle,
 )
-from dsw.uuids import other_answer_uuid
+from dsw.uuids import chapter_uuid, other_answer_uuid, question_uuid
 from project import Project, assemble_project, merge_rules, resolve_pins
 
 ROOT = Path(__file__).parent.parent
@@ -33,6 +33,17 @@ STAMP = "2026-01-01T00:00:00.000Z"
 
 # The suggested-vocabulary field whose "Other" sentinel must stay out of AL.
 SUGGESTED = ("contact", "affiliation", "affiliation_id", "type")
+
+# An object every standard is entitled to declare: nothing about it is
+# required, so the template is handed no key it may emit unconditionally.
+ANCHORLESS = {
+    "contact": {
+        "_cardinality": "1",
+        "_type": "object",
+        "name": {"_cardinality": "0..1", "_type": "string"},
+        "mbox": {"_cardinality": "0..1", "_type": "email"},
+    }
+}
 
 
 @pytest.fixture(scope="module")
@@ -59,6 +70,67 @@ class _Ctx:
 
     def __init__(self, **attrs):
         self.__dict__.update(attrs)
+
+
+class _Answered:
+    """Replies that answer every path asked of them, whatever it is.
+
+    Which paths a template reads is the template's own business, and a test
+    that listed them would be rebuilding the chain logic it is meant to check.
+    Saying yes to all of them opens every conditional block without knowing one
+    — every scalar and every list. A gate stays shut, since opening it takes
+    its own "Yes" answer's UUID and not just any value.
+    """
+
+    def __contains__(self, path: str) -> bool:
+        return True
+
+    def __getitem__(self, path: str) -> str:
+        return "answered"
+
+
+def _render(body: str, replies) -> dict:
+    """The template run by Jinja itself, and the document it produced.
+
+    DSW's three reply filters are stubbed: ``reply_path`` joins a chain of
+    UUIDs into one key, ``reply_str_value`` hands back the stored reply, and
+    ``reply_items`` gives a list question one item to iterate.
+    """
+    env = jinja2.Environment()
+    env.filters["reply_path"] = lambda parts: ".".join(str(p) for p in parts)
+    env.filters["reply_str_value"] = lambda reply: reply
+    env.filters["reply_items"] = lambda reply: ["item-0"]
+    ctx = _Ctx(
+        project=_Ctx(
+            replies=replies,
+            createdAt="2026-01-01T00:00:00Z",
+            updatedAt="2026-01-02T00:00:00Z",
+            uuid="1111",
+        ),
+        config=_Ctx(clientUrl="https://dsw.example"),
+    )
+    return json.loads(env.from_string(body).render(ctx=ctx))
+
+
+def _body_from_rules(tmp_path: Path, dmp: dict) -> str:
+    """A template built from a rules tree of one's own, on the real config.
+
+    A shape no standard on disk has today is still a shape a standard may
+    have, and the template has to hold for it — so it is written here rather
+    than waited for.
+    """
+    path = tmp_path / "synthetic" / "1.0.0.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            {"standard": "synthetic", "version": "1.0.0", "extends": False, "dmp": dmp}
+        )
+    )
+    config = yaml.safe_load(GLIDER_CONFIG.read_text())
+    bundle = build_template_bundle(
+        Project(config=config, model=merge_rules([path])), created_at=STAMP
+    )
+    return bundle["files"][0]["content"]
 
 
 # What binds the template to its KM
@@ -114,32 +186,43 @@ def test_the_body_is_jinja_that_parses(body):
 
 
 def test_an_unanswered_project_still_renders_valid_json(body):
-    """The comma anchor, checked where it actually fails. With no replies at
-    all, only the unconditional keys render — and an object without one would
-    open on a stray comma and produce a document nobody can parse.
-
-    Rendered by Jinja itself, with DSW's three reply filters stubbed. They are
-    never applied here: every `path in r` is false on an empty project, and
-    Jinja short-circuits."""
-    env = jinja2.Environment()
-    env.filters["reply_path"] = lambda parts: ".".join(str(p) for p in parts)
-    env.filters["reply_str_value"] = lambda reply: reply
-    env.filters["reply_items"] = lambda reply: reply
-    ctx = _Ctx(
-        project=_Ctx(
-            replies={},
-            createdAt="2026-01-01T00:00:00Z",
-            updatedAt="2026-01-02T00:00:00Z",
-            uuid="1111",
-        ),
-        config=_Ctx(clientUrl="https://dsw.example"),
-    )
-    document = json.loads(env.from_string(body).render(ctx=ctx))
+    """Nothing answered: every conditional block stays shut, and what is left
+    is what the document says about a project a researcher has not opened."""
+    document = _render(body, {})
     assert set(document) == {"dmp"}
     assert document["dmp"]["dmp_id"] == {
         "identifier": "https://dsw.example/projects/1111",
         "type": "url",
     }
+
+
+def test_an_answered_project_still_renders_valid_json(body):
+    """The other half, and the half a comma fault needs: every block open.
+
+    An unanswered project renders the conditional keys not at all, so it is
+    the one state under which a misplaced comma cannot show. This one answers
+    everything the template asks for."""
+    document = _render(body, _Answered())
+    assert document["dmp"]["title"] == "answered"
+    assert document["dmp"]["dataset"][0]["title"] == "answered"
+
+
+def test_an_object_whose_every_key_is_optional_still_renders_valid_json(tmp_path):
+    """A key is emitted with a comma in front of it, so an object closes only
+    if something else emitted a key first. Nothing entitles the template to
+    that: `cost { type?, unit? }` is an ordinary shape for a standard to
+    declare, and forbidding it would be asking the rules to lie about the
+    standard so that the generator has an easier time.
+
+    It takes a filled object to fail. Answer nothing and every block stays
+    shut, which is why both are asserted here."""
+    body = _body_from_rules(tmp_path, ANCHORLESS)
+    answered = f"{chapter_uuid('contact')}.{question_uuid(('contact', 'mbox'))}"
+
+    assert _render(body, {answered: "marie@example.org"})["dmp"]["contact"] == {
+        "mbox": "marie@example.org"
+    }
+    assert _render(body, {})["dmp"]["contact"] == {}
 
 
 def test_only_an_available_format_becomes_a_dsw_format(bundle):

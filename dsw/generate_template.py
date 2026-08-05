@@ -13,11 +13,13 @@ Conventions in the generated Jinja:
 - ``sv(path)`` / ``av(path, default)`` / ``jv(path)`` macros over
   ``r = ctx.project.replies``, plus DSW's own ``reply_path`` /
   ``reply_str_value`` / ``reply_items`` filters.
-- The output is assembled as literal JSON text: required keys joined by
-  literal commas, each optional key wrapped in its own ``{%- if ... %}``
-  block. **Every object therefore needs at least one unconditional key as a
-  comma anchor** — which is why a required field is emitted even when nothing
-  answered it. See ``doc.md`` ("Le template de document").
+- The output is assembled as literal JSON text: every key carries its comma in
+  front of it and each optional one is wrapped in its own ``{%- if ... %}``
+  block, so an object's body is captured and its first comma stripped at render
+  time. **No key has to be unconditional** — an object whose fields are all
+  optional is a shape a standard may declare, and closing it is the
+  generator's problem, not the rules'. See ``doc.md`` ("Le template de
+  document").
 """
 
 from __future__ import annotations
@@ -105,11 +107,15 @@ def q(uuid_str: str) -> str:
 class OutputField:
     """One emitted JSON ``"key": value`` pair of the output template.
 
-    ``required`` keys are always emitted, comma-joined; optional keys are each
-    wrapped in their own ``{%- if condition %}`` block. ``is_object`` marks
-    ``value_expr`` as raw JSON/Jinja text rather than a scalar to quote, and
-    ``preamble`` holds the ``{% set %}`` statements that must run before
-    ``condition`` is evaluated.
+    ``required`` keys are always emitted; optional keys are each wrapped in
+    their own ``{%- if condition %}`` block. Both carry their separating comma
+    **in front of them**, and :func:`render_object` strips the one that ends up
+    first — so which keys render is decided at render time and no key has to be
+    there for the others to hang off.
+
+    ``is_object`` marks ``value_expr`` as raw JSON/Jinja text rather than a
+    scalar to quote, and ``preamble`` holds the ``{% set %}`` statements that
+    must run before ``condition`` is evaluated.
     """
 
     def __init__(
@@ -129,27 +135,55 @@ class OutputField:
         self.preamble = preamble
 
     def render(self, depth: int) -> str:
-        """Render as an indented fragment. For object and array values the
-        caller must have built ``value_expr`` with ``depth + 1`` for its
-        children — see :func:`render_object`."""
+        """Render as an indented fragment, comma first. For object and array
+        values the caller must have built ``value_expr`` with ``depth + 1`` for
+        its children — see :func:`render_object`."""
         indent = "  " * depth
         v = self.value_expr if self.is_object else f'"{{{{ {self.value_expr} }}}}"'
         line = f'{indent}"{self.key}": {v}'
         if self.required:
-            return self.preamble + line
+            return f"{self.preamble},\n{line}"
         return f"{self.preamble}{{%- if {self.condition} %}},\n{line}\n{{%- endif %}}"
 
 
-def render_object(fields: list[OutputField], depth: int) -> str:
-    """Assemble a JSON object literal: the required fields comma-joined first,
-    then each optional field guarding itself with its own Jinja block."""
+def object_var(path: tuple[str, ...]) -> str:
+    """The Jinja variable an object's body is captured in, ``()`` being the
+    ``dmp`` root.
+
+    The leading underscore keeps it out of the way of the item variables built
+    from a field path, which start with a letter because a rules field name
+    does. Two paths can still join to one name (``("a", "b")`` and ``("a_b",)``
+    both give ``_obj_a_b``), and it does not matter: a capture is read on the
+    line that follows it, and a nested object's path always extends its
+    parent's, so the pair that could overwrite each other cannot be nested.
+    """
+    return "_obj" + "".join(f"_{part}" for part in path)
+
+
+def render_object(fields: list[OutputField], depth: int, var: str) -> str:
+    """Assemble a JSON object literal, required fields first.
+
+    Every key renders with a comma in front of it, so the body is captured and
+    the first comma stripped off whatever survived. An object therefore needs
+    no unconditional key of its own: one whose fields are all optional renders
+    as ``{}`` until one of them is answered. Ordering required keys first is
+    only about how the document reads — it is no longer what makes it parse.
+
+    The newline after the ``{`` is load-bearing twice over: it separates the
+    brace from the ``{%-`` that follows (``{{%`` would lex as a variable), and
+    that same ``{%-`` eats it back, leaving the newline the stripped comma
+    gives up.
+    """
     required = [f for f in fields if f.required]
     optional = [f for f in fields if not f.required]
-    body = ",\n".join(f.render(depth) for f in required)
-    for f in optional:
-        body += "\n" + f.render(depth)
+    body = "".join(f.render(depth) for f in required + optional)
     closing_indent = "  " * (depth - 1)
-    return "{\n" + body + "\n" + closing_indent + "}"
+    return (
+        "{\n"
+        f"{{%- set {var}_raw %}}{body}{{%- endset %}}"
+        f"{{%- set {var} = {var}_raw.lstrip()[1:] -%}}"
+        f"{{{{ {var} }}}}\n{closing_indent}}}"
+    )
 
 
 class TemplateBuilder:
@@ -335,7 +369,7 @@ class TemplateBuilder:
         )
         return OutputField(
             field.name,
-            render_object(sub_fields, depth + 1),
+            render_object(sub_fields, depth + 1, object_var(field.path)),
             required=False,
             condition=condition,
             is_object=True,
@@ -353,7 +387,7 @@ class TemplateBuilder:
             self.build_any_field(child, [f"{item_var}_path"], depth + 2)
             for child in field.children
         ]
-        item_obj = render_object(sub_fields, depth + 2)
+        item_obj = render_object(sub_fields, depth + 2, object_var(field.path))
         item_indent = "  " * (depth + 1)
         closing_indent = "  " * depth
 
@@ -389,7 +423,7 @@ class TemplateBuilder:
             ]
             return OutputField(
                 field.name,
-                render_object(sub_fields, depth + 1),
+                render_object(sub_fields, depth + 1, object_var(field.path)),
                 required=True,
                 is_object=True,
             )
@@ -461,7 +495,7 @@ def build_template_bundle(
             builder.build_any_field(field, [q(chapter_uuid(field.name))], depth=2)
         )
 
-    dmp_object = render_object(root_fields, depth=2)
+    dmp_object = render_object(root_fields, 2, object_var(()))
 
     al_entries = ",\n".join(
         f"  {q(uuid_)}: {q(label)}"
