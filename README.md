@@ -14,8 +14,9 @@ today and how to run it.
 **Where it stands.** The repository is built one slice at a time; each slice
 adds one package, the tests that cover it, the dependencies its code actually
 imports, and the CI job that checks it. Everything documented below is
-present and checked in CI. Current slice: **`project/`** — what a project
-resolves to, once its pins are followed and its rules merged.
+present and checked in CI. Current slice: **`registry/`** — a project's
+destination in the DMP registry, checked on every branch and converged on the
+default one.
 
 ## What it is
 
@@ -72,6 +73,28 @@ They compose, they do not call each other. `merge_rules` is handed paths and
 never learns a pin existed, which is what lets quality control merge the pins
 recorded in a submitted DMP's sidecar without building a project at all.
 
+### `registry/` — where a project's DMPs will land
+
+`projects/<id>/` in the `dmp-registry` mono-repo is a project's destination: a
+`meta.yaml` saying who the project is and which rules versions it was built
+from, next to a `template/` where the submission webhook drops the rendered
+DMP and a `productions/` for the deployment DMPs derived from it. Laying that
+out is this package's job — the webhook writes one document into a folder and
+creates nothing, and refuses a folder with no `meta.yaml`.
+
+Two verbs, and only one of them writes. `folder_status` reads and says where a
+project stands: `missing`, `registered`, `stale` or `collision`. Only a
+collision — a folder carrying another project's `id` — is a fault; the rest is
+a step not taken yet. `converge` makes the registry say what the config says
+and reports what that took: `created`, `updated` or `unchanged`. It never
+deletes, never overwrites another project's folder, and touches no key it does
+not own: `id` and `rules` are this repository's, and anything else the file
+carries is written by the registry's own CI, carried across untouched, and
+never compared.
+
+Nothing here needs DSW: registering a project takes a valid config and nothing
+generated, which is why it comes straight after validation.
+
 ### The code beside the data
 
 - `rules/loader.py` — `load_rules_file` reads one rules file and validates it
@@ -88,6 +111,12 @@ recorded in a submitted DMP's sidecar without building a project at all.
   above. None of them knows a file format or a destination: `grep "^from \|^import " project/*.py`
   shows neither `json` nor `yaml`, and a DSW identifier or an output path here
   would mean a generator's job has leaked in.
+- `registry/folder.py` — what one project's folder must say, the four states a
+  read of it can find, and the one write that makes it say it.
+- `registry/github.py` — the two calls of the GitHub Contents API this needs,
+  standard library only. It hands out bytes: base64, shas and status codes end
+  here. A 404 means "no file yet" on a read and a failure on a write, which is
+  the one asymmetry worth knowing about it.
 - `utils/schema.py` — the JSON-Schema plumbing both loaders sit on: compile a
   schema once, report every violation of a document at once.
 - `utils/errors.py` — `ProblemsError`, the one error shape for the whole
@@ -110,8 +139,20 @@ uv run python scripts/validate_projects.py
 ```
 
 `uv sync` creates `.venv` from the committed `uv.lock` and installs the
-package in editable mode, so `rules`, `configs`, `project` and `utils` import
-without any path juggling.
+package in editable mode, so `rules`, `configs`, `project`, `registry` and
+`utils` import without any path juggling.
+
+The registry is a private repository, so the two scripts that reach it need a
+token — `REGISTRY_TOKEN`, and that name only:
+
+```bash
+REGISTRY_TOKEN=$(gh auth token) uv run python scripts/validate_registry.py
+REGISTRY_TOKEN=$(gh auth token) uv run python scripts/sync_registry.py
+```
+
+The first only reads. The second writes, and is what registering a project
+*is*: until it has run, a researcher clicking Submit in DSW is turned away.
+Without the token the first skips and the second refuses.
 
 ## Layout
 
@@ -124,15 +165,17 @@ without any path juggling.
 | `configs/config.schema.json` | the schema every project config is validated against |
 | `configs/loader.py` | load one project config, fully validated |
 | `project/pins.py`, `project/merge.py`, `project/assemble.py` | resolve a config's pins, merge the rules they name, hold the two together |
+| `registry/folder.py`, `registry/github.py` | one project's folder in the registry, and the GitHub client that reaches it |
 | `utils/schema.py`, `utils/errors.py` | shared JSON-Schema plumbing, and the one error shape |
-| `scripts/validate_*.py` | the content checks the `rules`, `configs` and `projects` CI jobs run |
+| `scripts/validate_*.py` | the checks the `rules`, `configs`, `projects` and `registry` CI jobs run |
+| `scripts/sync_registry.py` | what the `registry-sync` CI job runs — the one thing here that writes outside this repository |
 | `tests/` | the test suite |
 | `doc.md` | the design decisions, and what was turned down (French) |
 
 ## CI
 
-Four jobs, in parallel, all installing from the lockfile with
-`uv sync --frozen`:
+Five jobs in parallel, plus one downstream, all installing from the lockfile
+with `uv sync --frozen`:
 
 - **checks** — `ruff check` (ruff's default rule set, which includes import
   order), `ruff format --check`, then `pytest`. Anything about the shape of
@@ -144,8 +187,18 @@ Four jobs, in parallel, all installing from the lockfile with
 - **projects** — every config is loaded the way a generator will load it,
   through `assemble_project`: its pins resolved, the files behind them merged.
 
+- **registry** — every project's destination in the registry, read: free, or
+  already its own. Skips, loudly, without `REGISTRY_TOKEN`.
+- **registry-sync** — the only job that writes anything outside this
+  repository. It waits on all five above and runs on `main` alone; on a pull
+  request it shows as `skipped`, so its abstention is readable.
+
 The first three fail for different reasons and get fixed by different people:
-a Python change, a rules change, a new project. The fourth is the only one
-that can be red while all three are green — it is the only one that sees a
-*combination*, and it has no `needs:` because a project whose pins do not
-resolve is broken whether or not something else is.
+a Python change, a rules change, a new project. `projects` is the only one
+that sees a *combination*, and `registry` the only one that looks outside —
+neither has `needs:`, because a project whose pins do not resolve, or whose
+folder is taken, is broken whether or not something else is.
+
+The line is not "before or after validation", it is **report or act**. Every
+job that reports runs concurrently and names its own culprit; the one job that
+acts waits for all of them.

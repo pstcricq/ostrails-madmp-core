@@ -18,6 +18,7 @@ arriveront — mais la table des matières ne liste que ce qui existe.*
 1. [Le principe](#1-le-principe)
 2. [Le format des règles](#2-le-format-des-règles)
 3. [La fusion « tighten-only »](#3-la-fusion--tighten-only-)
+10. [Le registre, et la publication](#10-le-registre-et-la-publication)
 14. [Limites connues](#14-limites-connues)
 
 ---
@@ -350,6 +351,183 @@ une chaîne. Le schéma de config l'attrape (`additionalProperties: {"type":
 module comme une **précondition**, pas comme un oubli. Le prix est nommé en
 [§14](#14-limites-connues) : des épingles venant d'ailleurs qu'une config
 validée, et le `meta.yaml` du registre est exactement ce cas.
+
+---
+
+## 10. Le registre, et la publication
+
+*Seule la moitié « registre » est écrite : elle arrive avec `registry/`. La
+publication vers DSW rejoindra cette section quand son code existera.*
+
+### Enregistrer n'est pas publier
+
+`registry/` n'est pas dans `dsw/`, et la raison est mesurable : enregistrer un
+projet n'appelle aucune instance DSW, ne demande aucun paquet publié et rien
+de généré. Une config valide suffit. C'est donc l'étape qui vient
+**immédiatement après la validation**, avant tout ce qui se construit — et
+c'est aussi ce qui permet de la mener à bien aujourd'hui, alors que la
+publication attend un déploiement joignable.
+
+Chaque destination porte son client. `registry/` connaît l'API Contents de
+GitHub et embarque le sien ; `dsw/` connaîtra l'API DSW et embarquera le sien.
+`utils/` est pour ce que **plusieurs** paquets partagent, et un client n'a
+qu'un consommateur : sa destination. La règle qui permet à `registry/` de
+refuser un ajout est celle-là — *rien d'autre dans ce dépôt n'appelle GitHub*.
+
+### Le dossier porte l'`id`, sans transformation
+
+`projects/<id>/`. Il n'y a pas de champ qui dise où va un projet, parce qu'il
+n'y a rien à dire : le nom du fichier de config, le dossier du registre et les
+identifiants DSW sont **la même chaîne**. Avant, `id: socib-glider` et
+`github.folder: glider` désignaient la même chose de deux façons, et chaque
+générateur devait choisir. Le motif du schéma (`^[a-z0-9-]{1,64}$`) est
+exactement celui que le registre exige d'un nom de dossier — pas de point, pas
+de barre oblique, donc une soumission ne peut jamais écrire hors de son propre
+dossier.
+
+### `meta.yaml` : deux clés, et une qui n'a pas encore de lecteur
+
+```yaml
+id: glider
+rules:
+  - rda_dcs: "1.0.0"
+  - ostrails: "1.0.0"
+```
+
+C'est tout. Un champ n'entre ici que s'il a un lecteur **du côté registre**,
+et il y en a trois possibles : le webhook, la CI du registre, un humain qui
+ouvre le dossier. `name` n'en a aucun — le recopier obligerait à mettre le
+registre à jour quand une prose change, et inviterait un lecteur à faire
+confiance à une copie plutôt qu'à la config.
+
+`rules` est l'exception assumée : **rien ne le lit encore**. Le contrôle
+qualité qui le lira n'est pas construit. On l'écrit quand même parce que c'est
+la seule information qu'on ne pourra **pas** ajouter après coup : un DMP doit
+être vérifiable contre les règles avec lesquelles il a été bâti, les épingles
+d'une config bougent, et personne ne saura plus tard ce qui était épinglé au
+moment où un DMP donné a été soumis. Geler coûte deux lignes aujourd'hui et
+est irrattrapable demain.
+
+Pas d'horodatage, pas de `sha` de commit, pas de « écrit par ». Ce serait
+tentant, et ça tuerait l'idempotence : `unchanged` deviendrait impossible et
+chaque push sur la branche par défaut laisserait un commit dans le registre.
+La provenance existe déjà, c'est l'historique git du registre.
+
+### Ce fichier a deux écrivains, et chacun ses clés
+
+`OWNED = ("id", "rules")`. Tout ce qu'on trouve d'autre dans `meta.yaml`
+appartient à quelqu'un d'autre — la CI du registre, aujourd'hui ou demain —
+est recopié tel quel, et **n'entre pas dans la comparaison**.
+
+Les deux moitiés de la règle comptent. Reconstruire le fichier depuis la seule
+config effacerait le travail de l'autre écrivain en silence, remarqué
+seulement par qui irait chercher un verdict qui n'y est plus. Et comparer sur
+*ses* clés à lui ferait lire son premier verdict comme une dérive : on
+récrirait le fichier pour le lui reprendre, à chaque push, indéfiniment.
+
+L'alternative essayée dans le prototype était un emplacement `qc` réservé,
+écrit vide à la création. Elle prévoit un consommateur qui n'existe pas, et ne
+couvre que celui-là. La règle de possession ne prévoit rien et les couvre tous.
+
+### Ce qui décide d'écrire, c'est le document, pas les octets
+
+Un fichier qui dit ce qu'il faut avec ses clés dans un autre ordre, ou écrit
+par un autre sérialiseur YAML, est **déjà juste**. Le comparer octet par octet
+le ferait récrire pour une différence que personne ne peut lire, et vaudrait
+un commit dans le registre. La comparaison porte donc sur le document analysé.
+
+### Quatre états, une seule faute
+
+| état | ce que c'est | ce qui suit |
+|---|---|---|
+| `missing` | rien là-bas | création |
+| `registered` | présent, à nous, et d'accord avec la config | rien n'est envoyé |
+| `stale` | à nous, mais ne dit plus ce que dit la config | mise à jour |
+| `collision` | présent, et c'est le dossier d'un autre projet | refus |
+
+Seule la collision est une **faute**. Un dossier qui n'existe pas encore n'en
+est pas une : ajouter un projet, c'est une config d'abord et un enregistrement
+ensuite, et faire échouer le contrôle sur le push qui ajoute la config
+apprendrait à tout le monde à ignorer ce job. Un `meta.yaml` qui a pris du
+retard n'en est pas une non plus : la synchronisation qui le rattrape tourne
+juste après. La collision, elle, ne se répare par aucune synchronisation — deux
+projets ne peuvent pas avoir raison sur une même destination — et elle ferait
+atterrir les DMP d'un projet dans le dossier d'un autre.
+
+**Une collision est inatteignable depuis ce dépôt seul.** Le dossier étant
+l'`id`, et l'`id` étant le nom du fichier, deux configs ne peuvent pas viser le
+même dossier ; un mauvais nom lève une `ConfigFileError` bien avant. Elle ne
+peut venir que d'un `id` renommé, ou d'un autre déploiement écrivant dans le
+même registre. Les deux sont arrivés : le prototype a dû semer un dossier pour
+exercer le contrôle, et la fusion des identifiants a rendu la collision réelle
+sur `glider`, dont le registre disait encore `socib-glider`. Elle a été
+résolue par une migration à la main, une fois, plutôt que par du code qui
+aurait dû connaître à jamais l'ancien format.
+
+### Le layout du dossier est à nous, pas au webhook
+
+`converge` crée `meta.yaml`, puis `template/` et `productions/` — chacun avec
+un `.gitkeep`, git ne stockant pas de répertoire vide. Le webhook, lui, écrit
+**un document dans un dossier déjà disposé** : il ne crée ni dépôt ni
+échafaudage, et refuse un dossier sans `meta.yaml`, parce qu'un dossier non
+initialisé n'a pas d'épingles et qu'un DMP déposé là serait orphelin.
+
+Le partage des rôles est celui-là et pas un autre : ce qui *dispose* connaît la
+config, ce qui *dépose* ne connaît que le nom du dossier reçu en paramètre.
+
+### `REGISTRY_TOKEN`, et pourquoi aucun repli
+
+Un seul nom, celui que tout le déploiement utilise — le webhook lit le même.
+Localement `REGISTRY_TOKEN=$(gh auth token)`, qui ne le laisse nulle part.
+
+**Pas de repli sur `GITHUB_TOKEN`.** Le jeton par défaut d'un workflow est
+limité au dépôt qui l'exécute, jamais au registre : il ne pourrait pas faire ce
+travail. Et un jeton sans accès se lit **404**, que le client traduit en « pas
+de fichier » sur un GET. Le repli rapporterait donc un projet `missing` alors
+que la vérité est « mauvais jeton » — vert, et faux, exactement là où aucune
+écriture ne vient contredire.
+
+Le registre étant privé, même **lire** demande un jeton. Le contrôle s'abstient
+donc bruyamment quand il n'en a pas (une PR issue d'un fork n'a pas les
+secrets) ; la synchronisation, elle, refuse de s'abstenir.
+
+### Un 404 GitHub n'est « fichier absent » que sur un GET
+
+Sur une écriture, un 404 veut dire que le dépôt ou l'accès du jeton est faux —
+GitHub répond 404 plutôt que 403 pour ne pas confirmer l'existence d'un dépôt
+privé — et il ne doit jamais passer pour un succès. C'est la seule asymétrie du
+transport, et elle est testée dans les deux sens.
+
+Le transport s'arrête là. Il rend et prend des **octets** ; le base64, le `sha`
+qu'une mise à jour doit nommer et les codes de statut sont son affaire seule,
+si bien que `folder.py` n'importe que `yaml`. Dans le prototype, `folder.py`
+importait `base64` : l'encodage du transport fuyait dans le module de sens.
+
+### Rendre compte, ou agir
+
+Cinq jobs ne font que **rendre compte** : ils tournent en parallèle, sans
+`needs:`, et chacun nomme son propre fautif. Un seul **agit** —
+`registry-sync`, la seule chose de ce dépôt qui écrive à l'extérieur — et lui
+attend tous les verdicts, et ne tourne que sur la branche par défaut. La ligne
+est là, et pas à « avant ou après la validation ».
+
+Sur une pull request il apparaît **`skipped`** : présent dans la liste des
+contrôles, donc son abstention se lit au lieu de passer inaperçue.
+
+Il tourne à **chaque** push sur la branche par défaut, pas seulement quand une
+config a changé. `meta.yaml` gèle des épingles, et la panne à empêcher est la
+dérive : une épingle relevée dans la config pendant que le registre nomme
+encore l'ancienne version. Converger à chaque fois la rend impossible au lieu
+de la rendre improbable. Le prix serait un commit à chaque push — il n'est pas
+payé, puisque rien n'est envoyé quand rien n'a changé.
+
+### Le webhook n'est pas dans ce dépôt
+
+Il est déployé à côté de DSW et embarque **sa propre copie** du client GitHub.
+Les deux côtés partagent le *layout* du registre, pas ce code : un changement
+ici n'atteint le webhook que si quelqu'un l'y reporte. Le `README.md` du
+registre est le contrat qu'ils honorent tous les deux, et ni l'un ni l'autre ne
+peut en dériver.
 
 ---
 

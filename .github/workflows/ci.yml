@@ -8,18 +8,29 @@
 #   projects — the one job that crosses them: every config's pins resolved
 #             against the rules they name, and those rules merged. The set is
 #             a property no per-file job can see.
+#   registry — every project's destination in the registry, read: free, or
+#             already its own.
 #
 # They are separate jobs rather than steps of one so that the check list on a
 # pull request names the culprit: a Python change, a rules change and a new
 # project are made by different people and fixed in different files. Each pays
 # its own setup, but they run concurrently, so wall-clock is the slowest of
-# the four.
+# the five.
 #
 # `projects` has no `needs:` on purpose. It could only be held back to spare a
 # second red check when a file is also malformed, and that trade is the wrong
 # way round: a project whose pins do not resolve is broken whether or not
 # something else is, and finding out on the next push costs more than one
-# extra red mark.
+# extra red mark. The same goes for `registry`: a folder taken by another
+# project is taken whatever else is wrong.
+#
+# The line is not "before or after validation", it is **report or act**. The
+# five jobs above only ever report, so they run concurrently and each names
+# its own culprit. `registry-sync` is the only job that writes anything
+# outside this repository, so it is the only one with `needs:` — it waits for
+# every verdict, and runs on the default branch alone. On a pull request it
+# appears as `skipped`, which is what makes its abstention readable rather
+# than silent.
 #
 # They all install with `uv sync --frozen`: the committed lockfile decides the
 # versions, and a transitive release cannot turn CI red on its own.
@@ -89,3 +100,48 @@ jobs:
         run: uv sync --frozen
       - name: Resolve and merge what every project pins
         run: uv run python scripts/validate_projects.py
+
+  registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install the locked environment
+        run: uv sync --frozen
+      # Reads the registry and reports; the one fault it can find is a folder
+      # that carries another project's id. A folder that does not exist yet is
+      # not a fault — `registry-sync` below is what creates it. Without the
+      # secret (a pull request from a fork) it skips, loudly: the registry is
+      # private, so even reading it needs a token.
+      - name: Check every project's destination in the registry
+        run: uv run python scripts/validate_registry.py
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+
+  registry-sync:
+    # The only job that writes outside this repository, so the only one that
+    # waits for every verdict — a project is registered from a config that
+    # loads, pins that resolve and rules that merge, or it is not registered.
+    needs: [checks, rules, configs, projects, registry]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install the locked environment
+        run: uv sync --frozen
+      # Runs on every push to the default branch, not only when a config
+      # changed: meta.yaml freezes the rules versions a project was built
+      # from, and converging every time is what makes drift impossible rather
+      # than unlikely. It sends nothing when nothing changed, so this leaves
+      # no commit behind on a push that touched no config.
+      - name: Register every project in the registry
+        run: uv run python scripts/sync_registry.py
+        env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
