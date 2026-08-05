@@ -43,11 +43,11 @@
 # The line is not "before or after validation", it is **report or act**. The
 # six jobs above only ever report, so they run concurrently and each names its
 # own culprit — `generate` included: an uploaded artifact is scoped to its own
-# run and reaches nothing. `registry-sync` is the only job that writes
-# anything outside this repository, so it is the only one with `needs:` — it
-# waits for every verdict, and runs on the default branch alone. On a pull
-# request it appears as `skipped`, which is what makes its abstention readable
-# rather than silent.
+# run and reaches nothing. Two jobs act, and they are the only two with
+# `needs:`: `registry-sync` writes into the registry repository, `publish`
+# writes into a DSW instance. Both run on the default branch alone, and on a
+# pull request both appear as `skipped` — which is what makes their abstention
+# readable rather than silent.
 #
 # They all install with `uv sync --frozen`: the committed lockfile decides the
 # versions, and a transitive release cannot turn CI red on its own.
@@ -185,6 +185,56 @@ jobs:
       - name: Register every project in the registry
         run: uv run python scripts/sync_registry.py
         env:
+          REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY_OWNER: Pierrott64
+          REGISTRY_REPO: dmp-registry
+
+  # The second job that acts, and the only one a researcher sees the effect
+  # of. After `registry-sync`, because a submission service pointing at an
+  # unregistered folder turns every Submit into a failure — `dsw.publish`
+  # refuses that on its own, and this ordering means it never has to.
+  #
+  # It downloads what `generate` built rather than building again: what gets
+  # published is what was produced once, not a second build nobody looked at.
+  #
+  # `vars.DSW_API_URL` is the switch. There is no reachable instance yet — a
+  # GitHub runner cannot dial localhost:3000 — so until one is declared, this
+  # shows as `skipped` in the check list, which is the whole point of gating
+  # on a variable rather than commenting the job out. A Codespaces URL is also
+  # why it is a repository variable and not written here like the registry's
+  # coordinates: it changes at every creation, and a variable is edited
+  # without a commit. What never changes is that the code assumes nothing —
+  # `dsw.publish` reads all five names with no default.
+  publish:
+    needs: [registry-sync]
+    if: vars.DSW_API_URL != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install the locked environment
+        run: uv sync --frozen
+      - uses: actions/download-artifact@v4
+        with:
+          name: dsw-artifacts
+          path: build/
+      # Idempotent by version: an already-published package is skipped, so
+      # every project is offered every time and only a bumped `version`
+      # actually publishes. The submission service is an upsert by id.
+      - name: Publish every project's KM, template and submission service
+        run: |
+          for cfg in configs/projects/*.yaml; do
+            uv run python -m dsw.publish all "$cfg"
+          done
+        env:
+          DSW_API_URL: ${{ vars.DSW_API_URL }}
+          DSW_EMAIL: ${{ vars.DSW_EMAIL }}
+          DSW_PASSWORD: ${{ secrets.DSW_PASSWORD }}
+          SUBMISSION_URL: ${{ vars.SUBMISSION_URL }}
+          SUBMISSION_TOKEN: ${{ secrets.SUBMISSION_TOKEN }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           REGISTRY_OWNER: Pierrott64
           REGISTRY_REPO: dmp-registry

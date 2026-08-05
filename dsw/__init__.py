@@ -5,7 +5,7 @@ says what a project resolves to, and this package is the first that knows what
 DSW *is*: a package identifier, an entity uuid, an event payload, a Jinja
 document template.
 
-Three kinds of module, each answering to a rule that can refuse an addition:
+Four kinds of module, each answering to a rule that can refuse an addition:
 
 - ``uuids.py`` knows nothing at all — the standard library and the shape of a
   field path. It is the whole UUID convention, frozen: every DSW entity of
@@ -17,6 +17,9 @@ Three kinds of module, each answering to a rule that can refuse an addition:
   generator.
 - ``generate_*.py`` are the only modules that write under ``build/``. Each
   owns one artifact and ignores the other.
+- ``publish.py`` is the only module that talks to a DSW instance. It builds
+  nothing and reads only what the generators already wrote, so a failed upload
+  is never a question about the artifacts.
 
 **The rule this package refuses an addition by:** a module here names
 something that is DSW's own — an identifier, an entity, a payload field, an

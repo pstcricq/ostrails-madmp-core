@@ -554,9 +554,6 @@ brut, alors que les deux dérivent de la même prose de config. D'où
 
 ## 10. Le registre, et la publication
 
-*Seule la moitié « registre » est écrite : elle arrive avec `registry/`. La
-publication vers DSW rejoindra cette section quand son code existera.*
-
 ### Enregistrer n'est pas publier
 
 `registry/` n'est pas dans `dsw/`, et la raison est mesurable : enregistrer un
@@ -567,10 +564,16 @@ c'est aussi ce qui permet de la mener à bien aujourd'hui, alors que la
 publication attend un déploiement joignable.
 
 Chaque destination porte son client. `registry/` connaît l'API Contents de
-GitHub et embarque le sien ; `dsw/` connaîtra l'API DSW et embarquera le sien.
-`utils/` est pour ce que **plusieurs** paquets partagent, et un client n'a
-qu'un consommateur : sa destination. La règle qui permet à `registry/` de
-refuser un ajout est celle-là — *rien d'autre dans ce dépôt n'appelle GitHub*.
+GitHub et embarque `GitHubClient` ; `dsw/` connaît l'API DSW et embarque
+`DswClient`. `utils/` est pour ce que **plusieurs** paquets partagent, et un
+client n'a qu'un consommateur : sa destination. La règle qui permet à
+`registry/` de refuser un ajout est celle-là — *rien d'autre dans ce dépôt
+n'appelle GitHub*.
+
+Une asymétrie entre les deux, et elle est justifiée : le jeton du registre se
+**lit dans l'environnement** (`token_from_env`), celui de DSW s'**obtient par
+un appel**. D'où `DswClient.login(instance)` comme constructeur : ce qui fait
+des appels est ce qui fait celui-là.
 
 ### Le dossier porte l'`id`, sans transformation
 
@@ -745,6 +748,99 @@ Les deux côtés partagent le *layout* du registre, pas ce code : un changement
 ici n'atteint le webhook que si quelqu'un l'y reporte. Le `README.md` du
 registre est le contrat qu'ils honorent tous les deux, et ni l'un ni l'autre ne
 peut en dériver.
+
+### Trois cibles, et deux natures
+
+`km`, `template`, `submission`. Les deux premières publient un **paquet** :
+une identité, une version, immuable. La troisième modifie la **configuration
+du tenant** de l'instance : mutable, upsertée par `id`, à côté des entrées des
+autres projets.
+
+Deux objets différents, donc deux idempotences différentes — par la version
+d'un côté, par l'upsert de l'autre. C'est la raison d'être des trois cibles :
+les fondre en une seule ferait croire à une opération unique là où il y en a
+deux, qui ne se rejouent pas de la même façon.
+
+### L'idempotence par la version
+
+Une version de paquet DSW est immuable : republier un `package_id` déjà présent
+serait rejeté. `publish` interroge donc la liste d'abord et **saute** ce qui est
+là, en le disant. Conséquence voulue : passer tous les projets à chaque push sur
+`main` ne coûte presque rien, et **seul un `version` incrémenté publie**. Il n'y
+a pas de « republier de force » — il y a une version à monter.
+
+Vérifié le 05/08/2026 contre l'instance locale, hors mocks : deuxième
+exécution, les deux cibles sautent, code de sortie 0.
+
+### La pagination n'est pas une optimisation
+
+`list_all` suit le nombre de pages au lieu de faire confiance à une grande page.
+Une liste tronquée répondrait « pas publié » à propos de quelque chose qui l'est
+— et c'est cette réponse-là qui décide s'il y a republication.
+
+### Registre avant soumission, et c'est le code qui le tient
+
+Le webhook refuse un dossier sans `meta.yaml`. Un service de soumission qui
+pointe vers un dossier non enregistré transforme donc **chaque Submit en échec**,
+et c'est le chercheur qui en porte la faute. `publish submission` appelle
+`folder_status` et refuse.
+
+Tenir ça par l'ordre des cibles serait le tenir par une convention — et une
+convention, c'est ce qu'on saute quand on lance une cible à la main. L'ordre
+dans la CI reste, mais il n'est plus ce qui garantit.
+
+`stale` passe : un `meta.yaml` qui ne dit plus ce que dit la config est à un
+sync près, et le dossier est là — c'est tout ce dont le webhook a besoin.
+
+### Le service de soumission n'est pas générable
+
+Question posée le 05/08/2026 : pourquoi n'a-t-il pas son `generate_*` ?
+
+Parce que deux de ses trois entrées n'existent pas au moment du build.
+`template_uuid` est attribué par DSW et **change à chaque publication** ;
+`tenant_uuid` est lu dans la config de l'instance. Un module `generate_*`
+produit une fonction du commit seul — déterministe, uploadable dans
+l'artefact. Celui-ci est une fonction du commit **et de l'instance vivante**.
+
+Ce qui *peut* être décidé sans instance l'est : `submission_service()` est une
+fonction pure qui rend le dict, testée sans rien joindre, et
+`publish_submission()` fait les appels. La séparation existe, comme frontière
+de fonction ; un fichier de plus la redirait sans l'ajouter.
+
+### Le scopage : deux choses le rendent propre à un projet
+
+Le dossier dans l'URL (`?project=<id>`), **seule** entrée de routage dont le
+webhook dispose — jamais la lecture du document ; et `supportedFormats` nommant
+le template de ce projet, pour que le menu Submit propose ce service aux
+documents de ce projet et à rien d'autre.
+
+Sans secret partagé, **pas d'en-tête `Authorization`** plutôt qu'un `Bearer`
+vide : un jeton vide n'authentifie rien tout en ayant l'air de le faire.
+
+### Publier consomme l'artefact, il ne régénère pas
+
+Décidé le 05/08/2026. Le job `publish` retélécharge ce que `generate` a
+construit dans le même run. Une seule définition de « ce que ce commit
+produit », et ce qui part dans DSW est ce qui a été produit une fois, pas une
+seconde construction que personne n'a regardée.
+
+L'alternative — régénérer dans le job — rendait `publish` autonome, mais ne
+donnait **aucun artefact** tant qu'il est `skipped` faute d'instance, c'est-à-
+dire aujourd'hui et pour un moment.
+
+### Aucune coordonnée n'a de défaut, et pas toutes au même moment
+
+Les cinq noms sont lus sans défaut : un point de terminaison par défaut, ce
+sont les coordonnées d'un déploiement gravées dans tous les autres. Et à la
+différence d'un mauvais registre, une mauvaise instance n'est rattrapée par
+rien en aval — elle accepte le paquet, et personne n'en sait rien.
+
+`DSW_API_URL` / `DSW_EMAIL` / `DSW_PASSWORD` disent quelle instance et en tant
+que qui : les trois sont exigés ensemble, et l'erreur les nomme **tous d'un
+coup**. `SUBMISSION_URL` n'est pas une coordonnée de l'instance mais l'adresse
+du webhook, donc seule la cible qui en a besoin le réclame — publier un KM ne
+doit pas exiger de savoir où les documents seront un jour envoyés.
+`SUBMISSION_TOKEN` est le seul qui puisse manquer.
 
 ---
 

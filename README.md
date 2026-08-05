@@ -14,9 +14,9 @@ today and how to run it.
 **Where it stands.** The repository is built one slice at a time; each slice
 adds one package, the tests that cover it, the dependencies its code actually
 imports, and the CI job that checks it. Everything documented below is
-present and checked in CI. Current slice: **`dsw/`** — the Knowledge Model and
-the Document Template, generated from a project and uploaded by CI. Publishing
-them to a DSW instance is the next slice.
+present and checked in CI. Current slice: **`dsw/publish.py`** — the Knowledge
+Model, the Document Template and the submission service, pushed into a DSW
+instance. Quality control on a submitted DMP is the next slice.
 
 ## What it is
 
@@ -101,6 +101,25 @@ job builds every project and uploads that directory as a workflow artifact —
 which is what lets a reviewer download a KM and see what a rules change did to
 the questionnaire.
 
+`dsw/publish.py` is the only module that reaches an instance, and it builds
+nothing: it uploads what is on disk, which in CI is that same artifact,
+downloaded again. Three targets, and they are two different kinds of thing.
+`km` and `template` publish a **package** — an identity, a version, immutable —
+so they are idempotent through the version: an already-published package is
+skipped, and bumping the config's `version` is what publishes a change.
+`submission` edits the **instance's own configuration**, upserting this
+project's Document Submission entry: the webhook's URL carrying `?project=<id>`,
+scoped to this project's template so the Submit menu offers it for this
+project's documents and nothing else. It refuses outright if the project's
+registry folder is not there — the webhook rejects a folder with no `meta.yaml`,
+and advertising that route would turn every Submit into a failure the
+researcher gets blamed for.
+
+Every coordinate is read from the environment with no default, and none of it
+is guessed: a default endpoint would be one deployment's address baked into
+every other's, and unlike a wrong registry a wrong instance is caught by
+nothing downstream — it accepts the package.
+
 ### `registry/` — where a project's DMPs will land
 
 `projects/<id>/` in the `dmp-registry` mono-repo is a project's destination: a
@@ -151,6 +170,10 @@ generated, which is why it comes straight after validation.
 - `dsw/generate_template.py` — the same model into Jinja that emits JSON as
   literal text. Every object needs one unconditional key as a comma anchor,
   which is why a required field is emitted even when nothing answered it.
+- `dsw/publish.py` — the three targets, and `DswClient`, the wizard-api calls
+  this needs. Standard library only, like the GitHub client. One asymmetry
+  between the two: the registry's token is read from the environment, DSW's is
+  *obtained by a call* — hence `DswClient.login(instance)` as its constructor.
 - `registry/folder.py` — what one project's folder must say, the four states a
   read of it can find, and the one write that makes it say it.
 - `registry/github.py` — the two calls of the GitHub Contents API this needs,
@@ -210,6 +233,21 @@ Missing coordinates fail both, naming every variable that is unset. A missing
 token is different — the registry is private, so the check skips, loudly, and
 the sync refuses.
 
+Publishing needs its own, and likewise has no defaults:
+
+```bash
+export DSW_API_URL=http://localhost:3000/wizard-api
+export DSW_EMAIL=you@example.com DSW_PASSWORD=...
+uv run python -m dsw.publish km configs/projects/glider.yaml
+uv run python -m dsw.publish template configs/projects/glider.yaml
+```
+
+`all` runs the three targets in order — `submission` needs the uuid of the
+template just published. That last one also needs `SUBMISSION_URL` (the
+webhook's address *as DSW reaches it*), optionally `SUBMISSION_TOKEN`, and the
+registry variables above, since it refuses to advertise a route to a folder
+that is not registered.
+
 ## Layout
 
 | path | what |
@@ -223,6 +261,7 @@ the sync refuses.
 | `project/pins.py`, `project/merge.py`, `project/assemble.py` | resolve a config's pins, merge the rules they name, hold the two together |
 | `dsw/uuids.py`, `dsw/common.py` | the frozen UUID convention, and what the generators must answer identically |
 | `dsw/generate_km.py`, `dsw/generate_template.py` | a project into a DSW Knowledge Model, and into a Document Template |
+| `dsw/publish.py` | the three targets, and the wizard-api client that reaches them |
 | `build/` | where the generators write; never committed, uploaded by CI |
 | `registry/folder.py`, `registry/github.py` | one project's folder in the registry, and the GitHub client that reaches it |
 | `utils/schema.py`, `utils/errors.py` | shared JSON-Schema plumbing, and the one error shape |
@@ -233,8 +272,8 @@ the sync refuses.
 
 ## CI
 
-Six jobs in parallel, plus one downstream, all installing from the lockfile
-with `uv sync --frozen`:
+Six jobs in parallel, then two that act, all installing from the lockfile with
+`uv sync --frozen`:
 
 - **checks** — `ruff check` (ruff's default rule set, which includes import
   order), `ruff format --check`, then `pytest`. Anything about the shape of
@@ -252,9 +291,16 @@ with `uv sync --frozen`:
   ever published from it.
 - **registry** — every project's destination in the registry, read: free, or
   already its own. Skips, loudly, without `REGISTRY_TOKEN`.
-- **registry-sync** — the only job that writes anything outside this
-  repository. It waits on all six above and runs on `main` alone; on a pull
-  request it shows as `skipped`, so its abstention is readable.
+- **registry-sync** — writes into the registry repository. It waits on all six
+  above and runs on `main` alone; on a pull request it shows as `skipped`, so
+  its abstention is readable.
+- **publish** — writes into a DSW instance, after `registry-sync` because a
+  submission service pointing at an unregistered folder would break every
+  Submit. It downloads what `generate` built rather than building again, and
+  runs only once `vars.DSW_API_URL` is set — until then it shows as `skipped`,
+  which is the point of gating on a variable rather than commenting it out.
+  A Codespaces URL changes at every creation, so it is a repository variable
+  and not written into the workflow like the registry's coordinates.
 
 The first three fail for different reasons and get fixed by different people:
 a Python change, a rules change, a new project. `projects` is the only one
@@ -263,5 +309,5 @@ neither has `needs:`, because a project whose pins do not resolve, or whose
 folder is taken, is broken whether or not something else is.
 
 The line is not "before or after validation", it is **report or act**. Every
-job that reports runs concurrently and names its own culprit; the one job that
-acts waits for all of them.
+job that reports runs concurrently and names its own culprit; the two that act
+wait — for every verdict, and for each other.
