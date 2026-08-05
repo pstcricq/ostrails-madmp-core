@@ -13,10 +13,12 @@ import pytest
 import yaml
 
 from registry import (
+    Registry,
     RegistryError,
     converge,
     folder_status,
     meta_document,
+    registry_from_env,
     token_from_env,
 )
 from registry.folder import SUBDIRS, meta_bytes, meta_path
@@ -25,6 +27,7 @@ from registry.github import File
 ROOT = Path(__file__).parent.parent
 GLIDER_CONFIG = ROOT / "configs" / "projects" / "glider.yaml"
 
+REGISTRY = Registry(owner="o", repo="r")
 CONFIG = {"id": "glider", "rules": [{"rda_dcs": "1.0.0"}, {"ostrails": "1.0.0"}]}
 META = "projects/glider/meta.yaml"
 KEEPS = [f"projects/glider/{sub}/.gitkeep" for sub in SUBDIRS]
@@ -40,13 +43,16 @@ class FakeGitHub:
     def __init__(self, files: dict[str, bytes] | None = None):
         self.files = dict(files or {})
         self.writes: list[str] = []
+        self.calls: list[tuple[str, str, str]] = []
 
     def get_file(self, owner: str, repo: str, path: str) -> File | None:
+        self.calls.append((owner, repo, path))
         if path not in self.files:
             return None
         return File(sha=f"sha-of-{path}", content=self.files[path])
 
     def put_file(self, owner, repo, path, content, message, sha=None) -> None:
+        self.calls.append((owner, repo, path))
         self.files[path] = content
         self.writes.append(path)
 
@@ -107,8 +113,8 @@ def test_a_foreign_key_does_not_make_a_folder_stale():
     would read as drift, and every sync would fight the registry's CI for the
     file."""
     fake = registry_with({"id": "glider", "rules": CONFIG["rules"], "qc": {}})
-    assert folder_status(fake, CONFIG).state == "registered"
-    assert converge(fake, CONFIG) == "unchanged"
+    assert folder_status(fake, REGISTRY, CONFIG).state == "registered"
+    assert converge(fake, REGISTRY, CONFIG) == "unchanged"
     assert fake.writes == []
 
 
@@ -118,7 +124,7 @@ def test_a_foreign_key_does_not_make_a_folder_stale():
 def test_a_missing_folder_is_not_a_fault():
     """Adding a project is a config first and a registration second, so the
     push that adds one must not fail the check that has not run yet."""
-    status = folder_status(FakeGitHub(), CONFIG)
+    status = folder_status(FakeGitHub(), REGISTRY, CONFIG)
     assert (status.state, status.is_fault) == ("missing", False)
 
 
@@ -126,7 +132,7 @@ def test_creating_lays_out_the_whole_folder():
     """`meta.yaml` and both directories, because laying out the folder is
     ours: the webhook writes a document into it and creates nothing."""
     fake = FakeGitHub()
-    assert converge(fake, CONFIG) == "created"
+    assert converge(fake, REGISTRY, CONFIG) == "created"
     assert fake.writes == [META, *KEEPS]
     assert document_in(fake) == meta_document(CONFIG)
 
@@ -138,8 +144,8 @@ def test_an_up_to_date_folder_is_left_alone():
     """The claim the sync job rests on: it runs on every push to the default
     branch, so a push that changed no config must send nothing at all."""
     fake = registry_with(meta_document(CONFIG))
-    assert folder_status(fake, CONFIG).state == "registered"
-    assert converge(fake, CONFIG) == "unchanged"
+    assert folder_status(fake, REGISTRY, CONFIG).state == "registered"
+    assert converge(fake, REGISTRY, CONFIG) == "unchanged"
     assert fake.writes == []
 
 
@@ -147,8 +153,8 @@ def test_a_bumped_pin_makes_the_folder_stale():
     """The drift the whole package exists to prevent: the config pins one
     version, the registry still names another."""
     fake = registry_with({"id": "glider", "rules": [{"rda_dcs": "0.9.0"}]})
-    assert folder_status(fake, CONFIG).state == "stale"
-    assert converge(fake, CONFIG) == "updated"
+    assert folder_status(fake, REGISTRY, CONFIG).state == "stale"
+    assert converge(fake, REGISTRY, CONFIG) == "updated"
     assert fake.writes == [META]
     assert document_in(fake)["rules"] == CONFIG["rules"]
 
@@ -157,7 +163,7 @@ def test_a_missing_subdir_is_created_without_touching_meta():
     """The two writes are independent: a folder whose meta.yaml is right but
     whose directories were removed gets them back, and nothing else."""
     fake = registry_with(meta_document(CONFIG), keeps=False)
-    assert converge(fake, CONFIG) == "unchanged"
+    assert converge(fake, REGISTRY, CONFIG) == "unchanged"
     assert fake.writes == KEEPS
 
 
@@ -166,8 +172,8 @@ def test_key_order_alone_is_not_a_change():
     thing in another order is already right, and rewriting it would be a commit
     nobody can read a difference in."""
     fake = registry_with({"rules": CONFIG["rules"], "id": "glider"})
-    assert folder_status(fake, CONFIG).state == "registered"
-    assert converge(fake, CONFIG) == "unchanged"
+    assert folder_status(fake, REGISTRY, CONFIG).state == "registered"
+    assert converge(fake, REGISTRY, CONFIG) == "unchanged"
     assert fake.writes == []
 
 
@@ -178,7 +184,7 @@ def test_another_projects_folder_is_a_fault():
     """The one state syncing cannot fix, and the only one this reports as a
     fault: two projects cannot both be right about one destination."""
     fake = registry_with({"id": "canales", "rules": []})
-    status = folder_status(fake, CONFIG)
+    status = folder_status(fake, REGISTRY, CONFIG)
     assert (status.state, status.is_fault) == ("collision", True)
     assert "canales" in status.detail and "glider" in status.detail
 
@@ -187,7 +193,7 @@ def test_converging_refuses_to_clobber_another_project():
     """Refusing is the point: that folder is where somebody else's DMPs land."""
     fake = registry_with({"id": "canales", "rules": []})
     with pytest.raises(RegistryError) as caught:
-        converge(fake, CONFIG)
+        converge(fake, REGISTRY, CONFIG)
     assert fake.writes == []
     assert "projects/glider" in str(caught.value)
     assert "'canales'" in str(caught.value)
@@ -219,4 +225,36 @@ def test_a_workflows_own_token_is_not_a_fallback():
     with pytest.MonkeyPatch.context() as env:
         env.delenv("REGISTRY_TOKEN", raising=False)
         env.setenv("GITHUB_TOKEN", "would-not-work")
-        assert token_from_env() == ""
+        assert token_from_env() is None
+
+
+# Which registry, and the refusal to guess
+
+
+def test_where_to_write_is_read_from_the_environment():
+    with pytest.MonkeyPatch.context() as env:
+        env.setenv("REGISTRY_OWNER", "socib")
+        env.setenv("REGISTRY_REPO", "dmp-registry")
+        assert registry_from_env() == Registry(owner="socib", repo="dmp-registry")
+
+
+def test_an_unset_coordinate_is_never_guessed():
+    """No default, and both names reported at once. A default owner and repo
+    would be one deployment's coordinates baked into every other: a fork or a
+    misconfigured job would write into this registry with nobody having said
+    so."""
+    with pytest.MonkeyPatch.context() as env:
+        env.delenv("REGISTRY_OWNER", raising=False)
+        env.delenv("REGISTRY_REPO", raising=False)
+        with pytest.raises(RegistryError) as caught:
+            registry_from_env()
+    assert "REGISTRY_OWNER" in str(caught.value)
+    assert "REGISTRY_REPO" in str(caught.value)
+
+
+def test_the_coordinates_reach_the_client():
+    """Threading the value through is only worth anything if it arrives: the
+    calls are made against the registry that was asked for, not a constant."""
+    fake = FakeGitHub()
+    converge(fake, Registry(owner="somebody", repo="theirs"), CONFIG)
+    assert {call[:2] for call in fake.calls} == {("somebody", "theirs")}

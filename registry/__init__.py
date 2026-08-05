@@ -26,10 +26,12 @@ caller here, does not belong.
 
 from registry.folder import (
     FolderStatus,
+    Registry,
     RegistryError,
     converge,
     folder_status,
     meta_document,
+    registry_from_env,
     token_from_env,
 )
 from registry.github import GitHubClient, GitHubError
@@ -38,9 +40,11 @@ __all__ = [
     "FolderStatus",
     "GitHubClient",
     "GitHubError",
+    "Registry",
     "RegistryError",
     "converge",
     "folder_status",
     "meta_document",
+    "registry_from_env",
     "token_from_env",
 ]

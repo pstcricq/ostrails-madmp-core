@@ -24,6 +24,11 @@
 # extra red mark. The same goes for `registry`: a folder taken by another
 # project is taken whatever else is wrong.
 #
+# Where the registry is, is written here rather than defaulted in the code:
+# this workflow *is* this deployment, so its coordinates belong in it, in the
+# open, where a diff shows them. `REGISTRY_TOKEN` is the one thing that cannot
+# be, and it is a repository secret.
+#
 # The line is not "before or after validation", it is **report or act**. The
 # five jobs above only ever report, so they run concurrently and each names
 # its own culprit. `registry-sync` is the only job that writes anything
@@ -120,6 +125,8 @@ jobs:
         run: uv run python scripts/validate_registry.py
         env:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY_OWNER: Pierrott64
+          REGISTRY_REPO: dmp-registry
 
   registry-sync:
     # The only job that writes outside this repository, so the only one that
@@ -145,3 +152,5 @@ jobs:
         run: uv run python scripts/sync_registry.py
         env:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
+          REGISTRY_OWNER: Pierrott64
+          REGISTRY_REPO: dmp-registry

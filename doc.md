@@ -475,6 +475,25 @@ initialisé n'a pas d'épingles et qu'un DMP déposé là serait orphelin.
 Le partage des rôles est celui-là et pas un autre : ce qui *dispose* connaît la
 config, ce qui *dépose* ne connaît que le nom du dossier reçu en paramètre.
 
+### Où écrire ne se devine pas
+
+`REGISTRY_OWNER` et `REGISTRY_REPO` sont lus **sans valeur par défaut**, et
+leur absence est une erreur qui les nomme toutes les deux d'un coup. Une valeur
+par défaut serait les coordonnées d'un déploiement gravées dans tous les
+autres : un fork, le checkout d'un collègue ou un job mal configuré écrirait
+dans ce registre-ci sans que personne l'ait demandé. Un programme peut ignorer
+beaucoup de choses, mais pas *où il écrit*.
+
+Elles ne sont donc pas des constantes de module mais une valeur, `Registry`,
+lue à l'entrée par les scripts et passée aux deux verbes. `folder.py` ne lit
+plus l'environnement du tout pour ça, et les tests n'ont plus besoin d'en
+poser : ils construisent le `Registry` qu'ils veulent. Le déploiement, lui, est
+déclaré là où il vit — dans `ci.yml`, en clair, où un diff le montre.
+
+`REGISTRY_TOKEN` est la seule des trois à ne pas pouvoir l'être, et la seule
+dont l'absence n'est pas une erreur en soi : le contrôle s'abstient, la
+synchronisation refuse, et seuls eux savent lequel des deux.
+
 ### `REGISTRY_TOKEN`, et pourquoi aucun repli
 
 Un seul nom, celui que tout le déploiement utilise — le webhook lit le même.

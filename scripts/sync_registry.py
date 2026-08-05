@@ -24,7 +24,14 @@ import sys
 from pathlib import Path
 
 from configs import ConfigFileError, load_config_file
-from registry import GitHubClient, GitHubError, RegistryError, converge, token_from_env
+from registry import (
+    GitHubClient,
+    GitHubError,
+    RegistryError,
+    converge,
+    registry_from_env,
+    token_from_env,
+)
 
 PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
 
@@ -45,6 +52,12 @@ def main() -> int:
         )
         return 1
 
+    try:
+        registry = registry_from_env()
+    except RegistryError as err:
+        print(err, file=sys.stderr)
+        return 1
+
     gh = GitHubClient(token=token)
     failures = 0
     verbs: dict[str, int] = {}
@@ -59,7 +72,7 @@ def main() -> int:
             failures += 1
             continue
         try:
-            verb = converge(gh, config)
+            verb = converge(gh, registry, config)
         except (RegistryError, GitHubError) as err:
             print(f"FAIL {path}\n     {err}", file=sys.stderr)
             failures += 1

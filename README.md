@@ -142,17 +142,22 @@ uv run python scripts/validate_projects.py
 package in editable mode, so `rules`, `configs`, `project`, `registry` and
 `utils` import without any path juggling.
 
-The registry is a private repository, so the two scripts that reach it need a
-token — `REGISTRY_TOKEN`, and that name only:
+The two scripts that reach the registry need three environment variables, and
+none of them has a default — where a program writes is not something it may
+assume:
 
 ```bash
-REGISTRY_TOKEN=$(gh auth token) uv run python scripts/validate_registry.py
-REGISTRY_TOKEN=$(gh auth token) uv run python scripts/sync_registry.py
+export REGISTRY_OWNER=Pierrott64 REGISTRY_REPO=dmp-registry
+export REGISTRY_TOKEN=$(gh auth token)
+uv run python scripts/validate_registry.py
+uv run python scripts/sync_registry.py
 ```
 
 The first only reads. The second writes, and is what registering a project
 *is*: until it has run, a researcher clicking Submit in DSW is turned away.
-Without the token the first skips and the second refuses.
+Missing coordinates fail both, naming every variable that is unset. A missing
+token is different — the registry is private, so the check skips, loudly, and
+the sync refuses.
 
 ## Layout
 

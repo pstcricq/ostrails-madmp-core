@@ -21,7 +21,14 @@ import sys
 from pathlib import Path
 
 from configs import ConfigFileError, load_config_file
-from registry import GitHubClient, GitHubError, folder_status, token_from_env
+from registry import (
+    GitHubClient,
+    GitHubError,
+    RegistryError,
+    folder_status,
+    registry_from_env,
+    token_from_env,
+)
 
 PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
 
@@ -49,6 +56,12 @@ def main() -> int:
         )
         return 0
 
+    try:
+        registry = registry_from_env()
+    except RegistryError as err:
+        print(err, file=sys.stderr)
+        return 1
+
     gh = GitHubClient(token=token)
     faults = 0
     for path in paths:
@@ -62,7 +75,7 @@ def main() -> int:
             faults += 1
             continue
         try:
-            status = folder_status(gh, config)
+            status = folder_status(gh, registry, config)
         except GitHubError as err:
             print(f"FAIL {path}\n     {err}", file=sys.stderr)
             faults += 1
