@@ -833,6 +833,26 @@ sûre à côté d'une rapide : une deuxième façon d'écrire une chaîne Jinja 
 deuxième endroit où un libellé peut finir dans la mauvaise. Un uuid, lui, en
 ressort inchangé — il n'y a rien à y échapper.
 
+### Le contrôle par config demande à Jinja, projet par projet
+
+Un libellé étant de la source, ce qu'il casse dépend des **données** — donc de
+choses qu'aucun test unitaire n'a vues. `scripts/validate_generation.py` est le
+seul endroit où toutes les configs passent par les générateurs, et c'était
+justement sa raison d'être : « les règles, vocabulaires et épingles d'un second
+projet sont des données qu'aucun test n'a vues ». Il vérifiait pourtant les
+entités en double et rien d'autre — pas que ce qu'il écrit compile.
+
+Il le fait maintenant. Deux contrôles, et tous deux portent sur ce que la
+**donnée** décide, jamais sur ce que le code décide : aucune entité émise deux
+fois, et un corps de template qui est du Jinja. Sans eux, la première faute est
+rendue par DSW en laissant tomber une question, la seconde au rendu, devant un
+chercheur.
+
+`jinja2` reste une dépendance de **développement** : le générateur écrit du
+Jinja, il ne l'exécute jamais, et un contrôle de dépôt n'est pas quelque chose
+qu'un paquet installé doit porter. La CI l'a, `uv sync --frozen` installant le
+groupe dev.
+
 ### Un champ requis est émis même sans réponse — et c'est maintenant un choix
 
 Avant, ce comportement était **forcé** par l'ancre de virgules. L'ancre partie,
@@ -1345,11 +1365,16 @@ fichiers d'un empaquetage antérieur survivent dans les roues suivantes ; et
 Deux constantes décrivent l'instance visée et non le projet :
 `METAMODEL_VERSION = 20` et `TEMPLATE_METAMODEL_VERSION = "18.0"` (§6). Rien
 dans le dépôt ne vérifie qu'une instance donnée les accepte, ni que le Jinja
-émis se rend réellement : les tests demandent à Jinja lui-même s'il **parse**,
-et rendent le template avec les trois filtres de DSW (`reply_path`,
-`reply_str_value`, `reply_items`) **remplacés par des doublures**. Un désaccord
-sur ce que fait un de ces filtres ne se verrait donc qu'à l'exécution, dans
-DSW, devant un chercheur.
+émis se rend réellement. Ce qui est vérifié : le corps **parse**, pour chaque
+projet (§7), et les tests le **rendent** avec les trois filtres de DSW
+(`reply_path`, `reply_str_value`, `reply_items`) **remplacés par des
+doublures**. Un désaccord sur ce que fait un de ces filtres ne se verrait donc
+qu'à l'exécution, dans DSW, devant un chercheur.
+
+Le bundle KM, lui, est conforme au schéma `kmp_schema_v20.json` : vérifié le
+06/08/2026 contre le fichier officiel, zéro erreur, et tenu par un test qui
+énumère les champs du métamodèle (§6). Mais c'est le schéma qui est confronté,
+pas l'instance.
 
 **Pourquoi on s'en tient là :** la seule vérification qui vaudrait mieux
 demande une instance DSW joignable, ce qu'un runner GitHub n'est pas

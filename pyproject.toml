@@ -38,7 +38,10 @@ dev = [
     # dsw/generate_template.py emits Jinja and nothing else in the pipeline
     # can say whether it parses — DSW would, at render time, in front of a
     # researcher. The test suite asks Jinja itself rather than counting
-    # braces. A dev tool only: the generator writes Jinja, it never runs it.
+    # braces, and scripts/validate_generation.py asks it of every project.
+    # Still not a runtime dependency: the generator writes Jinja, it never
+    # runs it, and a repository check is not something an installed package
+    # has to carry.
     "jinja2",
 ]
 

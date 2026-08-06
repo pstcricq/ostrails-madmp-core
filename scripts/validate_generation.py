@@ -10,6 +10,12 @@ config goes through the generators, and a repository that cannot generate one
 of its projects is broken whether or not anyone has asked for that project's
 KM yet.
 
+So what it checks is what the data decides rather than what the code decides:
+that the KM emits no entity twice, and that the document template is Jinja at
+all. Both are questions only this project's vocabularies can answer, and both
+would otherwise be answered by DSW — the first by dropping a question, the
+second at render time in front of a researcher.
+
 **The artifacts.** What it writes is uploaded by CI as a workflow artifact,
 which is how a reviewer sees what a rules change did to the questionnaire, and
 how the publish step gets the bundles it ships. They are therefore stamped
@@ -27,6 +33,8 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+
+import jinja2
 
 from dsw.common import BUILD_DIR, km_path, template_path, utc_timestamp
 from dsw.generate_km import build_km_bundle
@@ -56,6 +64,27 @@ def _duplicate_entities(km: dict) -> list[str]:
             twice.append(event["entityUuid"])
         seen.add(event["entityUuid"])
     return twice
+
+
+def _jinja_error(template: dict) -> str | None:
+    """Why the document template's body is not Jinja, if it is not.
+
+    The generator writes Jinja and never runs it, so nothing between here and
+    DSW would notice a syntax error — DSW would, at render time, in front of a
+    researcher. The unit tests parse one project's body; what they cannot parse
+    is a body built from vocabularies they have never seen.
+
+    Data-dependent for the same reason the duplicate check is, and for a
+    sharper one: a vocabulary label is not only data the template reads, it is
+    *source* the generator writes — the answer-label table holds each one as a
+    Jinja literal. `Institut d'Optique` used to close its literal early and
+    leave a body that was not Jinja at all.
+    """
+    try:
+        jinja2.Environment().parse(template["files"][0]["content"])
+    except jinja2.TemplateSyntaxError as err:
+        return f"line {err.lineno}: {err.message}"
+    return None
 
 
 def _write(path: Path, bundle: dict) -> int:
@@ -95,6 +124,14 @@ def main() -> int:
             print(
                 f"FAIL {path}\n     the KM emits {len(twice)} entity(ies) "
                 f"twice, first {twice[0]}.",
+                file=sys.stderr,
+            )
+            failures += 1
+            continue
+
+        if error := _jinja_error(template):
+            print(
+                f"FAIL {path}\n     the document template is not Jinja, {error}.",
                 file=sys.stderr,
             )
             failures += 1

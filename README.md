@@ -325,10 +325,13 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
 - **projects** — every config is loaded the way a generator loads it, through
   `assemble_project`: its pins resolved, the files behind them merged.
 - **generate** — every project through both generators. The tests generate one
-  project deeply; this is the only place the others are generated at all. It
-  uploads what it built, on `main` and on a pull request alike: the artifact
-  says what this commit *produces*, which is true whether or not anything was
-  ever published from it.
+  project deeply; this is the only place the others are generated at all, so
+  what it checks is what the *data* decides: that no entity is emitted twice,
+  and that the document template is Jinja at all — a vocabulary label is
+  written into the template as source, and one that does not parse would only
+  be found out by DSW, at render time. It uploads what it built, on `main` and
+  on a pull request alike: the artifact says what this commit *produces*,
+  which is true whether or not anything was ever published from it.
 - **registry** — every project's destination in the registry, read: free, or
   already its own. Skips, loudly, without `REGISTRY_TOKEN`.
 - **registry-sync** — writes into the registry repository. It waits on all six
