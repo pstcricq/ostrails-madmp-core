@@ -174,6 +174,75 @@ def test_extension_may_close_an_open_field(tmp_path):
     assert tightening.before is None
 
 
+def test_a_suggested_vocabulary_may_be_closed_over_its_own_values(tmp_path):
+    """The one move that changes a vocabulary's nature and is still a
+    tightening: a warning becomes a violation. The field must come out holding
+    one vocabulary and not two — `rules.loader` refuses both keys in one file,
+    and a merge is the only other way a field could come to carry them."""
+    model = _merge(
+        tmp_path,
+        {"mode": {**STRING_1, "_suggested_values": ["rt", "dt", "dm"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["dm", "rt"]}},
+    )
+    (mode,) = model.walk()
+    assert mode.allowed_values == ("rt", "dm")
+    assert mode.suggested_values is None
+    # Two facts, so two records: the recommendation is dropped, the field is
+    # closed. One Tightening carrying both would read as "was allowed
+    # [rt, dt, dm]", which the field never was.
+    dropped, closed = mode.tightenings
+    assert (dropped.aspect, dropped.after) == ("suggested_values", None)
+    assert (closed.aspect, closed.before) == ("allowed_values", None)
+
+
+def test_closing_a_suggested_vocabulary_outside_it_rejected(tmp_path):
+    """Closing on values the base does not recommend is not a tightening but a
+    disagreement: it forbids what the base suggests."""
+    conflicts = _merge_conflicts(
+        tmp_path,
+        {"mode": {**STRING_1, "_suggested_values": ["rt", "dt"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["track"]}},
+    )
+    assert "does not recommend" in conflicts
+    assert "track" in conflicts
+
+
+def test_a_closed_vocabulary_may_not_be_offered_back_as_suggested(tmp_path):
+    """The mirror move loosens — a violation would become a warning."""
+    conflicts = _merge_conflicts(
+        tmp_path,
+        {"mode": {**STRING_1, "_allowed_values": ["rt"]}},
+        {"mode": {**STRING_1, "_suggested_values": ["rt", "dt"]}},
+    )
+    assert "_suggested_values where base closed" in conflicts
+
+
+def test_reordering_a_vocabulary_is_not_a_tightening(tmp_path):
+    """Same values, another order: the no-op of a redeclared field. Order is
+    what the researcher reads the options in, never a constraint."""
+    model = _merge(
+        tmp_path,
+        {"mode": {**STRING_1, "_allowed_values": ["rt", "dt", "dm"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["dm", "dt", "rt"]}},
+    )
+    (mode,) = model.walk()
+    assert mode.allowed_values == ("rt", "dt", "dm")
+    assert mode.tightenings == ()
+
+
+def test_a_restriction_keeps_the_base_order(tmp_path):
+    """An extension says which values are offered, not how they are laid out:
+    the order stays the base standard's, whatever order the subset is written
+    in."""
+    model = _merge(
+        tmp_path,
+        {"mode": {**STRING_1, "_allowed_values": ["rt", "dt", "dm"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["dm", "rt"]}},
+    )
+    (mode,) = model.walk()
+    assert mode.allowed_values == ("rt", "dm")
+
+
 def test_an_extension_fills_a_missing_description_and_may_repeat_one(tmp_path):
     """Describing a field the base left undescribed is the useful case, and
     repeating a description word for word is what redeclaring a structural
@@ -211,6 +280,59 @@ def test_two_files_describing_one_field_differently_is_a_conflict(tmp_path):
     (problem,) = raised.value.problems
     assert "dmp.title" in problem and "_description" in problem
     assert "base" in problem and "ext" in problem
+
+
+# Attribution: with three standards, the one that set a value is neither the
+# base nor the one being refused, and only a message that names it sends the
+# reader to the right file.
+
+
+def _merge_three_conflicts(tmp_path, base_dmp, first_dmp, second_dmp) -> str:
+    with pytest.raises(RulesConflictError) as excinfo:
+        merge_rules(
+            [
+                _doc(tmp_path, "base", False, base_dmp),
+                _doc(tmp_path, "ext_one", True, first_dmp),
+                _doc(tmp_path, "ext_two", True, second_dmp),
+            ]
+        )
+    return str(excinfo.value)
+
+
+def test_a_loosened_cardinality_names_who_tightened_it(tmp_path):
+    conflicts = _merge_three_conflicts(
+        tmp_path,
+        {"title": dict(STRING_01)},
+        {"title": dict(STRING_1)},
+        {"title": dict(STRING_01)},
+    )
+    assert "set by ext_one" in conflicts
+
+
+def test_a_widened_vocabulary_names_who_restricted_it(tmp_path):
+    """The value ext_two writes is in the *base* vocabulary, so a message
+    blaming it for widening, with no mention of the restriction in between,
+    describes a file that is not the one to fix."""
+    conflicts = _merge_three_conflicts(
+        tmp_path,
+        {"mode": {**STRING_1, "_allowed_values": ["rt", "dt"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["rt"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["rt", "dt"]}},
+    )
+    assert "ext_one set it to ['rt']" in conflicts
+
+
+def test_a_prose_conflict_names_who_wrote_the_prose(tmp_path):
+    """`origin` answers who introduced the *field*; the base introduced it and
+    described nothing, so naming it here would send the reader to a file with
+    no `_description` in it at all."""
+    conflicts = _merge_three_conflicts(
+        tmp_path,
+        {"title": dict(STRING_1)},
+        {"title": {**STRING_1, "_description": "Written by ext_one."}},
+        {"title": {**STRING_1, "_description": "Written by ext_two."}},
+    )
+    assert "differs between ext_one and ext_two" in conflicts
 
 
 def test_all_conflicts_reported_at_once(tmp_path):

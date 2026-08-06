@@ -352,12 +352,71 @@ redéclarer un champ que la base définit déjà, dans deux cas seulement :
 - **à l'identique** — le cas courant : répéter un parent structurel uniquement
   pour atteindre ses propres feuilles en dessous ;
 - **en resserrant** — rendre obligatoire un champ optionnel (`0..1 -> 1`,
-  `0..n -> 1..n`), restreindre un vocabulaire à un sous-ensemble, ou fermer un
-  champ ouvert avec un vocabulaire à soi.
+  `0..n -> 1..n`), restreindre un vocabulaire à un sous-ensemble, fermer un
+  champ ouvert avec un vocabulaire à soi, ou **fermer un vocabulaire suggéré
+  sur les valeurs qu'il recommande**.
 
 Elles ne peuvent **jamais** relâcher ni reformer : affaiblir une cardinalité,
 transformer une valeur simple en liste (ou l'inverse), changer un type, élargir
-un vocabulaire sont des conflits.
+un vocabulaire, ou **rouvrir en suggéré un vocabulaire fermé** sont des
+conflits.
+
+### Un champ fusionné ne porte jamais deux vocabulaires
+
+La couche de cohérence interdit `_allowed_values` et `_suggested_values` sur un
+même champ **dans un fichier** (§2). La fusion est le seul autre chemin par
+lequel un champ pourrait en porter deux, et elle tenait la promesse à moitié :
+les deux clés étaient fusionnées indépendamment, donc une base qui suggère et
+une extension qui ferme produisaient un champ portant les deux — `field_kind`
+lisant `_allowed_values` en premier, la recommandation partait en silence. La
+règle du §2 se contournait en écrivant deux fichiers.
+
+Le couple est donc lu comme **un seul fait doté d'une nature** — fermé ou
+recommandé — et changer cette nature est un mouvement comme un autre :
+
+- **suggéré → fermé** resserre : un écart passait en WARNING, il devient un
+  FAIL. Accepté, et `_suggested_values` **disparaît** du champ fusionné : ce
+  n'est pas une information qu'on garde pour mémoire, elle est devenue fausse ;
+- **fermé → suggéré** relâche. Conflit.
+
+**La fermeture doit porter sur un sous-ensemble des valeurs suggérées.** Fermer
+sur `["z"]` un champ où la base recommande `["a", "b"]` est plus strict au sens
+formel — avant, tout était permis — mais ça **interdit ce que la base
+recommande**. Ce n'est pas un resserrement, c'est un désaccord entre deux
+standards, et le rendre visible est exactement ce à quoi sert la fusion
+tighten-only.
+
+L'audit enregistre **deux** `Tightening` pour ce mouvement, la recommandation
+retirée puis le champ fermé. Un seul enregistrement portant les deux devrait se
+lire « était fermé sur `[a, b, c]` », ce que le champ n'a jamais été.
+
+### L'ordre d'un vocabulaire appartient à la base
+
+C'est l'ordre dans lequel le chercheur lit les options, et ce n'est pas une
+contrainte. La validité se juge donc sur des ensembles, mais deux conséquences
+en découlent, qui ne l'étaient pas :
+
+- un vocabulaire **réécrit dans un autre ordre** est le même vocabulaire : le
+  no-op d'un champ redéclaré, pas un resserrement. Il n'entre plus dans l'audit,
+  et ne change plus l'ordre des options ;
+- un resserrement **conserve l'ordre de la base**, filtré des valeurs retirées.
+  Une extension dit *quelles* valeurs sont offertes ; la mise en page n'est pas
+  ce que tighten-only lui permet de décider.
+
+### Un message de conflit nomme qui a écrit la valeur
+
+`origin` répond « qui a introduit ce champ ». Les messages lui faisaient dire
+« qui a produit l'état courant », et ce sont deux questions différentes dès
+qu'il y a trois standards : celui qui a resserré n'est ni la base ni celui
+qu'on refuse. Trois messages nommaient donc un fichier qui n'avait rien écrit —
+le pire étant le conflit de prose, qui accusait la base alors qu'elle n'avait
+aucune description.
+
+`_Node.meta_origin` retient, **pour chaque clé de métadonnée**, le standard qui
+a écrit la valeur courante. Un dictionnaire plutôt qu'une relecture de
+`Tightening` à rebours : il couvre d'un coup la cardinalité, les vocabulaires
+**et** la prose — qui ne contraint rien, donc n'est enregistrée nulle part
+ailleurs.
 
 ### La prose suit la même règle, et pour la même raison
 

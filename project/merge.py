@@ -10,11 +10,13 @@ Merge semantics — on a field the base already defines, an extension may:
 - redeclare it identically (the usual case: repeating a structural parent
   purely to reach its own new leaf fields underneath);
 - **tighten** it — optional to required (``0..1`` -> ``1``, ``0..n`` ->
-  ``1..n``), a vocabulary to a subset of itself, or an open field closed
-  with a vocabulary of its own. Each tightening is recorded on the field
-  (:class:`Tightening`) with the standard that imposed it;
+  ``1..n``), a vocabulary to a subset of itself, an open field closed with a
+  vocabulary of its own, or a *suggested* vocabulary closed over the values
+  it suggests (a warning becomes a violation). Each tightening is recorded on
+  the field (:class:`Tightening`) with the standard that imposed it;
 - never **loosen** or reshape it: a weaker cardinality, single <-> list, a
-  different type, or a wider vocabulary are conflicts;
+  different type, a wider vocabulary, or a closed vocabulary offered back as
+  a suggested one are conflicts;
 - describe what the base left undescribed, or repeat what it says — but not
   say something else, which is a conflict too. Prose constrains nothing, and
   is still nobody's to overwrite in silence.
@@ -147,45 +149,129 @@ class _Node:
 
     meta: dict[str, Any]
     origin: str
+    #: Per metadata key, the standard that wrote the value ``meta`` currently
+    #: holds. ``origin`` answers a different question — who introduced the
+    #: *field* — and answering the second with the first is what made a
+    #: conflict message name a file that had written nothing: with three
+    #: standards, the one that tightened is neither the base nor the one now
+    #: being refused. Kept for every key, not just the tightenable ones,
+    #: because prose conflicts need it too and nothing records those.
+    meta_origin: dict[str, str]
     tightenings: list[Tightening]
     children: dict[str, _Node]
 
 
 def _new_node(raw: dict[str, Any], origin: str) -> _Node:
     """An interim merge node for a field (and subtree) one file introduced."""
+    meta = {k: v for k, v in raw.items() if k.startswith("_")}
     return _Node(
-        meta={k: v for k, v in raw.items() if k.startswith("_")},
+        meta=meta,
         origin=origin,
+        meta_origin=dict.fromkeys(meta, origin),
         tightenings=[],
         children={k: _new_node(v, origin) for k, v in field_children(raw)},
     )
 
 
+def _ordered_like(reference: list[str], keep: list[str]) -> list[str]:
+    """``keep``'s values, in ``reference``'s order.
+
+    The order of a vocabulary is the order the researcher reads its options in,
+    and it is not a constraint — so it stays the base standard's. An extension
+    restricts *which* values are offered; deciding how they are laid out is not
+    part of what tighten-only lets it do.
+    """
+    kept = set(keep)
+    return [value for value in reference if value in kept]
+
+
 def _merge_vocabulary(
     node: _Node,
     raw: dict[str, Any],
-    key: str,
     origin: str,
     dotted: str,
     conflicts: list[str],
 ) -> None:
-    addition = raw.get(key)
-    if addition is None:
+    """Merge whichever vocabulary an extension declares onto the one the field
+    already carries — including the case where the two are not the same key.
+
+    A field holds **at most one** vocabulary. ``rules.loader`` refuses both keys
+    in one file; this is where that invariant survives a merge, which is the
+    only other way a field could come to hold two. So the pair is read as a
+    single fact with a nature ('closed' or 'recommended') rather than as two
+    independent keys, and changing that nature is a move like any other: closing
+    a recommended vocabulary tightens (a warning becomes a violation), the
+    reverse loosens and is refused.
+    """
+    meta = node.meta
+    add_key = next((k for k in _VOCABULARY_ASPECTS if k in raw), None)
+    if add_key is None:
         return
-    base = node.meta.get(key)
-    if addition == base:
+    addition = raw[add_key]
+    base_key = next((k for k in _VOCABULARY_ASPECTS if k in meta), None)
+
+    if base_key is None:
+        _set_vocabulary(node, add_key, list(addition), origin, before=None)
         return
-    if base is not None and not set(addition) <= set(base):
-        widened = sorted(set(addition) - set(base))
+
+    base, author = meta[base_key], node.meta_origin[base_key]
+
+    if base_key == "_allowed_values" and add_key == "_suggested_values":
         conflicts.append(
-            f"{dotted}: {origin} widens {key} with {widened}; an extension "
-            f"may only restrict a vocabulary to a subset, never widen it."
+            f"{dotted}: {origin} offers _suggested_values where {author} closed "
+            f"the vocabulary with _allowed_values; that turns a violation into "
+            f"a warning, and an extension may only tighten."
         )
         return
+
+    if not set(addition) <= set(base):
+        outside = sorted(set(addition) - set(base))
+        if base_key == add_key:
+            conflicts.append(
+                f"{dotted}: {origin} widens {add_key} with {outside}; {author} "
+                f"set it to {base}, and an extension may only restrict a "
+                f"vocabulary to a subset, never widen it."
+            )
+        else:
+            conflicts.append(
+                f"{dotted}: {origin} closes the vocabulary on {outside}, which "
+                f"{author} does not recommend; closing what is suggested is a "
+                f"tightening only over the values the base suggests — here it "
+                f"would forbid {sorted(set(base) - set(addition))}, which it "
+                f"recommends."
+            )
+        return
+
+    if base_key == add_key and set(addition) == set(base):
+        # The same vocabulary, possibly rewritten in another order: the no-op
+        # of a redeclared field, not a tightening of anything.
+        return
+
+    kept = _ordered_like(base, list(addition))
+    if base_key != add_key:
+        # Recommended -> closed. Two facts, recorded as two, because one
+        # Tightening carrying both would have to be read as "was allowed
+        # [a, b]" — which the field never was.
+        node.tightenings.append(
+            Tightening(origin, _VOCABULARY_ASPECTS[base_key], list(base), None)
+        )
+        del meta[base_key]
+        del node.meta_origin[base_key]
+        _set_vocabulary(node, add_key, kept, origin, before=None)
+    else:
+        _set_vocabulary(node, add_key, kept, origin, before=list(base))
+
+
+def _set_vocabulary(
+    node: _Node, key: str, values: list[str], origin: str, before: Any
+) -> None:
+    """Record the tightening and write the vocabulary, in that order — the
+    three lines every branch above ends with."""
     node.tightenings.append(
-        Tightening(origin, _VOCABULARY_ASPECTS[key], base, list(addition))
+        Tightening(origin, _VOCABULARY_ASPECTS[key], before, values)
     )
-    node.meta[key] = addition
+    node.meta[key] = values
+    node.meta_origin[key] = origin
 
 
 def _merge_meta(
@@ -197,11 +283,11 @@ def _merge_meta(
 ) -> None:
     """Merge one extension's metadata onto a field's interim node,
     applying the tighten-only semantics documented at module level."""
-    meta = node.meta
+    meta, wrote = node.meta, node.meta_origin
 
     if raw["_type"] != meta["_type"]:
         conflicts.append(
-            f"{dotted}: _type {meta['_type']!r} ({node.origin}) vs "
+            f"{dotted}: _type {meta['_type']!r} ({wrote['_type']}) vs "
             f"{raw['_type']!r} ({origin}); a field's type is never negotiable."
         )
 
@@ -209,33 +295,34 @@ def _merge_meta(
     if addition_card != base_card:
         if _SHAPE[addition_card] != _SHAPE[base_card]:
             conflicts.append(
-                f"{dotted}: _cardinality {base_card!r} ({node.origin}) vs "
-                f"{addition_card!r} ({origin}) changes the field's shape "
+                f"{dotted}: _cardinality {base_card!r} ({wrote['_cardinality']}) "
+                f"vs {addition_card!r} ({origin}) changes the field's shape "
                 f"(single value vs list)."
             )
         elif base_card in _REQUIRED:
             conflicts.append(
-                f"{dotted}: {origin} loosens _cardinality {base_card!r} to "
-                f"{addition_card!r}; an extension may only tighten "
-                f"(optional -> required), never loosen."
+                f"{dotted}: {origin} loosens _cardinality {base_card!r}, set by "
+                f"{wrote['_cardinality']}, to {addition_card!r}; an extension "
+                f"may only tighten (optional -> required), never loosen."
             )
         else:
             node.tightenings.append(
                 Tightening(origin, "cardinality", base_card, addition_card)
             )
             meta["_cardinality"] = addition_card
+            wrote["_cardinality"] = origin
 
-    for key in _VOCABULARY_ASPECTS:
-        _merge_vocabulary(node, raw, key, origin, dotted, conflicts)
+    _merge_vocabulary(node, raw, origin, dotted, conflicts)
 
     for key in _DESCRIPTIVE_KEYS:
         if key not in raw:
             continue
         if key not in meta:
             meta[key] = raw[key]
+            wrote[key] = origin
         elif raw[key] != meta[key]:
             conflicts.append(
-                f"{dotted}: {key} differs between {node.origin} and {origin}; "
+                f"{dotted}: {key} differs between {wrote[key]} and {origin}; "
                 f"an extension may describe a field the base left undescribed, "
                 f"or repeat what it says, but not replace it."
             )
