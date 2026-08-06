@@ -9,6 +9,7 @@ The uploads themselves are three lines of urllib each and are the instance's
 answer, not ours.
 """
 
+import json
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from dsw.publish import (
     Instance,
     PublishError,
     Webhook,
+    _artifact,
     _require_registered,
     installed_service,
     instance_from_env,
@@ -344,3 +346,44 @@ def test_no_token_means_the_check_cannot_be_made_and_it_stops(config, monkeypatc
     monkeypatch.delenv("REGISTRY_TOKEN", raising=False)
     with pytest.raises(PublishError, match="cannot be checked"):
         _require_registered(config)
+
+
+# The bundle on disk is the one this config asks for
+
+
+def _bundle(tmp_path, pid):
+    path = tmp_path / "glider_km.km"
+    path.write_text(json.dumps({"id": pid, "packages": []}))
+    return path
+
+
+def test_a_bundle_that_was_never_built_names_the_generator(tmp_path):
+    with pytest.raises(PublishError, match="run dsw.generate_km first"):
+        _artifact(tmp_path / "glider_km.km", "dsw.generate_km", "socib:glider:1.0.2")
+
+
+def test_a_bundle_built_for_another_version_is_not_published(tmp_path, config):
+    """The file name carries no version, so a `version` bumped without
+    regenerating leaves the previous bundle exactly where the new one goes.
+    Nothing downstream catches it — the listing is asked about the new id, says
+    "not published", and the old bundle goes up under the version it was built
+    with, the run printing a success that names neither the version the config
+    asks for nor the one it published."""
+    stale = _bundle(tmp_path, "socib:glider:1.0.1")
+    with pytest.raises(PublishError, match="was built for 'socib:glider:1.0.1'"):
+        _artifact(stale, "dsw.generate_km", package_id(config))
+
+
+def test_a_bundle_built_for_this_config_goes_through(tmp_path, config):
+    pid = package_id(config)
+    assert _artifact(_bundle(tmp_path, pid), "dsw.generate_km", pid) == _bundle(
+        tmp_path, pid
+    )
+
+
+def test_a_bundle_that_is_not_a_bundle_says_so(tmp_path):
+    """Rather than an eight-line traceback out of the middle of a publish."""
+    path = tmp_path / "glider_km.km"
+    path.write_text("half a file")
+    with pytest.raises(PublishError, match="cannot be read as a bundle"):
+        _artifact(path, "dsw.generate_km", "socib:glider:1.0.2")

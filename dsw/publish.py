@@ -6,6 +6,11 @@ disk. In CI that "already on disk" is the artifact the ``generate`` job
 uploaded, downloaded again — so what is published is what was built once, not
 a second build nobody looked at.
 
+Not building it is not the same as not checking it: a bundle names its own
+package id and its file name carries no version, so a config bumped without
+regenerating leaves the old bundle exactly where the new one goes.
+:func:`_artifact` confronts the two before anything is uploaded.
+
 Three targets, and they are three different things:
 
 - ``km`` — the Knowledge Model bundle: the questionnaire itself.
@@ -532,16 +537,38 @@ def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> N
     )
 
 
-def _artifact(path: Path, generator: str) -> Path:
-    """One generated bundle, or the name of the generator that writes it.
+def _artifact(path: Path, generator: str, pid: str) -> Path:
+    """One generated bundle, checked to be the one this config asks for.
 
     Where it is, is :mod:`dsw.common`'s answer and not this module's: this one
     reads what the other wrote, in another run and — in CI — on another
     machine, so a path spelled twice would go wrong here and look like a
     generator that never ran.
+
+    A bundle names its own package id, and the file name does not carry a
+    version, so a config whose ``version`` was bumped without regenerating
+    leaves the previous bundle exactly where the new one would be. Nothing
+    downstream catches it: the listing is asked about the *new* id, says "not
+    published", and the *old* bundle goes up under the version it was built
+    with — leaving the run to print a success naming a version that is not
+    what the config asks for. Publishing is the step with no undo, so the two
+    are compared here rather than trusted to have been run in order.
     """
     if not path.exists():
         raise PublishError([f"not found: {path} — run {generator} first"])
+    try:
+        built = json.loads(path.read_text()).get("id")
+    except (OSError, json.JSONDecodeError) as err:
+        raise PublishError([f"{path} cannot be read as a bundle: {err}"]) from err
+    if built != pid:
+        raise PublishError(
+            [
+                (
+                    f"{path} was built for {built!r} and this config asks for "
+                    f"{pid!r} — re-run {generator}"
+                )
+            ]
+        )
     return path
 
 
@@ -577,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 publish_km(
                     client,
-                    _artifact(km_path(artifact_id), "dsw.generate_km"),
+                    _artifact(km_path(artifact_id), "dsw.generate_km", pid),
                 )
 
         if args.target in ("template", "all"):
@@ -591,7 +618,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 publish_template(
                     client,
-                    _artifact(template_path(artifact_id), "dsw.generate_template"),
+                    _artifact(template_path(artifact_id), "dsw.generate_template", pid),
                 )
 
         if args.target in ("submission", "all"):

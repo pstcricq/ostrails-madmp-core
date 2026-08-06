@@ -109,7 +109,10 @@ the questionnaire.
 
 `dsw/publish.py` is the only module that reaches an instance, and it builds
 nothing: it uploads what is on disk, which in CI is that same artifact,
-downloaded again. Three targets, and they are two different kinds of thing.
+downloaded again. Not building it is not the same as not checking it — a
+bundle names its own package id and its file name carries no version, so a
+`version` bumped without regenerating leaves the old bundle where the new one
+goes, and the two are confronted before anything is uploaded. Three targets, and they are two different kinds of thing.
 `km` and `template` publish a **package** — an identity, a version, immutable —
 so they are idempotent through the version: an already-published package is
 skipped, and bumping the config's `version` is what publishes a change.

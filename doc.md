@@ -1287,6 +1287,19 @@ L'alternative — régénérer dans le job — rendait `publish` autonome, mais 
 donnait **aucun artefact** tant qu'il est `skipped` faute d'instance, c'est-à-
 dire aujourd'hui et pour un moment.
 
+**Ne pas construire n'est pas ne pas vérifier.** Un bundle porte son propre
+`package_id`, et son nom de fichier ne porte **pas** de version : `glider_km.km`
+et rien de plus. Une `version` incrémentée sans régénérer laisse donc l'ancien
+bundle exactement là où le nouveau irait, et rien en aval ne le rattrape — la
+liste est interrogée sur le **nouvel** id, répond « pas publié », et c'est
+l'**ancien** bundle qui monte, sous la version avec laquelle il a été
+construit. L'exécution imprime alors un succès qui ne nomme ni la version
+demandée ni celle qu'elle vient de publier.
+
+`_artifact()` confronte donc les deux avant tout téléversement. Cette étape
+étant celle qui n'a pas de retour arrière, l'ordre des commandes n'est pas
+quelque chose sur quoi on se repose : on regarde.
+
 ### Aucune coordonnée n'a de défaut, et pas toutes au même moment
 
 Les cinq noms sont lus sans défaut : un point de terminaison par défaut, ce
