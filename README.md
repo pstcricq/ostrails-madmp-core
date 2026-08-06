@@ -190,14 +190,20 @@ generated, which is why it comes straight after validation.
   publisher that reads what it wrote, `SUBMISSION_FORMAT` and `format_uuid`
   between the template a generator emits formats into and the submission
   service that names one of them, plus the package identifier, the chapter
-  split, the README head and tail, and the upper-case form a standard is shown
-  in. It opens no file and reaches no instance.
+  split, the README head and tail — which take compatibility *facts* and set
+  the bullets themselves, formatting each caller had to remember being what
+  made the two packages disagree about it — and the upper-case form a standard
+  is shown in. It opens no file and reaches no instance.
 - `dsw/generate_km.py` — the model walked into a DSW event bundle. Emission
   order is load-bearing: DSW infers the order of sibling entities from the
   order of the events, so the order questions are emitted in is the order a
   researcher reads them. Every event content is exactly the fields metamodel
   20 defines for it and no others — each of its schemas forbids extras, and a
   bundle out of schema publishes today but is one nobody else can validate.
+  Every question also says which rules field it fills, the item template of a
+  repeated scalar included: that one has no path distinct from its list's, but
+  it is the entity the value is stored against, so it is the one a consumer
+  meets.
 - `dsw/generate_template.py` — the same model into Jinja that emits JSON as
   literal text. Every key carries its comma in front of it and each object's
   body is captured so the first one can be dropped, which is what lets a

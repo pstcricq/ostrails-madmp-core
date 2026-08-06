@@ -216,12 +216,19 @@ def readme_head(config: dict[str, Any], kind: str) -> list[str]:
     return [f"# {config['name']} : {kind}", "", config["description"], ""]
 
 
-def readme_tail(config: dict[str, Any], compatibility_lines: list[str]) -> list[str]:
-    """The Markdown lines every package README ends with."""
+def readme_tail(config: dict[str, Any], compatibility: list[str]) -> list[str]:
+    """The Markdown lines every package README ends with.
+
+    ``compatibility`` is a list of plain facts, one per line, and the bullets
+    are put on here. Handing it pre-marked lines is what let the two READMEs
+    drift: the template's were all bulleted and the KM's opened with a bare
+    sentence, because presentation was every caller's to remember and one of
+    them remembered differently.
+    """
     lines = [
         "## Compatibility",
         "",
-        *compatibility_lines,
+        *(f"- {fact}" for fact in compatibility),
         "",
         "## Author",
         "",
@@ -235,12 +242,13 @@ def readme_tail(config: dict[str, Any], compatibility_lines: list[str]) -> list[
 
 
 def rules_provenance_line(model: Model) -> str:
-    """One README line naming the exact rules versions merged into this
-    artifact — the provenance a QC run reproduces from the same pins."""
+    """One README fact naming the exact rules versions merged into this
+    artifact — the provenance a QC run reproduces from the same pins. A fact,
+    not a line: :func:`readme_tail` decides how a compatibility fact is set."""
     parts = ", ".join(
         f"{standard_label(name)} {version}" for name, version in model.standard_versions
     )
-    return f"- Rules: {parts}"
+    return f"Rules: {parts}"
 
 
 def strip_markdown(text: str) -> str:

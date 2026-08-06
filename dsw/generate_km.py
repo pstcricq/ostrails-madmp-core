@@ -370,7 +370,13 @@ class KmBuilder:
             {
                 "eventType": "AddQuestionEvent",
                 "questionType": "ValueQuestion",
-                "annotations": [],
+                # The same path as the ListQuestion above it, and that is the
+                # truth about a repeated scalar: one rules field, asked through
+                # two entities because DSW has no other way to want several of
+                # one value. The wrapper holds the items, this holds a value —
+                # and it is the one a reply is stored against, so it is the one
+                # a consumer mapping an answer back to its field must find.
+                "annotations": path_annotation(field.path),
                 "title": title_for(field),
                 "text": field.description,
                 "requiredPhaseUuid": None,
@@ -538,7 +544,7 @@ class KmBuilder:
         lines += [""] + readme_tail(
             self.config,
             [
-                f"Requires DS Wizard with metamodel version {METAMODEL_VERSION}.",
+                f"Requires DS Wizard with metamodel version {METAMODEL_VERSION}",
                 rules_provenance_line(self.model),
             ],
         )

@@ -308,12 +308,29 @@ def test_every_question_carries_the_path_it_fills(project, by_entity):
     field — the QC needs it."""
     for field in project.model.walk():
         event = by_entity.get(question_uuid(field.path))
-        if event is None or not event["content"]["annotations"]:
+        if event is None:
             continue
         assert event["content"]["annotations"][0] == {
             "key": "rules_path",
             "value": ".".join(field.path),
         }
+
+
+def test_no_question_is_asked_without_saying_what_it_fills(events):
+    """The one above walks the *fields* and looks each one's question up, so a
+    question it has no field to look up is a question it never sees. Four were:
+    the item template of every repeated scalar, which is exactly the entity a
+    reply is stored against — annotated with nothing at all, and therefore an
+    answer no consumer could place.
+
+    A chapter may have no path, the general one being ours rather than a
+    standard's. A question may not: it was asked because a rules field asked
+    for it."""
+    for event in events:
+        if event["content"]["eventType"] != "AddQuestionEvent":
+            continue
+        keys = [a["key"] for a in event["content"]["annotations"]]
+        assert "rules_path" in keys, event["content"]["title"]
 
 
 # Tags and phases, the two things a researcher navigates by

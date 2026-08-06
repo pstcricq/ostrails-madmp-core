@@ -227,8 +227,11 @@ def test_the_package_id_is_the_three_fields_dsw_reads():
 
 
 def test_the_provenance_line_names_every_standard_and_version():
+    """A fact, with no bullet of its own: how a compatibility fact is set is
+    `readme_tail`'s to decide, and a caller marking its own is what let the two
+    package READMEs disagree about it."""
     line = rules_provenance_line(assemble_project(GLIDER_CONFIG).model)
-    assert line == "- Rules: RDA_DCS 1.0.0, OSTRAILS 1.0.0"
+    assert line == "Rules: RDA_DCS 1.0.0, OSTRAILS 1.0.0"
 
 
 @pytest.mark.parametrize(
@@ -249,10 +252,25 @@ def test_markdown_reduces_to_its_plain_reading(markdown, plain):
 def test_a_readme_opens_with_the_project_and_ends_with_its_references():
     config = yaml.safe_load(GLIDER_CONFIG.read_text())
     head = readme_head(config, "Knowledge model")
-    tail = readme_tail(config, ["- Compatible with everything."])
+    tail = readme_tail(config, ["Compatible with everything", "And with this"])
     assert head[0] == "# SOCIB Glider : Knowledge model"
     assert tail[-1] == "- [SOCIB](https://www.socib.es)"
-    assert "- Compatible with everything." in tail
+    assert tail[2:4] == ["- Compatible with everything", "- And with this"]
+
+
+def test_both_packages_set_their_compatibility_facts_the_same_way():
+    """One README bulleted every fact and the other opened with a bare
+    sentence, because the marker was each caller's to remember."""
+    project = assemble_project(GLIDER_CONFIG)
+    stamp = "2026-01-01T00:00:00.000Z"
+    readmes = (
+        build_km_bundle(project, created_at=stamp)["packages"][0]["readme"],
+        build_template_bundle(project, created_at=stamp)["readme"],
+    )
+    for readme in readmes:
+        facts = readme.split("## Compatibility\n\n", 1)[1].split("\n\n", 1)[0]
+        assert facts.splitlines()
+        assert all(line.startswith("- ") for line in facts.splitlines()), facts
 
 
 def test_the_timestamp_is_the_shape_dsw_expects():

@@ -708,9 +708,34 @@ extensions comprises — c'est `origin` qui le dit, et il vient de la fusion (§
 
 Chaque question porte une annotation qui la retrace jusqu'à son champ de règles,
 pour qu'un consommateur puisse relier une réponse au chemin qu'elle remplit.
-C'est ce dont le contrôle qualité aura besoin pour lire un DMP soumis. Seuls les
-modèles d'items en sont volontairement dépourvus : ils n'ont pas de chemin
-propre.
+C'est ce dont le contrôle qualité aura besoin pour lire un DMP soumis.
+
+**Chaque** question, désormais, y compris le modèle d'item d'un scalaire répété
+— et c'est un revirement. Cette page disait qu'ils en étaient « volontairement
+dépourvus : ils n'ont pas de chemin propre ». La prémisse est juste, la
+conséquence était fausse.
+
+Sur un `value_multi`, la réponse de la `ListQuestion` est la liste des uuid
+d'items ; la **valeur**, elle, est stockée contre le modèle d'item, sous le
+chemin `<liste>.<item>.<modèle>`. C'est ce que lit le template, et c'est donc la
+seule entité qu'un consommateur rencontre en parcourant les réponses. Ne pas
+l'annoter, c'est laisser sans chemin la seule qui en porte une valeur : quatre
+champs de `glider` étaient dans ce cas, et leurs réponses étaient impossibles à
+replacer.
+
+Le modèle d'item porte donc le chemin de son champ, le même que la liste qui le
+contient. Deux entités nomment un seul champ, et c'est la vérité d'un scalaire
+répété : DSW n'a pas d'autre façon de vouloir plusieurs fois une valeur, donc il
+faut un emballage. Elles restent distinguables par leur type et par leur
+parenté, et la convention de chemins pointés du QC (`dmp.dataset[].title`) ne
+donne de toute façon pas de chemin séparé à un élément.
+
+Ce qui reste sans annotation : le chapitre général, qui est le nôtre et non
+celui d'un standard. Un chapitre a le droit de n'avoir pas de chemin ; une
+question n'en a pas le droit, elle a été posée parce qu'un champ de règles l'a
+demandée. Un test le dit dans ce sens-là, sur les événements et non sur les
+champs — celui qui parcourait les champs ne voyait pas une question qu'aucun
+champ ne fait chercher, ce qui est exactement le cas qui manquait.
 
 ### La version de métamodèle est gelée à la main
 
@@ -929,6 +954,19 @@ la `version` du projet, qu'une publication oblige justement à incrémenter.
 le tableau des formats du README. Seules les entrées `available: true`
 deviennent un vrai format DSW. JSON-LD y figure en `available: false` : déclaré,
 honnêtement non implémenté.
+
+### Les deux README sont composés au même endroit
+
+`readme_head()` et `readme_tail()` donnent aux deux paquets leur ouverture et
+leur fermeture. Le bloc « Compatibility » recevait des lignes **déjà puchées**
+par l'appelant, et les deux ne s'en souvenaient pas pareil : le template
+puçait tout, le KM ouvrait sur une phrase nue. Rien n'était faux, les deux
+paquets se contredisaient simplement sur une page que des lecteurs comparent.
+
+`readme_tail()` reçoit maintenant des **faits**, un par ligne, et pose les
+puces. `rules_provenance_line()` rend un fait et non une ligne, pour la même
+raison. Une mise en forme que chaque appelant doit se rappeler est une mise en
+forme qui divergera.
 
 ### Markdown et texte brut
 

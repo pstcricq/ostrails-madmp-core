@@ -643,11 +643,8 @@ def build_template_bundle(
         lines += readme_tail(
             config,
             [
-                f"- Knowledge Model: `{pid}`",
-                (
-                    f"- DS Wizard template metamodel version: "
-                    f"{TEMPLATE_METAMODEL_VERSION}"
-                ),
+                f"Knowledge Model: `{pid}`",
+                (f"DS Wizard template metamodel version: {TEMPLATE_METAMODEL_VERSION}"),
                 rules_provenance_line(model),
             ],
         )
