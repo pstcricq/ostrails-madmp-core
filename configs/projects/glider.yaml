@@ -15,7 +15,7 @@
 # title, and the registry meta.yaml.
 id: glider
 name: "SOCIB Glider"
-version: "1.0.2" # bump to publish a change
+version: "1.0.3" # bump to publish a change
 author: "Pierre St-Cricq dit Lompre ([SOCIB](https://www.socib.es))"
 license: "CC BY 4.0"
 
