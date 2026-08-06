@@ -14,5 +14,14 @@ __pycache__/
 # (setuptools also scratches here on `uv build`.)
 build/
 
+# Where to publish, and as whom, when a target is run by hand. None of these
+# names has a default in the code — on purpose — so the README tells you to set
+# them, and DSW_PASSWORD is one of them. A password written next to the code
+# that reads it is a password that gets pushed one day, so the file it would
+# live in is ignored before it exists.
+.env
+.env.*
+!.env.example
+
 # Editor settings (personal)
 .vscode/
