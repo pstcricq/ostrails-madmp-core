@@ -66,13 +66,16 @@ loaded. Three steps, and each answers a question the others do not:
 - `merge_rules` merges the validated documents into one `Model`, base standard
   first, and is the only place that sees the *set*: two extensions
   contradicting each other on a shared field is a property of the combination,
-  invisible file by file;
+  invisible file by file. Each extension is judged against the base rather than
+  against the ones merged before it — an extension is written knowing the base
+  and nothing else — and what they require then combines, so the result does
+  not depend on the order the pins are written in;
 - `assemble_project` puts a config and its merged model together, in the one
   order that works, so that no two consumers assemble a project differently.
 
 They compose, they do not call each other. `merge_rules` is handed paths and
 never learns a pin existed, which is what lets quality control merge the pins
-recorded in a submitted DMP's sidecar without building a project at all.
+recorded in a project's registry `meta.yaml` without building a project at all.
 
 ### `dsw/` — the two packages DS Wizard consumes
 
@@ -136,9 +139,11 @@ Two verbs, and only one of them writes, but both about the same folder — all
 three of `meta.yaml`, `template/` and `productions/`, so that what reads
 cannot call a folder settled and then watch the other change it.
 `folder_status` reads and says where a project stands: `missing`, `registered`,
-`stale` or `collision`, naming everything out of date in one go. Only a
-collision — a folder carrying another project's `id` — is a fault; the rest is
-a step not taken yet. `converge` makes the registry say what the config says
+`stale`, `collision` or `unreadable`, naming everything out of date in one go.
+Two of those are faults: a collision — a folder carrying another project's
+`id` — and a `meta.yaml` that is there and does not parse, which is refused
+rather than rebuilt, since that file holds the only record of the rules a
+project's submitted DMPs are checked against. The rest is a step not taken yet. `converge` makes the registry say what the config says
 and reports what that took, from what it actually sent: `created`, `updated`
 or `unchanged` — so a run that reports `unchanged` left no commit. It never
 deletes, never overwrites another project's folder, and touches no key it does
@@ -154,7 +159,7 @@ generated, which is why it comes straight after validation.
 - `rules/loader.py` — `load_rules_file` reads one rules file and validates it
   three ways, reporting every problem of all three in one error: against
   `rules/rules.schema.json` (the meta-schema that says what a rules file may
-  contain), against three coherence constraints kept in Python because JSON
+  contain), against five coherence constraints kept in Python because JSON
   Schema cannot say *which* field is wrong, and against its own path — a file
   must declare the standard and the version it is filed under.
 - `configs/loader.py` — `load_config_file` reads one project config and

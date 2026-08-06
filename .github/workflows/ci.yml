@@ -59,6 +59,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+# One run at a time per branch, and queued rather than cancelled. Two pushes in
+# quick succession would otherwise have two `registry-sync` jobs converging the
+# same `meta.yaml`: the second holds a sha the first has just replaced, GitHub
+# answers 409, and the job goes red having done nothing wrong. Cancelling would
+# be worse than queueing here — the jobs that act are the last ones, so the run
+# killed is the one about to register.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   checks:
     runs-on: ubuntu-latest
