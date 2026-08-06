@@ -17,12 +17,12 @@ import yaml
 from dsw.common import package_id
 from dsw.publish import (
     JSON_FORMAT_UUID,
-    NIL_UUID,
     DswClient,
     Instance,
     PublishError,
     Webhook,
     _require_registered,
+    installed_service,
     instance_from_env,
     publish_submission,
     published_ids,
@@ -119,34 +119,72 @@ def test_a_listing_is_read_as_the_three_names_of_one_package():
 
 WEBHOOK = Webhook("http://w", "s3cret")
 
+#: What the instance stamps on a service of its own accord, and hands back on
+#: the next read. A `PUT` takes none of it: it is assigned, not declared.
+TENANT = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+
+def as_dsw_returns_it(service: dict) -> dict:
+    """The same service, in the shape ``GET /tenants/current/config`` gives it
+    back — a tenant uuid on the service and on each supported format, the
+    service id repeated inside the format, and the two timestamps.
+
+    Every fixture below goes through this, and that is the point: a fake that
+    hands back what `publish.py` writes is a fake that agrees with the code
+    about a shape neither of them owns. This one agrees with DSW.
+    """
+    return {
+        **service,
+        "tenantUuid": TENANT,
+        "createdAt": "2026-07-01T10:00:00.000Z",
+        "updatedAt": "2026-07-01T10:00:00.000Z",
+        "supportedFormats": [
+            {**fmt, "tenantUuid": TENANT, "serviceId": service["id"]}
+            for fmt in service["supportedFormats"]
+        ],
+    }
+
 
 def test_the_service_routes_by_folder_and_only_by_folder(config):
     """The folder in the URL is the only routing input the webhook has: which
     project a submission belongs to is decided there, never by reading the
     document."""
-    service = submission_service(config, "template-uuid", "tenant-uuid", WEBHOOK)
+    service = submission_service(config, "template-uuid", WEBHOOK)
     assert service["id"] == "glider"
     assert service["request"]["url"] == "http://w?project=glider"
 
 
 def test_the_service_carries_the_shared_secret(config):
     """What DSW sends is what the webhook compares against its own copy."""
-    service = submission_service(config, "template-uuid", "tenant-uuid", WEBHOOK)
+    service = submission_service(config, "template-uuid", WEBHOOK)
     assert service["request"]["headers"] == {"Authorization": "Bearer s3cret"}
 
 
 def test_the_service_is_scoped_to_this_project_s_own_template(config):
     """So the Submit menu offers it for this project's documents and for
-    nothing else."""
-    service = submission_service(config, "template-uuid", "tenant-uuid", WEBHOOK)
+    nothing else. Two fields and no more: a supported format is stored with a
+    tenant uuid and its service id too, and neither is this run's to send."""
+    service = submission_service(config, "template-uuid", WEBHOOK)
     assert service["supportedFormats"] == [
-        {
-            "serviceId": "glider",
-            "templateUuid": "template-uuid",
-            "formatUuid": JSON_FORMAT_UUID,
-            "tenantUuid": "tenant-uuid",
-        }
+        {"templateUuid": "template-uuid", "formatUuid": JSON_FORMAT_UUID}
     ]
+
+
+def test_a_service_this_module_builds_is_already_what_a_write_carries(config):
+    """The two halves of one fact, tied together so neither can drift: what
+    `submission_service` declares is exactly what `installed_service` keeps, so
+    a field added to one and forgotten in the other cannot quietly drop out of
+    the comparison."""
+    service = submission_service(config, "tpl-uuid", WEBHOOK)
+    assert installed_service(service) == service
+
+
+def test_what_the_instance_stamped_on_a_service_is_not_a_difference(config):
+    """A read gives back more than a write takes. Those extra fields are the
+    instance's own answer, not something this run has an opinion about, so they
+    cannot be read as a disagreement."""
+    service = submission_service(config, "tpl-uuid", WEBHOOK)
+    assert installed_service(as_dsw_returns_it(service)) == service
 
 
 # Writing it: only when it would say something else
@@ -200,14 +238,21 @@ def submission_env(monkeypatch):
 
 def _current(config):
     """The service the instance would already hold, published from this very
-    config against this very template."""
-    return submission_service(config, "tpl-uuid", NIL_UUID, WEBHOOK)
+    config against this very template — and handed back the way DSW hands one
+    back, which is the whole of what this used to get wrong."""
+    return as_dsw_returns_it(submission_service(config, "tpl-uuid", WEBHOOK))
 
 
 def test_a_service_that_already_says_this_is_not_written_again(config, submission_env):
     """The PUT carries the tenant's whole configuration, so a run with nothing
     to change must not make it: that is what stops it from reverting a setting
-    edited in the console since the GET."""
+    edited in the console since the GET.
+
+    It never did. The instance returns a service with a tenant uuid and two
+    timestamps of its own, and this compared that against one built without
+    them, so "unchanged" could not come out true and every single run wrote.
+    The fixture said otherwise only because it handed back `publish.py`'s own
+    shape — the code and its double agreeing about something neither owns."""
     client = _Instance(config, [_current(config)])
     publish_submission(client, config, package_id(config))
     assert client.puts == []

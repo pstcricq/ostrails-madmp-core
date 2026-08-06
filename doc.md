@@ -1165,9 +1165,8 @@ sync près, et le dossier est là — c'est tout ce dont le webhook a besoin.
 
 Question posée le 05/08/2026 : pourquoi n'a-t-il pas son `generate_*` ?
 
-Parce que deux de ses trois entrées n'existent pas au moment du build.
-`template_uuid` est attribué par DSW et **change à chaque publication** ;
-`tenant_uuid` est lu dans la config de l'instance. Un module `generate_*`
+Parce qu'une de ses entrées n'existe pas au moment du build : `template_uuid`
+est attribué par DSW et **change à chaque publication**. Un module `generate_*`
 produit une fonction du commit seul — déterministe, uploadable dans
 l'artefact. Celui-ci est une fonction du commit **et de l'instance vivante**.
 
@@ -1197,6 +1196,39 @@ rien à changer, une version de template inchangée gardant le même uuid.
 L'état `enabled` compte dans la comparaison : un service que personne ne peut
 joindre parce que les soumissions sont désactivées, c'est un bouton Submit qui
 n'est pas là.
+
+#### Ce qu'on compare, c'est ce qu'une écriture porte
+
+Le garde-fou ci-dessus **ne se déclenchait jamais**, et c'est le contraire d'une
+comparaison trop laxiste : elle était inatteignable.
+
+Un `GET /tenants/current/config` rend le service tel qu'il est **stocké** — un
+`tenantUuid` sur le service et un sur chaque `supportedFormats`, le `serviceId`
+répété dans le format, `createdAt` et `updatedAt`. Le `PUT` prend un
+`TenantConfigChangeDTO`, qui n'a aucun de ces champs. Neuf clés d'un côté, six
+de l'autre : `current == service` ne pouvait pas être vrai, donc **chaque
+exécution écrivait**, donc chaque exécution rétablissait ce que la console avait
+changé depuis le `GET`. Vérifié contre `engine-backend` au tag `v4.31.0`.
+
+Deux corrections, et la seconde est la vraie :
+
+1. `submission_service()` ne produit plus que ce qu'une écriture porte — plus de
+   `tenantUuid`, plus de `serviceId` dans le format. Un champ que l'API ne lit
+   pas n'est pas un champ qu'on envoie. Le paramètre `tenant_uuid` disparaît
+   avec, et avec lui la recherche qui allait le chercher dans un autre service.
+2. `installed_service()` relit ce que l'instance rend **à travers ce contrat**,
+   et c'est cette réduction qu'on compare. Un champ que l'instance a apposé
+   n'est pas un champ sur lequel cette exécution a un avis, donc pas un champ
+   d'où lire un désaccord.
+
+**Pourquoi le test ne le voyait pas.** Le faux instance rendait exactement la
+sortie de `submission_service()` — c'est-à-dire ce que le code écrit, pas ce que
+DSW rend. Un double qui se met d'accord avec le code sur une forme dont ni l'un
+ni l'autre n'est propriétaire ne teste plus rien. Il passe maintenant par
+`as_dsw_returns_it()`, et deux tests tiennent les deux moitiés ensemble :
+`installed_service(submission_service(...)) == submission_service(...)`, pour
+qu'un champ ajouté d'un côté et oublié de l'autre ne puisse pas retomber hors
+de la comparaison.
 
 ### Publier consomme l'artefact, il ne régénère pas
 

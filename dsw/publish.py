@@ -33,7 +33,10 @@ tenant's *entire* configuration back — organisation, authentication, look and
 feel, everything. Anything changed in the console between the read and the
 write is silently reverted. So this compares what the service should say with
 what it says, and sends nothing when they agree; the window then opens only on
-the runs that had something to change.
+the runs that had something to change. The comparison is made over what a
+write *carries*, not over what a read gives back — the instance returns a
+service richer than the one it accepts, and comparing the two shapes as they
+stand can only ever answer "different".
 
 Registering the project's folder in the registry is **not** here — it is
 :mod:`registry`, and it runs in CI long before anything is published. What is
@@ -80,7 +83,6 @@ from utils.errors import ProblemsError
 # so the submission service can name it without reading the bundle back.
 JSON_FORMAT_UUID = u("template", "format", "JSON")
 
-NIL_UUID = "00000000-0000-0000-0000-000000000000"
 LISTING_PAGE_SIZE = 1000
 
 
@@ -382,26 +384,26 @@ def publish_template(client: DswClient, template_path: Path) -> None:
 def submission_service(
     config: dict[str, Any],
     template_uuid: str,
-    tenant_uuid: str,
     webhook: Webhook,
 ) -> dict[str, Any]:
-    """One project's Document Submission entry.
+    """One project's Document Submission entry, in the shape a write takes.
 
     A pure function on purpose: what a submission service *says* is decided
     here and tested without an instance, while installing it is
     :func:`publish_submission`'s job. It cannot be generated ahead of time
-    though — ``template_uuid`` is assigned by DSW and changes at every publish,
-    and ``tenant_uuid`` is read from the instance — which is why it lives here
-    and not beside the generators.
+    though — ``template_uuid`` is assigned by DSW and changes at every publish
+    — which is why it lives here and not beside the generators.
 
     Two things make it this project's and no other's: the folder in the URL,
     which is the *only* routing input the webhook has, and ``supportedFormats``
     naming this project's own template — so the Submit menu offers this service
     for this project's documents and for nothing else.
 
-    Being pure is also what lets the caller compare it to what the instance
-    already holds: two calls with the same inputs give the same document, so an
-    equal one means there is nothing to write.
+    Nothing here is the instance's to assign. A service is *stored* with a
+    tenant uuid on itself and on each supported format, a service id repeated
+    inside the format, and two timestamps; the change payload carries none of
+    them, and sending them anyway would be sending fields the API does not
+    read. :func:`installed_service` is the other half of that fact.
     """
     folder = config["id"]
     return {
@@ -416,12 +418,37 @@ def submission_service(
             "url": f"{webhook.url}?project={folder}",
         },
         "supportedFormats": [
-            {
-                "serviceId": folder,
-                "templateUuid": template_uuid,
-                "formatUuid": JSON_FORMAT_UUID,
-                "tenantUuid": tenant_uuid,
-            }
+            {"templateUuid": template_uuid, "formatUuid": JSON_FORMAT_UUID}
+        ],
+    }
+
+
+#: What a write carries, at each of the two levels a service has one. The rest
+#: of what a read gives back — `tenantUuid` on both levels, `serviceId` inside
+#: the format, `createdAt` and `updatedAt` — is assigned by the instance.
+_WRITTEN_SERVICE_FIELDS = ("id", "name", "description", "props", "request")
+_WRITTEN_FORMAT_FIELDS = ("templateUuid", "formatUuid")
+
+
+def installed_service(service: dict[str, Any]) -> dict[str, Any]:
+    """A service the instance returned, read as the write contract sees it.
+
+    A ``GET`` hands back the service as it is *stored* and a ``PUT`` takes the
+    fields above and no others, so the two shapes never match as they stand.
+    Comparing them directly always answered "different", which meant the write
+    this module goes to such lengths not to make was made on **every** run —
+    and with it, every run reverted whatever had been edited in the console
+    since the ``GET``. The guard was not weak, it was unreachable.
+
+    Nothing to do with defaults: a field the instance assigned is not a field
+    this run has an opinion about, so it is not a field a difference can be
+    read from.
+    """
+    return {
+        **{name: service.get(name) for name in _WRITTEN_SERVICE_FIELDS},
+        "supportedFormats": [
+            {name: fmt.get(name) for name in _WRITTEN_FORMAT_FIELDS}
+            for fmt in service.get("supportedFormats") or []
         ],
     }
 
@@ -475,7 +502,9 @@ def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> N
     The write is skipped when the service already says exactly this and
     submissions are enabled — the ``PUT`` carries the whole tenant
     configuration, so not making it is how a run that changes nothing cannot
-    revert anything either.
+    revert anything either. What "exactly this" means is
+    :func:`installed_service`'s answer: the fields a write carries, and not the
+    ones the instance stamped on the service itself.
     """
     _require_registered(config)
     webhook = webhook_from_env()
@@ -487,12 +516,10 @@ def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> N
     tenant = client.get("/tenants/current/config")
     submission = tenant.setdefault("submission", {})
     services = submission.setdefault("services", [])
-    tenant_uuid = next(
-        (s["tenantUuid"] for s in services if s.get("tenantUuid")), NIL_UUID
-    )
-    service = submission_service(config, template_uuid, tenant_uuid, webhook)
+    service = submission_service(config, template_uuid, webhook)
     current = next((s for s in services if s.get("id") == folder), None)
-    if current == service and submission.get("enabled"):
+    unchanged = current is not None and installed_service(current) == service
+    if unchanged and submission.get("enabled"):
         print(f"Submission service {folder!r} unchanged (template {template_uuid}).")
         return
 

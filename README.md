@@ -121,6 +121,15 @@ registry folder is not there — the webhook rejects a folder with no `meta.yaml
 and advertising that route would turn every Submit into a failure the
 researcher gets blamed for.
 
+That third target writes the tenant's *whole* configuration, there being no
+endpoint for one service, so a run with nothing to change must not write at
+all — otherwise it reverts whatever was edited in the console since the read.
+What makes that hold is comparing over what a write **carries**: the instance
+hands a service back as it is stored, with a tenant uuid and timestamps of its
+own, and takes back only the fields the change payload has. `submission_service`
+declares exactly those, `installed_service` reads an existing one through the
+same contract, and two tests tie the pair together so neither can drift.
+
 Every coordinate is read from the environment with no default, and none of it
 is guessed: a default endpoint would be one deployment's address baked into
 every other's, and unlike a wrong registry a wrong instance is caught by
