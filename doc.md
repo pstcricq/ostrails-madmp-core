@@ -913,6 +913,29 @@ veut dire « pas fourni », et c'est ce mécanisme qui produit les `title` vides
 des DMP issus d'une baseline. La moitié qui manque est côté contrôle qualité,
 juste en dessous.
 
+#### Un booléen n'a pas de chaîne vide : il rend `null`
+
+Un scalaire dit « fourni, vide » avec `""`. Un booléen n'a pas cette valeur-là,
+et il disait donc `false` — sauf que **`false` n'est pas un silence, c'est une
+réponse**. « Personne n'a répondu » et « on a répondu non » rendaient le même
+document, sur des champs comme `is_reused` où les deux affirmations n'ont rien
+à voir.
+
+Trois états, donc trois valeurs : `true`, `false`, et `null` pour le non
+répondu. Le QC lira `null` comme il lira `""` — une absence — et la clé reste
+émise, puisque c'est elle qui dit que le champ manque.
+
+Le prix, lui aussi assumé : `null` n'est pas un booléen valide au regard du
+schéma d'un standard. Mais `""` ne satisfait pas davantage un titre requis, et
+c'est la même doctrine qui l'accepte : entre un document **prouvablement
+incomplet** et un document qui affirme tranquillement quelque chose que
+personne n'a dit, on prend le premier.
+
+**Corrigé avant d'être atteignable.** Aucun standard sur disque ne déclare de
+booléen requis — `dmp.dataset[].is_reused` est en `0..1`, donc conditionnel, et
+n'a jamais rien inventé. Mais `0..1 → 1` est un **resserrement autorisé** par la
+fusion : une extension activait ça sans une ligne de code et sans rien de rouge.
+
 ### Le repli d'un champ non répondu : `''`, jamais une valeur de vocabulaire
 
 Un champ sans réponse retombe sur la chaîne vide, y compris pour un vocabulaire.

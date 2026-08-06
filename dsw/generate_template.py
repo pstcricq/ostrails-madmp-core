@@ -300,13 +300,24 @@ class TemplateBuilder:
             for value in ("yes", "no"):
                 self.answer_labels[answer_uuid(field.path, value)] = value
             # A JSON boolean, not a quoted string: the Yes/No answer maps to a
-            # bare true/false literal.
-            condition = f"{own_path} in r and r[{own_path}]|reply_str_value"
+            # bare true/false literal — and an unanswered one to `null`, never
+            # to `false`.
+            #
+            # A required key is emitted whether or not it was answered, which
+            # is the choice doc.md defends: a DMP missing a mandatory field
+            # must say so. A scalar says it with `""`. A boolean has no empty
+            # value, so it used to say it with `false` — and `false` is not a
+            # silence, it is an answer. "Nobody answered" and "answered no"
+            # rendered the same document, on fields like `is_reused` where the
+            # two are not remotely the same claim. `null` is what a boolean has
+            # instead of an empty string.
+            answered = f"av({own_path}, '')"
             return OutputField(
                 field.name,
-                f"{{{{ 'true' if av({own_path}, 'no') == 'yes' else 'false' }}}}",
+                f"{{{{ 'true' if {answered} == 'yes' "
+                f"else ('false' if {answered} == 'no' else 'null') }}}}",
                 required=field.cardinality == "1",
-                condition=condition,
+                condition=f"{own_path} in r and r[{own_path}]|reply_str_value",
                 is_object=True,
             )
         elif kind == "value":

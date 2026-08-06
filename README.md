@@ -210,6 +210,9 @@ generated, which is why it comes straight after validation.
   standard declare an object with nothing required in it. A required field is
   still emitted when nothing answered it, now as a choice rather than a
   constraint: a required field that is empty says so, an absent one does not.
+  A scalar says it with `""` and a boolean with `null`, having no empty value
+  of its own — `false` there would be the document answering a question nobody
+  answered, making "not filled in" and "said no" the same document.
   Because the document *is* literal text, nothing stands between a reply and
   the file but the `js()` macro, so everything that renders text goes through
   it — a value, a vocabulary label, and above all the free text behind a

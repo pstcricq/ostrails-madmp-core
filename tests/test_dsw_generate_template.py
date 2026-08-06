@@ -67,6 +67,14 @@ ANCHORLESS = {
     }
 }
 
+# A boolean a standard made mandatory. No standard on disk does today, but
+# `0..1` -> `1` is a tightening the merge allows, so an extension turns this on
+# without a line of code changing.
+REQUIRED_BOOLEAN = {
+    "is_reused": {"_cardinality": "1", "_type": "boolean"},
+    "title": {"_cardinality": "1", "_type": "string"},
+}
+
 # A vocabulary spelling its values the way an institution's name is spelt. The
 # apostrophe is the one that used to take the whole template down: it closed
 # the Jinja literal `AL` holds the label in, and the body stopped parsing.
@@ -433,6 +441,47 @@ def test_a_multi_choice_array_carries_its_labels_and_its_free_text_intact(tmp_pa
 
     document = _render(body, replies, items=lambda reply: reply)
     assert document["dmp"]["keyword"] == [*labels, 'a "manual" keyword']
+
+
+def test_a_required_boolean_nobody_answered_is_null_and_never_false(tmp_path):
+    """A required key is emitted answered or not — that is the choice: a DMP
+    missing a mandatory field has to say so. A scalar says it with `""`, and a
+    boolean has no empty value, so it used to say it with `false`.
+
+    But `false` is not a silence, it is an answer. "Nobody answered" and
+    "answered no" rendered the same document, and on `is_reused` the two are
+    not remotely the same claim. `null` is what a boolean has instead of an
+    empty string, and the three states are three values again."""
+    body = _body_from_rules(tmp_path, REQUIRED_BOOLEAN)
+    asked = f"{chapter_uuid('general')}.{question_uuid(('is_reused',))}"
+
+    unanswered = _render(body, {})["dmp"]
+    said_no = _render(body, {asked: answer_uuid(("is_reused",), "no")})["dmp"]
+    said_yes = _render(body, {asked: answer_uuid(("is_reused",), "yes")})["dmp"]
+
+    assert unanswered["is_reused"] is None
+    assert said_no["is_reused"] is False
+    assert said_yes["is_reused"] is True
+    assert unanswered["is_reused"] is not said_no["is_reused"]
+    # Still emitted at all: the key is what says the field is missing.
+    assert "is_reused" in unanswered
+
+
+def test_an_optional_boolean_is_absent_until_it_is_answered(tmp_path):
+    """The other half. Optional keys are conditional, so an unanswered one
+    renders nothing at all rather than a null — `dataset.is_reused` is `0..1`
+    in RDA DCS, which is every boolean on disk today."""
+    optional = dict(
+        REQUIRED_BOOLEAN, is_reused={"_cardinality": "0..1", "_type": "boolean"}
+    )
+    body = _body_from_rules(tmp_path, optional)
+    asked = f"{chapter_uuid('general')}.{question_uuid(('is_reused',))}"
+
+    assert "is_reused" not in _render(body, {})["dmp"]
+    assert (
+        _render(body, {asked: answer_uuid(("is_reused",), "no")})["dmp"]["is_reused"]
+        is False
+    )
 
 
 def test_a_uuid_is_quoted_the_same_way_it_always_was():
