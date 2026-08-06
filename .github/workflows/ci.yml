@@ -207,14 +207,15 @@ jobs:
   # It downloads what `generate` built rather than building again: what gets
   # published is what was produced once, not a second build nobody looked at.
   #
-  # `vars.DSW_API_URL` is the switch. There is no reachable instance yet — a
-  # GitHub runner cannot dial localhost:3000 — so until one is declared, this
-  # shows as `skipped` in the check list, which is the whole point of gating
-  # on a variable rather than commenting the job out. A Codespaces URL is also
-  # why it is a repository variable and not written here like the registry's
-  # coordinates: it changes at every creation, and a variable is edited
-  # without a commit. What never changes is that the code assumes nothing —
-  # `dsw.publish` reads all five names with no default.
+  # `vars.DSW_API_URL` is the switch. Until an instance is declared this shows
+  # as `skipped` in the check list, which is the whole point of gating on a
+  # variable rather than commenting the job out. It is also why that one name
+  # is a *variable* while the account is two *secrets*: the `secrets` context
+  # is not available in a job-level `if:`, so the switch could not be one. A
+  # deployment URL changes, and a variable is edited without a commit.
+  #
+  # What never changes is that the code assumes nothing — `dsw.publish` reads
+  # all five names with no default, and says which one is missing.
   publish:
     needs: [registry-sync]
     if: vars.DSW_API_URL != ''
@@ -233,15 +234,25 @@ jobs:
           path: build/
       # Idempotent by version: an already-published package is skipped, so
       # every project is offered every time and only a bumped `version`
-      # actually publishes. The submission service is an upsert by id.
-      - name: Publish every project's KM, template and submission service
+      # actually publishes.
+      #
+      # The two packages only, for now. `submission` would write a service
+      # pointing at the webhook, and the webhook is deployed nowhere a remote
+      # DSW can reach — it exists as a container on the local compose network.
+      # Publishing that route would advertise a Submit that cannot work, which
+      # is the one thing this target exists to avoid. Restore `all` when the
+      # webhook has a public address; the two names it needs are already
+      # wired below.
+      - name: Publish every project's KM and document template
         run: |
           for cfg in configs/projects/*.yaml; do
-            uv run python -m dsw.publish all "$cfg"
+            uv run python -m dsw.publish km "$cfg"
+            uv run python -m dsw.publish template "$cfg"
+            # uv run python -m dsw.publish all "$cfg"
           done
         env:
           DSW_API_URL: ${{ vars.DSW_API_URL }}
-          DSW_EMAIL: ${{ vars.DSW_EMAIL }}
+          DSW_EMAIL: ${{ secrets.DSW_EMAIL }}
           DSW_PASSWORD: ${{ secrets.DSW_PASSWORD }}
           SUBMISSION_URL: ${{ vars.SUBMISSION_URL }}
           SUBMISSION_TOKEN: ${{ secrets.SUBMISSION_TOKEN }}
