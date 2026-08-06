@@ -96,6 +96,71 @@ def test_two_runs_of_one_project_are_the_same_bundle(project):
     )
 
 
+def test_every_event_carries_the_fields_its_metamodel_defines_and_no_others(events):
+    """The one thing about this bundle that is somebody else's specification.
+
+    Each ``Add*EventContent`` of `kmp_schema_v20.json` is
+    ``additionalProperties: false``, so a field the metamodel does not define
+    is not a field this may send — an `OptionsQuestion` carried `answerUuids`
+    and a `ListQuestion` `itemTemplateQuestionUuids`, neither of which v20 has.
+    Both were inert: DSW infers the order of sibling entities from the order of
+    the events, which is why nothing rejected them and why nothing lost by
+    dropping them. A bundle that is out of schema publishes today and is a
+    bundle nobody else can validate.
+
+    Read off the schema and written out here rather than validating against the
+    file itself: pinning it would mean vendoring a hundred kilobytes of
+    somebody else's JSON, and the fields this generator emits are two dozen
+    names that say, in one place, what a KM event is.
+    """
+    metamodel = {
+        "AddKnowledgeModelEvent": {"annotations", "eventType"},
+        "AddPhaseEvent": {"annotations", "description", "eventType", "title"},
+        "AddTagEvent": {"annotations", "color", "description", "eventType", "name"},
+        "AddChapterEvent": {"annotations", "eventType", "text", "title"},
+        "AddAnswerEvent": {
+            "advice",
+            "annotations",
+            "eventType",
+            "label",
+            "metricMeasures",
+        },
+        "AddChoiceEvent": {"annotations", "eventType", "label"},
+    }
+    question = {
+        "annotations",
+        "eventType",
+        "questionType",
+        "requiredPhaseUuid",
+        "tagUuids",
+        "text",
+        "title",
+    }
+    questions = {
+        "ValueQuestion": question | {"validations", "valueType"},
+        "OptionsQuestion": question,
+        "ListQuestion": question,
+        "MultiChoiceQuestion": question,
+    }
+
+    for event in events:
+        assert set(event) == {
+            "uuid",
+            "entityUuid",
+            "parentUuid",
+            "createdAt",
+            "content",
+        }
+        content = event["content"]
+        kind = content["eventType"]
+        expected = (
+            questions[content["questionType"]]
+            if kind == "AddQuestionEvent"
+            else metamodel[kind]
+        )
+        assert set(content) == expected, f"{kind} {content.get('questionType') or ''}"
+
+
 # The invariant that holds for any project
 
 

@@ -694,11 +694,37 @@ propre.
 
 `METAMODEL_VERSION = 20` (KM) et `TEMPLATE_METAMODEL_VERSION = "18.0"` (document
 template) sont deux concepts distincts, liés à **l'instance DSW** et non au
-projet (20 correspond à DSW 4.31). Référence :
-<https://github.com/ds-wizard/dsw-schemas/tree/main/schemas/km-package>.
+projet. Référence :
+<https://github.com/ds-wizard/dsw-schemas/tree/main/schemas>.
+
+**Revérifiés le 06/08/2026 contre `engine-backend` au tag `v4.31.0`**, plutôt
+que crus sur parole : `knowledgeModelMetamodelVersion = 20`, et
+`documentTemplateMetamodelVersion = SemVer2Tuple 18 1`. `18.0` est donc
+**accepté** — `isDocumentTemplateSupported` prend la même majeure avec une
+mineure inférieure — mais 4.31 est à 18.1.
 
 Ce que le dépôt ne fait pas, c'est vérifier que l'instance visée les accepte :
 c'est écrit en [§14](#14-limites-connues).
+
+### Un champ que le métamodèle ne définit pas n'est pas un champ qu'on envoie
+
+Chaque `Add*EventContent` de `kmp_schema_v20.json` est
+`additionalProperties: false`. Le générateur émettait pourtant `answerUuids: []`
+sur les `OptionsQuestion` et `itemTemplateQuestionUuids: []` sur les
+`ListQuestion`, que v20 n'a ni l'un ni l'autre : 60 erreurs de schéma, zéro
+après retrait.
+
+Les deux étaient **inertes** — DSW déduit l'ordre des entités sœurs de l'ordre
+des événements, pas de ces listes — ce qui explique à la fois que rien ne les
+ait rejetés (le décodeur Aeson du serveur ignore les clés inconnues) et que
+rien ne se perde à les retirer. Un bundle hors schéma se publie aujourd'hui et
+reste un bundle que personne d'autre ne peut valider.
+
+Le contrat est tenu par un test qui énumère, pour chaque type d'événement, les
+champs que le métamodèle définit. Écrit là plutôt que vérifié contre le fichier
+de schéma lui-même : l'épingler voudrait dire embarquer cent kilo-octets de
+JSON qui ne sont pas les nôtres, alors que les champs émis tiennent en deux
+douzaines de noms qui disent en un seul endroit ce qu'est un événement de KM.
 
 ---
 

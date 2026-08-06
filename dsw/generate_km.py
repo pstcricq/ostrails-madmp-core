@@ -53,8 +53,12 @@ from dsw.uuids import (
 from project import Field, Model, Project, assemble_project
 
 # The DSW metamodel schema version this bundle targets. Tied to the DSW
-# instance and not to the project (20 for DSW v4.31): see
-# https://github.com/ds-wizard/dsw-schemas/tree/main/schemas/km-package
+# instance and not to the project: `knowledgeModelMetamodelVersion` is 20 in
+# engine-backend at v4.31.0, and `kmp_schema_v20.json` in
+# https://github.com/ds-wizard/dsw-schemas is what an event of this bundle has
+# to look like. Each schema is `additionalProperties: false`, so a field it
+# does not define is not a field this may send — see `tests` for the fields it
+# defines, held there rather than believed here.
 METAMODEL_VERSION = 20
 
 # A scalar field type, as the matching DSW ValueQuestion value type. Several
@@ -248,7 +252,6 @@ class KmBuilder:
                 "text": field.description,
                 "requiredPhaseUuid": self.required_phase_for(field),
                 "tagUuids": self.tags_for(field),
-                "answerUuids": [],
             },
         )
         for value in values:
@@ -359,7 +362,6 @@ class KmBuilder:
                 "text": field.description,
                 "requiredPhaseUuid": self.required_phase_for(field),
                 "tagUuids": self.tags_for(field),
-                "itemTemplateQuestionUuids": [],
             },
         )
         self.emit(
@@ -396,7 +398,6 @@ class KmBuilder:
                 "text": "**Optional.** Answer Yes to provide these details.",
                 "requiredPhaseUuid": None,
                 "tagUuids": [self.tag_optional],
-                "answerUuids": [],
             },
         )
         yes_uuid = gate_yes_uuid(field.path)
@@ -433,7 +434,6 @@ class KmBuilder:
                     "text": field.description,
                     "requiredPhaseUuid": self.required_phase_for(field),
                     "tagUuids": self.tags_for(field),
-                    "itemTemplateQuestionUuids": [],
                 },
             )
             for child in field.children:

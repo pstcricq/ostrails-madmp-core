@@ -190,7 +190,9 @@ generated, which is why it comes straight after validation.
 - `dsw/generate_km.py` — the model walked into a DSW event bundle. Emission
   order is load-bearing: DSW infers the order of sibling entities from the
   order of the events, so the order questions are emitted in is the order a
-  researcher reads them.
+  researcher reads them. Every event content is exactly the fields metamodel
+  20 defines for it and no others — each of its schemas forbids extras, and a
+  bundle out of schema publishes today but is one nobody else can validate.
 - `dsw/generate_template.py` — the same model into Jinja that emits JSON as
   literal text. Every key carries its comma in front of it and each object's
   body is captured so the first one can be dropped, which is what lets a
