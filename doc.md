@@ -1245,7 +1245,23 @@ là, en le disant. Conséquence voulue : passer tous les projets à chaque push 
 a pas de « republier de force » — il y a une version à monter.
 
 Vérifié le 05/08/2026 contre l'instance locale, hors mocks : deuxième
-exécution, les deux cibles sautent, code de sortie 0.
+exécution, les deux cibles sautent, code de sortie 0. Revérifié le 06/08 sur
+`publish all` complet, les trois cibles.
+
+**« Déjà publié » est exact de la dernière version, et d'elle seule.**
+`/knowledge-model-packages` et `/document-templates` rendent **une ligne par
+`kmId`** — la plus récente. Constaté le 06/08 : `1.0.2` a disparu de la liste à
+la seconde où `1.0.3` a été publiée. Rien n'est supprimé pour autant, la 1.0.2
+répond toujours quand on la demande par son uuid ; elle est seulement invisible
+dans ce que `publish` interroge.
+
+La conséquence est bornée. Une version ne fait que monter, donc celle qu'on
+publie est toujours la dernière et la réponse est juste. Publier une version
+**antérieure** — un vieux commit rejoué — se ferait répondre « pas publiée »,
+tenterait l'envoi, et DSW le rejetterait : une erreur et un code de sortie 1,
+pas un écrasement. Le mode dégradé est un refus, ce pour quoi il n'y a rien à
+corriger : rendre la réponse exacte demanderait d'interroger l'instance version
+par version pour se prémunir d'un scénario que le flux normal ne produit pas.
 
 ### La pagination n'est pas une optimisation
 

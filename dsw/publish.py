@@ -354,7 +354,14 @@ def _package_exists(
 ) -> bool:
     """Whether ``pid`` is already published. DSW versions are immutable, so
     this is what makes publishing idempotent: the version is the sole gate,
-    and running publish on an unchanged config does nothing."""
+    and running publish on an unchanged config does nothing.
+
+    Exact of the **latest** version, and of it alone: the listing returns one
+    row per ``kmId``, so an older version answers "not published" while being
+    perfectly present. A version only ever goes up, so the one being published
+    is the latest and the answer holds; replaying an old commit would attempt
+    the upload and have DSW reject it, which is an error and not an overwrite.
+    """
     return pid in _package_ids(client, endpoint, collection, id_key)
 
 
