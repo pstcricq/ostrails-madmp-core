@@ -3,6 +3,7 @@ validators are meta-checked and cached, and every violation of a document is
 reported at once as a readable "path: message"."""
 
 import json
+from pathlib import Path
 
 import pytest
 from jsonschema.exceptions import SchemaError
@@ -35,6 +36,13 @@ def test_valid_document_has_no_problems(tmp_path):
 def test_validator_is_cached_per_path(tmp_path):
     path = _schema_file(tmp_path, SCHEMA)
     assert validator_for(path) is validator_for(path)
+
+
+def test_the_cache_key_is_the_file_not_how_it_was_spelled(tmp_path):
+    """A cache keyed on the argument as given would hold one validator per
+    spelling of the same path."""
+    path = _schema_file(tmp_path, SCHEMA)
+    assert validator_for(str(path)) is validator_for(Path(path))
 
 
 def test_broken_schema_fails_at_build_time(tmp_path):

@@ -17,7 +17,12 @@ build-backend = "setuptools.build_meta"
 name = "madmp-core"
 version = "0.1.0"
 description = "Declarative maDMP rules with an explicit meta-schema, merged into one typed model."
-requires-python = ">=3.10"
+# The version CI runs and the only one this is ever installed on. It said
+# >=3.10 before, which nothing checked: a floor is a promise, and one no job
+# exercises is only found to be false by whoever first believes it. Raising it
+# also dropped two backports (exceptiongroup, tomli) the lockfile carried for
+# Pythons that never run this.
+requires-python = ">=3.12"
 dependencies = [
     "jsonschema>=4",     # rules/*.json validated against rules/rules.schema.json
     "pyyaml",            # project configs (configs/projects/*.yaml)
@@ -44,7 +49,7 @@ dev = [
 cache_dir = ".venv/.pytest_cache"
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py312"
 cache-dir = ".venv/.ruff_cache"
 
 # No `select`: ruff's own default rule set, which already covers pyflakes,

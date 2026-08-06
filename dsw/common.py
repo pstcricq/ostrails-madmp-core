@@ -23,7 +23,7 @@ Loading is ``project/``'s job, writing is a generator's, uploading is
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -77,7 +77,7 @@ def package_id(config: dict[str, Any]) -> str:
 
 def utc_timestamp() -> str:
     """The creation timestamp stamped on every generated event and bundle."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 
 def standard_label(standard: str) -> str:

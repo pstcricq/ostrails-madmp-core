@@ -36,13 +36,24 @@ class SchemaFileError(ProblemsError):
 
 
 @cache
+def _validator(schema_path: Path) -> Draft202012Validator:
+    schema = json.loads(schema_path.read_text())
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
 def validator_for(schema_path: str | Path) -> Draft202012Validator:
     """A cached validator for a schema file — meta-checked against JSON Schema's
     own meta-schema, so a structurally broken schema fails here rather than
-    silently mis-validating real files."""
-    schema = json.loads(Path(schema_path).read_text())
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
+    silently mis-validating real files.
+
+    The path is normalised before it becomes a cache key, which is the only
+    reason this wrapper exists: ``lru_cache`` keys on the argument as given, so
+    ``"s.json"`` and ``Path("s.json")`` would each build and hold a validator
+    for the same file. Harmless today — every caller passes the same module
+    constant — and the kind of thing that stays harmless only by accident.
+    """
+    return _validator(Path(schema_path))
 
 
 def schema_problems(validator: Draft202012Validator, doc: Any) -> list[str]:
