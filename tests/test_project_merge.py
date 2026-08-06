@@ -3,6 +3,7 @@ tighten-only merge semantics accept (and record) every legitimate restriction
 while rejecting every loosening, reshaping, or widening."""
 
 import json
+from itertools import permutations
 from pathlib import Path
 
 import pytest
@@ -282,44 +283,135 @@ def test_two_files_describing_one_field_differently_is_a_conflict(tmp_path):
     assert "base" in problem and "ext" in problem
 
 
-# Attribution: with three standards, the one that set a value is neither the
-# base nor the one being refused, and only a message that names it sends the
-# reader to the right file.
+# Several extensions: each is judged against the base, and what they require
+# combines. An extension is written knowing the base and nothing else.
+
+
+def _merge_three(tmp_path, base_dmp, first_dmp, second_dmp) -> Model:
+    return merge_rules(
+        [
+            _doc(tmp_path, "base", False, base_dmp),
+            _doc(tmp_path, "ext_one", True, first_dmp),
+            _doc(tmp_path, "ext_two", True, second_dmp),
+        ]
+    )
 
 
 def _merge_three_conflicts(tmp_path, base_dmp, first_dmp, second_dmp) -> str:
     with pytest.raises(RulesConflictError) as excinfo:
-        merge_rules(
-            [
-                _doc(tmp_path, "base", False, base_dmp),
-                _doc(tmp_path, "ext_one", True, first_dmp),
-                _doc(tmp_path, "ext_two", True, second_dmp),
-            ]
-        )
+        _merge_three(tmp_path, base_dmp, first_dmp, second_dmp)
     return str(excinfo.value)
 
 
-def test_a_loosened_cardinality_names_who_tightened_it(tmp_path):
-    conflicts = _merge_three_conflicts(
+def test_an_extension_may_restate_the_base_another_extension_tightened(tmp_path):
+    """ext_two repeats what the base says — the ordinary way of reaching one's
+    own leaves. That ext_one required the field in the meantime is none of its
+    author's business: they wrote against the base, and cannot know which
+    extensions a project pins beside theirs."""
+    model = _merge_three(
         tmp_path,
         {"title": dict(STRING_01)},
         {"title": dict(STRING_1)},
         {"title": dict(STRING_01)},
     )
-    assert "set by ext_one" in conflicts
+    (title,) = model.walk()
+    assert title.cardinality == "1"
 
 
-def test_a_widened_vocabulary_names_who_restricted_it(tmp_path):
-    """The value ext_two writes is in the *base* vocabulary, so a message
-    blaming it for widening, with no mention of the restriction in between,
-    describes a file that is not the one to fix."""
+def test_extension_order_does_not_change_the_verdict(tmp_path):
+    """The same files in the other order: same model, not a conflict. Reordering
+    two pins in a config must never decide whether a project builds."""
+    one = {"title": dict(STRING_1)}
+    two = {"title": dict(STRING_01)}
+    swapped = _merge_three(tmp_path, {"title": dict(STRING_01)}, two, one)
+    (title,) = swapped.walk()
+    assert title.cardinality == "1"
+
+
+def test_restrictions_from_two_extensions_combine(tmp_path):
+    """Both restrict the base vocabulary, each legitimately. A DMP satisfying
+    both standards satisfies both restrictions, so the field holds their
+    intersection — and the base's order, not either extension's."""
+    model = _merge_three(
+        tmp_path,
+        {"mode": {**STRING_1, "_allowed_values": ["rt", "dt", "dm"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["dm", "rt"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["dt", "dm"]}},
+    )
+    (mode,) = model.walk()
+    assert mode.allowed_values == ("dm",)
+
+
+def test_irreconcilable_restrictions_rejected(tmp_path):
+    """An empty intersection is a field nobody can fill: said once, naming both
+    standards, rather than generated as an unanswerable question."""
     conflicts = _merge_three_conflicts(
+        tmp_path,
+        {"mode": {**STRING_1, "_allowed_values": ["rt", "dt"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["rt"]}},
+        {"mode": {**STRING_1, "_allowed_values": ["dt"]}},
+    )
+    assert "no value satisfies both" in conflicts
+    assert "ext_one" in conflicts and "ext_two" in conflicts
+
+
+def test_a_vocabulary_restated_from_the_base_is_a_no_op(tmp_path):
+    """The vocabulary counterpart of restating a cardinality: ext_two repeats
+    the base, ext_one's restriction stands."""
+    model = _merge_three(
         tmp_path,
         {"mode": {**STRING_1, "_allowed_values": ["rt", "dt"]}},
         {"mode": {**STRING_1, "_allowed_values": ["rt"]}},
         {"mode": {**STRING_1, "_allowed_values": ["rt", "dt"]}},
     )
-    assert "ext_one set it to ['rt']" in conflicts
+    (mode,) = model.walk()
+    assert mode.allowed_values == ("rt",)
+
+
+def test_every_order_of_three_extensions_gives_the_same_model(tmp_path):
+    """The property the whole design is for, checked on every permutation
+    rather than on the one order a test happened to write: a cardinality
+    tightened by one and restated by another, and vocabularies restricted from
+    both sides."""
+    base = _doc(
+        tmp_path,
+        "base",
+        False,
+        {
+            "title": dict(STRING_01),
+            "mode": {**STRING_1, "_allowed_values": list("abcd")},
+        },
+    )
+    extensions = [
+        _doc(tmp_path, "one", True, {"title": dict(STRING_1)}),
+        _doc(
+            tmp_path,
+            "two",
+            True,
+            {"mode": {**STRING_1, "_allowed_values": list("abc")}},
+        ),
+        _doc(
+            tmp_path,
+            "three",
+            True,
+            {
+                "title": dict(STRING_01),
+                "mode": {**STRING_1, "_allowed_values": list("bcd")},
+            },
+        ),
+    ]
+    models = {
+        tuple(
+            (f.dotted_path, f.cardinality, f.allowed_values)
+            for f in merge_rules([base, *order]).walk()
+        )
+        for order in permutations(extensions)
+    }
+    assert len(models) == 1
+    assert models.pop() == (
+        ("dmp.title", "1", None),
+        ("dmp.mode", "1", ("b", "c")),
+    )
 
 
 def test_a_prose_conflict_names_who_wrote_the_prose(tmp_path):

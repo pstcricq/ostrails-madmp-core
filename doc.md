@@ -349,6 +349,51 @@ l'éditer — c'est leur seule fonction, et elle suffit à justifier qu'on les t
 Exactement un fichier est la base (`extends: false`). Les extensions peuvent
 redéclarer un champ que la base définit déjà, dans deux cas seulement :
 
+### Chaque extension est jugée par rapport à la base
+
+**Pas par rapport à ce qu'une autre extension a déjà imposé.** C'est la règle
+dont tout le reste de ce chapitre découle, et elle tient à un fait sur les
+auteurs : OSTrails est écrit contre RDA DCS, un futur standard SOCIB le sera
+aussi, et **aucun des deux ne sait ce que l'autre exige** — ni même qu'un projet
+les épinglera ensemble.
+
+La fusion faisait l'inverse : elle appliquait les extensions l'une après
+l'autre, chacune comparée au résultat des précédentes. Une extension qui
+redéclare la cardinalité de la base — le cas courant, redire un parent pour
+atteindre ses propres feuilles — devenait donc un « relâchement » dès qu'une
+autre était passée avant :
+
+```
+[base 0..1, serre 1, repete 0..1] -> CONFLIT
+[base 0..1, repete 0..1, serre 1] -> accepté
+```
+
+Mêmes fichiers, verdicts opposés selon l'ordre des épingles. C'était un artefact
+d'implémentation — la sémantique avait suivi la boucle — et il reprochait à un
+auteur quelque chose qu'il ne pouvait pas savoir.
+
+Chaque extension est donc validée contre `base_meta`, la déclaration figée du
+standard qui a **introduit** le champ, et ce que les extensions exigent se
+**combine** ensuite :
+
+- la cardinalité la plus stricte l'emporte. Deux resserrements ne peuvent pas
+  se contredire : une forme n'a qu'une forme requise (`0..1 -> 1`,
+  `0..n -> 1..n`) ;
+- les vocabulaires s'**intersectent**. Un DMP qui respecte les deux standards
+  respecte les deux restrictions, donc le champ ne garde que les valeurs que
+  les deux acceptent ;
+- une intersection **vide** est un conflit nommant les deux standards, pas un
+  champ que personne ne peut remplir.
+
+L'opération est commutative et associative, donc le résultat ne dépend plus de
+l'ordre des épingles — vérifié sur **toutes les permutations** de trois
+extensions plutôt que sur l'ordre qu'un test aurait écrit.
+
+Un `Tightening` dit désormais « ce que ce standard-ci exige **de plus que la
+base** », et non plus « de plus que ce que j'ai trouvé en arrivant ». C'est la
+phrase que le QC doit lire, et elle ne peut pas dépendre de qui a fusionné en
+premier.
+
 - **à l'identique** — le cas courant : répéter un parent structurel uniquement
   pour atteindre ses propres feuilles en dessous ;
 - **en resserrant** — rendre obligatoire un champ optionnel (`0..1 -> 1`,
@@ -385,6 +430,12 @@ formel — avant, tout était permis — mais ça **interdit ce que la base
 recommande**. Ce n'est pas un resserrement, c'est un désaccord entre deux
 standards, et le rendre visible est exactement ce à quoi sert la fusion
 tighten-only.
+
+La même règle s'applique **entre deux extensions** : si l'une ferme un champ et
+l'autre en recommande des valeurs, la fermeture l'emporte — une recommandation
+ne peut pas retenir une violation — mais seulement sur des valeurs que l'autre
+recommande. Sinon les deux standards ne disent pas la même chose du champ, et
+c'est un conflit.
 
 L'audit enregistre **deux** `Tightening` pour ce mouvement, la recommandation
 retirée puis le champ fermé. Un seul enregistrement portant les deux devrait se
