@@ -1390,6 +1390,15 @@ l'instance mais celles du webhook, donc seule la cible qui en a besoin les
 réclame — publier un KM ne doit pas exiger de savoir où les documents seront un
 jour envoyés.
 
+**`SUBMISSION_URL` contient la route.** `publish` n'y ajoute que
+`?project=<id>` : contre la pile locale c'est
+`http://submission:8080/submissions`, nom de service compose **et** chemin que
+`submission/app.py` expose. Omettre le chemin écrit un service qui poste sur la
+racine du conteneur — un bouton Submit qui 404, écrit par-dessus un qui
+marchait, sur une valeur que rien en aval ne peut contrôler. Le piège a été
+tendu et évité le 06/08/2026 : c'est en relisant le service **stocké** avant
+d'écrire que l'écart s'est vu.
+
 Le secret est exigé autant que l'adresse, corrigé le 05/08/2026. Le code le
 disait facultatif au motif qu'« un webhook déployé sans secret accepte les
 appels non authentifiés » : ce déploiement n'existe pas. Le webhook de

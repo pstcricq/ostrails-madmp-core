@@ -291,11 +291,23 @@ uv run python -m dsw.publish template configs/projects/glider.yaml
 ```
 
 `all` runs the three targets in order — `submission` needs the uuid of the
-template just published. That last one also needs `SUBMISSION_URL` (the
-webhook's address *as DSW reaches it*), `SUBMISSION_TOKEN` (the shared secret
-it checks, without which it rejects every submission), and the registry
-variables above, since it refuses to advertise a route to a folder that is not
-registered. It rewrites the service only when it would say something else: the
+template just published. That last one also needs `SUBMISSION_URL`,
+`SUBMISSION_TOKEN` (the shared secret the webhook checks, without which it
+rejects every submission), and the registry variables above, since it refuses
+to advertise a route to a folder that is not registered.
+
+`SUBMISSION_URL` is the webhook's address *as DSW reaches it*, **route
+included** — publish only appends `?project=<id>` to it. Against the local
+stack that is a compose service name and the webhook's own path:
+
+```bash
+export SUBMISSION_URL=http://submission:8080/submissions
+export SUBMISSION_TOKEN=... REGISTRY_TOKEN=$(gh auth token)
+uv run python -m dsw.publish submission configs/projects/glider.yaml
+```
+
+Leaving the route off writes a service that posts to the container root, which
+is a Submit button that 404s — and it would be written over one that worked. It rewrites the service only when it would say something else: the
 call carries the tenant's whole configuration, so a run with nothing to change
 sends nothing.
 

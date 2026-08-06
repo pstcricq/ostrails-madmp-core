@@ -159,10 +159,15 @@ class Webhook:
     with it.
 
     The address is the fixed webhook as **DSW** reaches it: a compose service
-    name locally, a public URL in a deployment. Both names are asked for by the
-    ``submission`` target alone, because neither is a coordinate of the
-    instance: publishing a KM must not require knowing where documents will one
-    day be sent.
+    name locally, a public URL in a deployment. **Route included** — a service
+    is built by appending ``?project=<id>`` and nothing else, so an address
+    given without the webhook's own path writes a service that posts to the
+    container root. That is a Submit button that 404s, written over one that
+    worked, on a value nothing downstream can check.
+
+    Both names are asked for by the ``submission`` target alone, because
+    neither is a coordinate of the instance: publishing a KM must not require
+    knowing where documents will one day be sent.
 
     The secret is as required as the address. The webhook answers 500 when it
     holds none and 401 when the header does not match, so a service written
@@ -181,7 +186,10 @@ def webhook_from_env() -> Webhook:
         *_required_env(
             ("SUBMISSION_URL", "SUBMISSION_TOKEN"),
             {
-                "SUBMISSION_URL": "says where DSW sends a submitted document",
+                "SUBMISSION_URL": (
+                    "says where DSW sends a submitted document, route included "
+                    "(publish only appends ?project=<id>)"
+                ),
                 "SUBMISSION_TOKEN": (
                     "is the shared secret the webhook checks, without which it "
                     "rejects every submission"
