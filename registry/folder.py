@@ -56,8 +56,8 @@ class FolderStatus:
 
     ``state`` is one of ``"registered"`` (there, it is this project's, and it
     says what the config says), ``"stale"`` (this project's, but no longer
-    saying it), ``"missing"`` (nothing there yet) or ``"collision"`` (there,
-    and it is another project's).
+    saying it), ``"missing"`` (nothing there yet), ``"collision"`` (there, and
+    it is another project's) or ``"unreadable"`` (there, and not a document).
     """
 
     folder: str
@@ -67,9 +67,16 @@ class FolderStatus:
     @property
     def is_fault(self) -> bool:
         """Whether this state is somebody's mistake rather than a step not
-        taken yet. Only a collision is: two projects claiming one destination
-        cannot both be right, and no amount of syncing fixes it."""
-        return self.state == "collision"
+        taken yet.
+
+        Two are. A collision, because two projects claiming one destination
+        cannot both be right. And an unreadable ``meta.yaml``, for the same
+        reason it is not simply resynced: this file carries the only record of
+        which rules a project's submitted DMPs were built from, and it may hold
+        another writer's keys. Overwriting it on the strength of a failed parse
+        would destroy both, so it takes a human.
+        """
+        return self.state in ("collision", "unreadable")
 
 
 @dataclass(frozen=True)
@@ -161,14 +168,46 @@ def meta_bytes(document: dict[str, Any]) -> bytes:
     return yaml.safe_dump(document, sort_keys=False, allow_unicode=True).encode()
 
 
+class UnreadableMeta(Exception):
+    """``meta.yaml`` is there and cannot be read as a document.
+
+    Not a ``RegistryError``: it says what a *read* found, and the two verbs
+    answer for it differently — one reports a state, the other refuses. Internal
+    to this module, which is why it carries a reason rather than a problem list.
+    """
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
 def _read_meta(
     gh: GitHubClient, registry: Registry, config: dict[str, Any]
 ) -> tuple[Any, dict | None]:
-    """The file and the document it parses to, or ``(None, None)``."""
+    """The file and the document it parses to, or ``(None, None)`` when there
+    is no file. Raises :class:`UnreadableMeta` when there is one and it is not
+    a document.
+
+    Three outcomes, not two, and the distinction is the point: returning
+    ``None`` for both "no file" and "unreadable file" is what made a damaged
+    ``meta.yaml`` read as ``missing`` — and then get rebuilt from the config
+    alone, which is exactly what ``OWNED`` exists to prevent. Whatever another
+    writer had recorded in it would go, and the run would report ``created``.
+    """
     entry = gh.get_file(registry.owner, registry.repo, meta_path(config))
     if entry is None:
         return None, None
-    return entry, yaml.safe_load(entry.content)
+    try:
+        document = yaml.safe_load(entry.content)
+    except yaml.YAMLError as err:
+        raise UnreadableMeta(f"invalid YAML: {err}") from err
+    if not isinstance(document, dict):
+        # An empty file parses to None, and a list or a scalar parses to
+        # something with no keys to read. None of them can be compared, and
+        # none of them can be safely overwritten either.
+        found = "empty" if document is None else f"a {type(document).__name__}"
+        raise UnreadableMeta(f"not a mapping ({found}).")
+    return entry, document
 
 
 def keep_path(config: dict[str, Any], subdir: str) -> str:
@@ -200,7 +239,17 @@ def folder_status(
     not be answering about the same thing.
     """
     folder = config["id"]
-    _, current = _read_meta(gh, registry, config)
+    try:
+        _, current = _read_meta(gh, registry, config)
+    except UnreadableMeta as err:
+        return FolderStatus(
+            folder,
+            "unreadable",
+            # The reason last: a YAML parse error is several lines, and a
+            # sentence continuing after it would be read by nobody.
+            f"{meta_path(config)} is there and cannot be read, so it can "
+            f"neither be compared nor overwritten by this job — {err.reason}",
+        )
     if current is None:
         return FolderStatus(
             folder, "missing", "no folder yet; it is created on the default branch."
@@ -240,14 +289,29 @@ def converge(gh: GitHubClient, registry: Registry, config: dict[str, Any]) -> st
     registry's history checks first.
 
     Never deletes and never overwrites another project: a collision raises
-    rather than clobbering a folder somebody else's DMPs land in.
+    rather than clobbering a folder somebody else's DMPs land in. Same for a
+    ``meta.yaml`` that is there and does not parse — the one case where doing
+    nothing is safer than converging.
 
     What decides between updating and doing nothing is the **document**, not
     the bytes. A file that says the right thing with its keys in another order,
     or written by another YAML dumper, is already right, and rewriting it would
     be a commit that changes nothing anyone can read.
     """
-    entry, current = _read_meta(gh, registry, config)
+    try:
+        entry, current = _read_meta(gh, registry, config)
+    except UnreadableMeta as err:
+        raise RegistryError(
+            [
+                (
+                    f"{meta_path(config)} is there and cannot be read. "
+                    f"Rewriting it would drop the rules pins this project's "
+                    f"submitted DMPs are checked against, and any key another "
+                    f"writer owns; fix the file by hand — {err.reason}"
+                )
+            ],
+            folder_path(config),
+        ) from err
     if current is not None and current.get("id") != config["id"]:
         raise RegistryError(
             [

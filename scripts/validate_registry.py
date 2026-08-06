@@ -32,11 +32,14 @@ from registry import (
 
 PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
 
+# Every state FolderStatus can hold: a state added there and forgotten here
+# would raise a KeyError on the one run that found it.
 MARK = {
     "registered": "ok  ",
     "missing": "todo",
     "stale": "todo",
     "collision": "FAIL",
+    "unreadable": "FAIL",
 }
 
 

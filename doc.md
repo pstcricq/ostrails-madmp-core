@@ -896,8 +896,9 @@ un commit dans le registre. La comparaison porte donc sur le document analysé.
 | `registered` | présent, à nous, et d'accord avec la config | rien n'est envoyé |
 | `stale` | à nous, mais ne dit plus ce que dit la config | mise à jour |
 | `collision` | présent, et c'est le dossier d'un autre projet | refus |
+| `unreadable` | présent, et ce n'est pas un document | refus |
 
-Seule la collision est une **faute**. Un dossier qui n'existe pas encore n'en
+Deux états sont des **fautes**. Un dossier qui n'existe pas encore n'en
 est pas une : ajouter un projet, c'est une config d'abord et un enregistrement
 ensuite, et faire échouer le contrôle sur le push qui ajoute la config
 apprendrait à tout le monde à ignorer ce job. Un `meta.yaml` qui a pris du
@@ -905,6 +906,30 @@ retard n'en est pas une non plus : la synchronisation qui le rattrape tourne
 juste après. La collision, elle, ne se répare par aucune synchronisation — deux
 projets ne peuvent pas avoir raison sur une même destination — et elle ferait
 atterrir les DMP d'un projet dans le dossier d'un autre.
+
+### Un `meta.yaml` illisible est l'autre faute
+
+La lecture ne rendait que deux réponses — un document, ou rien — et rangeait
+sous « rien » deux situations qui n'ont aucun rapport : **il n'y a pas de
+fichier**, et **il y en a un qu'on n'arrive pas à lire**. Un `meta.yaml` vide,
+réduit à un commentaire, ou remplacé par une liste passait donc pour `missing`,
+et la synchronisation le **reconstruisait depuis la seule config** — exactement
+ce que la règle des clés possédées existe pour interdire. Ce qu'un autre
+écrivain y avait mis disparaissait, et le run annonçait `created`. Un YAML
+franchement invalide, lui, remontait en `ParserError` nue, que le script
+n'attrape pas.
+
+C'est une faute au même titre qu'une collision, et pour la même raison : rien
+ne la répare tout seul. Ce fichier porte **l'unique trace** des règles contre
+lesquelles les DMP déjà soumis du projet doivent être vérifiés — le document
+rendu n'en dit rien — et il peut porter les clés d'un autre écrivain. Écraser
+sur la foi d'un `safe_load` qui a échoué détruirait les deux. On refuse, on
+nomme le dossier, et un humain regarde.
+
+Ne pas confondre avec valider le *contenu*. Un `meta.yaml` bien formé dont les
+épingles sont fantaisistes est déjà traité correctement : il ne dit pas ce que
+dit la config, donc `stale`, donc réécrit. La garde ne couvre que ce qui
+empêche de lire.
 
 **Une collision est inatteignable depuis ce dépôt seul.** Le dossier étant
 l'`id`, et l'`id` étant le nom du fichier, deux configs ne peuvent pas viser le

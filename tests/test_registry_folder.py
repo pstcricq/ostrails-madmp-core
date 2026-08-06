@@ -222,6 +222,51 @@ def test_converging_refuses_to_clobber_another_project():
     assert "'canales'" in str(caught.value)
 
 
+# A meta.yaml that is there and cannot be read
+
+
+def registry_saying(content: bytes) -> FakeGitHub:
+    """A registry whose meta.yaml holds these bytes, whatever they are."""
+    return FakeGitHub({META: content, **dict.fromkeys(KEEPS, b"")})
+
+
+DAMAGED = {
+    "empty": b"",
+    "comment only": b"# nothing here\n",
+    "a list": b"- glider\n",
+    "a scalar": b"glider\n",
+    "invalid YAML": b"id: [glider\n",
+}
+
+
+@pytest.mark.parametrize("content", DAMAGED.values(), ids=list(DAMAGED))
+def test_an_unreadable_meta_is_a_fault(content):
+    """Not `missing`: the file is there. Reporting it missing is what had this
+    job rebuild it from the config alone — dropping the rules pins the
+    submitted DMPs are checked against, and any key another writer owns — and
+    then report `created`."""
+    status = folder_status(registry_saying(content), REGISTRY, CONFIG)
+    assert (status.state, status.is_fault) == ("unreadable", True)
+    assert META in status.detail
+
+
+@pytest.mark.parametrize("content", DAMAGED.values(), ids=list(DAMAGED))
+def test_converging_refuses_an_unreadable_meta(content):
+    """Refusing is the point, as for a collision: this file carries the only
+    record of what a project's DMPs were built from."""
+    fake = registry_saying(content)
+    with pytest.raises(RegistryError) as caught:
+        converge(fake, REGISTRY, CONFIG)
+    assert fake.writes == []
+    assert "projects/glider" in str(caught.value)
+
+
+def test_an_unreadable_meta_is_told_apart_from_a_missing_one():
+    """The two states the read used to answer with the same `None`."""
+    assert folder_status(FakeGitHub(), REGISTRY, CONFIG).state == "missing"
+    assert folder_status(registry_saying(b""), REGISTRY, CONFIG).state == "unreadable"
+
+
 # Where a project's folder is, and what opens it
 
 
