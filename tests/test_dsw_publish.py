@@ -16,8 +16,9 @@ import pytest
 import yaml
 
 from dsw.common import package_id
+from dsw.generate_template import build_template_bundle
 from dsw.publish import (
-    JSON_FORMAT_UUID,
+    SUBMISSION_FORMAT_UUID,
     DswClient,
     Instance,
     PublishError,
@@ -31,6 +32,7 @@ from dsw.publish import (
     submission_service,
     webhook_from_env,
 )
+from project import assemble_project
 
 GLIDER_CONFIG = Path(__file__).parent.parent / "configs" / "projects" / "glider.yaml"
 
@@ -168,8 +170,26 @@ def test_the_service_is_scoped_to_this_project_s_own_template(config):
     tenant uuid and its service id too, and neither is this run's to send."""
     service = submission_service(config, "template-uuid", WEBHOOK)
     assert service["supportedFormats"] == [
-        {"templateUuid": "template-uuid", "formatUuid": JSON_FORMAT_UUID}
+        {"templateUuid": "template-uuid", "formatUuid": SUBMISSION_FORMAT_UUID}
     ]
+
+
+def test_the_service_names_a_format_the_template_bundle_actually_carries(config):
+    """The third thing this module and a generator must answer identically,
+    and the one nothing was checking. `publish` names a format uuid in the
+    submission service; `generate_template` emits the formats a template has.
+    Neither reads the other, they run in different runs, and a service naming
+    a format the bundle does not carry is an entry in the Submit menu that
+    produces nothing — which renaming the format was all it took.
+
+    Both derive it from `common` now, so this is what says the derivation did
+    not drift: it builds a real bundle and looks for the uuid in it."""
+    project = assemble_project(GLIDER_CONFIG)
+    bundle = build_template_bundle(project, created_at="2026-01-01T00:00:00.000Z")
+    service = submission_service(config, "tpl-uuid", WEBHOOK)
+
+    emitted = {fmt["uuid"] for fmt in bundle["formats"]}
+    assert service["supportedFormats"][0]["formatUuid"] in emitted
 
 
 def test_a_service_this_module_builds_is_already_what_a_write_carries(config):

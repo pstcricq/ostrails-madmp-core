@@ -71,8 +71,13 @@ from pathlib import Path
 from typing import Any
 
 from configs import ConfigFileError, load_config_file
-from dsw.common import km_path, package_id, template_path
-from dsw.uuids import u
+from dsw.common import (
+    SUBMISSION_FORMAT,
+    format_uuid,
+    km_path,
+    package_id,
+    template_path,
+)
 from registry import (
     GitHubClient,
     GitHubError,
@@ -83,10 +88,11 @@ from registry import (
 )
 from utils.errors import ProblemsError
 
-# The JSON output format of the generated document template (see
-# generate_template.FORMATS): the format a submitted document is rendered in,
-# so the submission service can name it without reading the bundle back.
-JSON_FORMAT_UUID = u("template", "format", "JSON")
+# The format a submitted document is rendered in, so the submission service can
+# name it without reading the template bundle back. Both the name and the
+# derivation come from `common`: this and generate_template must answer with
+# the same uuid, and neither owns the question.
+SUBMISSION_FORMAT_UUID = format_uuid(SUBMISSION_FORMAT)
 
 LISTING_PAGE_SIZE = 1000
 
@@ -423,7 +429,7 @@ def submission_service(
             "url": f"{webhook.url}?project={folder}",
         },
         "supportedFormats": [
-            {"templateUuid": template_uuid, "formatUuid": JSON_FORMAT_UUID}
+            {"templateUuid": template_uuid, "formatUuid": SUBMISSION_FORMAT_UUID}
         ],
     }
 

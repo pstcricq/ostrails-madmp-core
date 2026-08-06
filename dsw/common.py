@@ -8,7 +8,9 @@ on what a rules field becomes: :func:`field_kind` and
 a list while the template renders a single value is a pair of packages that
 cannot be filled. The publisher never meets a rules field, but it has to find
 on disk exactly what a generator wrote, so :func:`km_path` and
-:func:`template_path` are that agreement.
+:func:`template_path` are that agreement — and it has to name, in a submission
+service, one of the output formats the template bundle carries, so
+:data:`SUBMISSION_FORMAT` and :func:`format_uuid` are the third.
 
 **The rule this module refuses an addition by:** something here is answered the
 same way by more than one module *and* would be a fault if they diverged.
@@ -27,6 +29,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from dsw.uuids import u
 from project import Field, Model
 
 # Every generated artifact lands under build/, one subdirectory per kind. CI
@@ -65,6 +68,21 @@ def template_path(project_id: str) -> Path:
     """Where a project's Document Template bundle is written and read back.
     See :func:`km_path`."""
     return BUILD_DIR / "template" / f"{project_id}_template.json"
+
+
+def format_uuid(name: str) -> str:
+    """The DSW uuid of one output format of a project's document template."""
+    return u("template", "format", name)
+
+
+#: The format a submitted document is rendered in — the third thing a generator
+#: and the publisher must answer identically. ``generate_template`` emits a DSW
+#: format under this name; ``publish`` names that format's uuid in the
+#: submission service, in another run, from a module the generator never meets.
+#: A service naming a format the template does not carry is an entry in the
+#: Submit menu that produces nothing, and renaming the format is all it would
+#: have taken. Both read it here, so there is one name to rename.
+SUBMISSION_FORMAT = "JSON"
 
 
 def package_id(config: dict[str, Any]) -> str:

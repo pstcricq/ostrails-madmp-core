@@ -187,7 +187,9 @@ generated, which is why it comes straight after validation.
 - `dsw/common.py` — what two modules here must answer identically, and would
   be a fault to disagree on: `field_kind` and `needs_a_synthetic_escape` for
   the generators, `km_path` and `template_path` between a generator and the
-  publisher that reads what it wrote, plus the package identifier, the chapter
+  publisher that reads what it wrote, `SUBMISSION_FORMAT` and `format_uuid`
+  between the template a generator emits formats into and the submission
+  service that names one of them, plus the package identifier, the chapter
   split, the README head and tail, and the upper-case form a standard is shown
   in. It opens no file and reaches no instance.
 - `dsw/generate_km.py` — the model walked into a DSW event bundle. Emission

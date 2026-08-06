@@ -37,8 +37,10 @@ from pathlib import Path
 from typing import Any
 
 from dsw.common import (
+    SUBMISSION_FORMAT,
     computed_fields_from_config,
     field_kind,
+    format_uuid,
     needs_a_synthetic_escape,
     package_id,
     readme_head,
@@ -80,7 +82,9 @@ COMPUTED_FIELD_EXPR: dict[str, str] = {
 # format) and the README's table.
 FORMATS: list[dict[str, Any]] = [
     {
-        "name": "JSON",
+        # Named from `common` rather than spelt here: this is the format the
+        # submission service points at, and `publish` has to name the same one.
+        "name": SUBMISSION_FORMAT,
         "available": True,
         "content_type": "application/json",
         "extension": "json",
@@ -677,7 +681,7 @@ def build_template_bundle(
                         },
                     }
                 ],
-                "uuid": u("template", "format", fmt["name"]),
+                "uuid": format_uuid(fmt["name"]),
             }
             for fmt in FORMATS
             if fmt["available"]

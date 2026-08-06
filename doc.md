@@ -620,6 +620,28 @@ C'est la règle de `dsw/common.py` en entier : ce qui doit rester littéralement
 identique entre les générateurs vit là, et **ce qu'un seul utilise n'y a pas sa
 place** — ça appartient à ce générateur-là.
 
+### Ce n'est pas qu'entre les générateurs
+
+`common` porte trois accords, pas un, et les deux autres traversent la
+publication :
+
+- `km_path()` / `template_path()` — un générateur écrit, `publish` relit, dans
+  une autre exécution et en CI sur une autre machine. Deux chemins épelés
+  séparément se contrediraient un jour, et l'erreur dirait « lance d'abord le
+  générateur », c'est-à-dire la seule chose qui n'avait pas manqué ;
+- `SUBMISSION_FORMAT` / `format_uuid()` — `generate_template` émet un format
+  DSW sous ce nom, `publish` nomme l'uuid de ce format dans le service de
+  soumission. Aucun des deux ne lit l'autre. Un service qui nomme un format que
+  le bundle ne porte pas est une entrée du menu Submit qui ne produit rien, et
+  renommer le format suffisait à l'obtenir : `publish` redérivait l'uuid depuis
+  la chaîne `"JSON"` écrite chez lui. Un test le confronte désormais à un vrai
+  bundle.
+
+Le critère est le même dans les trois cas, et il a deux moitiés : plusieurs
+modules doivent y répondre **pareil**, *et* diverger serait une faute. Une
+valeur que les deux calculent chacun de son côté, correctement, aujourd'hui,
+remplit déjà la première moitié — c'est la seconde qui décide.
+
 ### La règle du découpage en chapitres
 
 Un champ `dmp` de premier niveau devient **son propre chapitre** si et seulement
