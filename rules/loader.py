@@ -9,9 +9,12 @@ document that fails the schema is not carried further.
 1. Structural — against :data:`rules/rules.schema.json`: required keys,
    closed ``_cardinality``/``_type`` enumerations, no unknown metadata
    keys, snake_case field names.
-2. Coherence — three constraints kept out of the schema on purpose:
-    - only ``_type: "object"`` fields may declare child fields;
+2. Coherence — five constraints kept out of the schema on purpose:
+    - only ``_type: "object"`` fields may declare child fields, and every
+    one of them must declare at least one: an object is its children;
     - ``_allowed_values``/``_suggested_values`` only on scalar fields;
+    - never both on the same field: they say opposite things about the
+    same list, and the generators read ``_allowed_values`` alone;
     - ``_chapter_description`` only on a *top-level object* field, the
     only kind that becomes a DSW chapter. Anywhere else the generators
     ignore it without a word, which is what this check exists to catch.
@@ -58,12 +61,27 @@ def _coherence_problems(tree: dict[str, Any], prefix: str, depth: int = 1) -> li
                 f"{path}: declares child fields but has _type "
                 f"{node.get('_type')!r}, only 'object' fields may have children."
             )
+        if node.get("_type") == "object" and not field_children(node):
+            problems.append(
+                f"{path}: _type 'object' but declares no child fields, an "
+                f"object field is its children and nothing else. It would "
+                f"generate an empty chapter, a gate opening on nothing or "
+                f"list items with no question in them, and could never carry "
+                f"a value."
+            )
         for vocab_key in ("_allowed_values", "_suggested_values"):
             if vocab_key in node and node.get("_type") == "object":
                 problems.append(
                     f"{path}: {vocab_key} on an 'object' field, vocabularies "
                     f"only apply to scalar fields."
                 )
+        if "_allowed_values" in node and "_suggested_values" in node:
+            problems.append(
+                f"{path}: both _allowed_values and _suggested_values, a "
+                f"vocabulary is either closed or recommended, not both. "
+                f"field_kind reads _allowed_values first, so the suggested "
+                f"values would be silently dropped (keep one)."
+            )
         if "_chapter_description" in node and not (
             depth == 1 and node.get("_type") == "object"
         ):

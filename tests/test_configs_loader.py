@@ -82,8 +82,9 @@ def test_unreadable_path_is_a_config_file_error(tmp_path):
 
 
 def test_empty_file_rejected(tmp_path):
-    """safe_load returns None on an empty file — a non-dict must be rejected by
-    the schema, not crash the layout check that follows it."""
+    """safe_load returns None on an empty file. The schema rejects a non-object,
+    which is what keeps the layout check that follows from ever seeing one —
+    this test is what lets that check read doc["id"] with no guard of its own."""
     path = tmp_path / "test-project.yaml"
     path.write_text("")
     with pytest.raises(ConfigFileError, match=r"\(root\)"):
@@ -120,6 +121,23 @@ def test_bare_standard_name_rejected(tmp_path):
     assert "rules" in _load_problems(tmp_path, _valid_config(rules=["rda_dcs"]))
 
 
+def test_pinned_standard_not_snake_case_rejected(tmp_path):
+    """A standard has one spelling, and the pin is one of the two places it is
+    written: `rules.schema.json` imposes snake_case where the standard declares
+    itself, so the config that names it imposes the same. Otherwise
+    `RDA DCS: "1.0.0"` loads and only fails at resolution."""
+    problems = _load_problems(tmp_path, _valid_config(rules=[{"RDA DCS": "1.0.0"}]))
+    assert "rules.0" in problems
+    assert "RDA DCS" in problems
+
+
+def test_empty_pinned_version_rejected(tmp_path):
+    """An empty version names no file: it would build the path
+    rules/standards/rda_dcs/.json."""
+    problems = _load_problems(tmp_path, _valid_config(rules=[{"rda_dcs": ""}]))
+    assert "rules.0.rda_dcs" in problems
+
+
 def test_several_extensions_accepted(tmp_path):
     """Nothing caps the number of standards, and the pins keep the order they
     were written in: the base is first because the file says so, not because
@@ -139,6 +157,27 @@ def test_empty_human_name_rejected(tmp_path):
     """`name` is free-form — it is prose a reader sees — but a package with a
     blank name is a package nobody can pick out of a DSW list."""
     assert "name" in _load_problems(tmp_path, _valid_config(name=""))
+
+
+@pytest.mark.parametrize("version", ["1.0", "v1.0.2", "1.0.2-beta", "latest"])
+def test_non_semver_version_rejected(tmp_path, version):
+    """`version` is the last third of the DSW package id, and DSW wants X.Y.Z.
+    Unchecked, it generates fine and only fails on the publish call, against a
+    remote server, with everything already built."""
+    assert "version" in _load_problems(tmp_path, _valid_config(version=version))
+
+
+def test_organization_id_outside_dsw_character_set_rejected(tmp_path):
+    """Same reason, first third: DSW takes lowercase, digits and dots."""
+    problems = _load_problems(tmp_path, _valid_config(organizationId="SOCIB Data"))
+    assert "organizationId" in problems
+
+
+def test_dotted_organization_id_accepted(tmp_path):
+    """The dot is in DSW's set, and a reverse-domain organization id is what
+    its own examples look like."""
+    config = _valid_config(organizationId="es.socib")
+    assert load_config_file(_write(tmp_path, config))["organizationId"] == "es.socib"
 
 
 def test_filename_disagreeing_with_id_rejected(tmp_path):

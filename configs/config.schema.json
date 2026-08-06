@@ -20,28 +20,37 @@
     "id": {
       "type": "string",
       "pattern": "^[a-z0-9-]{1,64}$",
-      "description": "The project's one machine name, declared once and repeated nowhere: the filename this config sits at, its destination folder in the dmp-registry (and the ?project= routing key), and what the KM, the document template, the seed and the DSW baseline project are named after."
+      "description": "The project's one machine name, declared once and repeated nowhere: the filename this config sits at, its destination folder in the dmp-registry (and the ?project= routing key), and what the KM, the document template, the seed and the DSW baseline project are named after. The pattern is also, and independently, what DSW asks of a kmId (lowercase, digits, dashes) — it is the middle third of `organizationId:id:version`."
     },
     "name": {
       "type": "string",
       "minLength": 1,
       "description": "What a reader sees, and only that: the DSW package name, the KM title, and the registry meta.yaml. Free-form on purpose — deriving it from `id` would give `Socib Hf Radar`."
     },
-    "version": { "type": "string", "minLength": 1 },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$",
+      "description": "The project's version, bumped to publish a change. Semver X.Y.Z, and the form is DSW's rather than ours: with `organizationId` and `id` it composes the package identifier `organizationId:id:version` that dsw/common.package_id sends. Checked here so a malformed version fails at load time instead of on the last call of the pipeline, against a remote server."
+    },
     "author": { "type": "string", "minLength": 1 },
     "license": { "type": "string", "minLength": 1 },
     "rules": {
       "type": "array",
       "minItems": 1,
-      "description": "Pinned rules versions, base first: [{standard: version}, ...] -> rules/standards/<standard>/<version>.json.",
+      "description": "Pinned rules versions, base first: [{standard: version}, ...] -> rules/standards/<standard>/<version>.json. One key per entry, and both halves are the ones the rules file itself declares: the standard in the same snake_case rules.schema.json requires of it, the version as a non-empty string (unquoted 1.0 would be a YAML float, not a version).",
       "items": {
         "type": "object",
         "minProperties": 1,
         "maxProperties": 1,
-        "additionalProperties": { "type": "string" }
+        "propertyNames": { "pattern": "^[a-z][a-z0-9_]*$" },
+        "additionalProperties": { "type": "string", "minLength": 1 }
       }
     },
-    "organizationId": { "type": "string", "minLength": 1 },
+    "organizationId": {
+      "type": "string",
+      "pattern": "^[a-z0-9.]+$",
+      "description": "The DSW organization the generated packages belong to. Lowercase, digits and dots — DSW's own character set for the first third of `organizationId:id:version`. See `version` for why the form is checked here."
+    },
     "description": { "type": "string", "minLength": 1 },
     "references": {
       "type": "array",

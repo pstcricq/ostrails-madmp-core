@@ -116,6 +116,31 @@ Ce qui protège de la dérive, ce n'est donc pas ici la dérivation, c'est le
 paquet n'en dépend, et il peut changer à chaque version sans qu'une seule
 référence bouge. C'est du texte, et le schéma n'en exige que d'être non vide.
 
+### Trois champs de la config forment un identifiant DSW
+
+`dsw/common.package_id` assemble `organizationId:id:version` : c'est sous ce
+nom que DSW connaît un paquet, et c'est ce qui fait qu'un KM et son template se
+reconnaissent. La forme des trois tiers n'est donc pas la nôtre, c'est celle du
+[guide DSW](https://guide.ds-wizard.org/en/4.31/more/development/document-templates/specification.html)
+— minuscules, chiffres et points pour l'organisation ; minuscules, chiffres et
+tirets pour l'identifiant ; semver `X.Y.Z` strict pour la version. Les trois
+sont donc des motifs dans le schéma.
+
+**Pourquoi ce n'est pas le raisonnement du §2 sur les règles.** Là-bas,
+`version` n'a délibérément aucun motif : la vraie contrainte est l'égalité avec
+le nom de fichier, et un motif semver refuserait des versionnages qu'on n'a pas
+rencontrés. Le raisonnement tient parce que **nous** décidons de ce qui est une
+version acceptable. Ici, non : un `version: "1.0"` ou un `organizationId:
+"SOCIB Data"` se génère sans broncher et n'échoue qu'au tout dernier appel du
+pipeline, contre un serveur distant, après avoir tout produit. Une contrainte
+externe qu'on connaît se vérifie à la porte ; un contrôle qui ne peut tomber
+qu'en CI, sur une instance, est un contrôle qu'on subit.
+
+`id` n'a rien eu à changer : le motif que le §précédent lui donne pour nos
+propres raisons — un nom de fichier, un dossier de registre, une clé de routage
+— est déjà exactement ce que DSW demande d'un `kmId`. Coïncidence heureuse,
+notée ici pour qu'on ne la casse pas en l'élargissant un jour.
+
 ---
 
 ## 2. Le format des règles
@@ -141,6 +166,14 @@ arbitrer, à la fusion, entre `_type: list` et `_cardinality: 0..n`. Séparer
 
 - `_allowed_values` — vocabulaire fermé, une violation est un **FAIL** ;
 - `_suggested_values` — recommandation, un écart est un **WARNING** seulement.
+
+Les deux **s'excluent sur un même champ**, et la couche de cohérence le refuse.
+Un vocabulaire est fermé ou il est recommandé ; déclarer les deux, c'est dire
+d'une même liste qu'un écart est un FAIL et qu'il est un WARNING. Le code, lui,
+n'hésite pas — `field_kind` teste `_allowed_values` d'abord et sort — donc les
+valeurs suggérées seraient simplement perdues, sans un mot. C'est le défaut que
+cette couche existe pour attraper, au même titre qu'un `_chapter_description`
+mal placé.
 
 La distinction n'est pas cosmétique : elle traverse toute la chaîne. Côté DSW,
 un vocabulaire strict devient une `OptionsQuestion` sans échappatoire ; un
@@ -247,11 +280,19 @@ Un fichier malformé doit échouer **à la porte**, pas au fond d'un consommateu
    comprise dedans : une virgule en trop ressort en `RulesFileError`, pas en
    `json.JSONDecodeError`, pour qu'un seul type d'exception couvre toutes les
    façons dont un fichier de règles peut être faux.
-2. **Cohérence** — trois contraintes tenues hors du schéma :
+2. **Cohérence** — cinq contraintes tenues hors du schéma :
    - seuls les champs `_type: "object"` peuvent déclarer des enfants ;
+   - et chacun d'eux doit en déclarer au moins un : un objet **est** ses
+     enfants. Sans enfant, il ne collecte rien — un chapitre vide au premier
+     niveau, une porte Oui/Non qui n'ouvre sur rien en `0..1`, des items de
+     liste sans une seule question, et en `1` un champ qui disparaît du
+     questionnaire sans laisser de trace ;
    - `_allowed_values`/`_suggested_values` ne peuvent apparaître que sur des
      scalaires (un vocabulaire contraint *chaque valeur*, et un objet n'est pas
      une valeur qu'on compare à une chaîne) ;
+   - jamais les deux sur un même champ : une liste est fermée ou recommandée,
+     pas les deux, et `field_kind` lit `_allowed_values` en premier — les
+     valeurs suggérées n'atteindraient aucun générateur ;
    - `_chapter_description` ne peut apparaître que sur un champ objet de
      **premier niveau**, le seul qui devienne un chapitre DSW. Ailleurs, les
      générateurs l'ignorent sans un mot.
@@ -402,7 +443,16 @@ construction.
 
 `ostrails: 1.0` est un **flottant** en YAML, contrairement à `1.0.0` qui est
 une chaîne. Le schéma de config l'attrape (`additionalProperties: {"type":
-"string"}`), donc une config ne peut pas le porter jusqu'ici.
+"string", "minLength": 1}`), donc une config ne peut pas le porter jusqu'ici.
+
+Le nom du standard y est tenu par le **même** motif que dans le fichier de
+règles qu'il désigne (`propertyNames`, `^[a-z][a-z0-9_]*$`). Un identifiant
+dont la forme est obligatoire d'un côté et libre de l'autre est un identifiant
+qui a deux orthographes en attente : `RDA DCS: "1.0.0"` se chargeait, pour
+n'échouer qu'à la résolution. Les deux messages sont bons — `resolve_pins` va
+jusqu'à lire le disque pour lister les standards existants — donc ce qui est
+gagné n'est pas la lisibilité de l'erreur, c'est que la règle du §2 (« un
+standard n'a qu'une orthographe ») vaille **partout où il s'écrit**.
 
 `resolve_pins` ne revérifie pas la forme d'une épingle — c'est écrit dans son
 module comme une **précondition**, pas comme un oubli. Le prix est nommé en

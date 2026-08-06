@@ -18,9 +18,10 @@ reported together:
    forgotten. ``name`` is not checked against anything: it is prose, and the
    only field a reader ever sees.
 
-Same shape as ``rules/loader.py``: both build on the shared ``utils.schema``
-plumbing and add only their own ``…FileError`` subclass, schema file, and
-domain checks. Configs need no coherence pass — the schema says it all.
+Same shape as ``rules/loader.py``, down to the ordering being a precondition
+rather than a courtesy: both build on the shared ``utils.schema`` plumbing and
+add only their own ``…FileError`` subclass, schema file, and domain checks.
+Configs need no coherence pass — the schema says it all.
 """
 
 from __future__ import annotations
@@ -68,8 +69,13 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
         raise ConfigFileError(path, [f"cannot be read: {err.strerror}."]) from err
     except yaml.YAMLError as err:
         raise ConfigFileError(path, [f"invalid YAML: {err}"]) from err
+    # The layout check only once the schema passed, and not only to spare the
+    # noise: it reads doc["id"] without a guard, which is safe precisely
+    # because the schema pass guaranteed the key is there and typed. An empty
+    # file — safe_load returns None — is a non-object, so the schema is what
+    # stops it here rather than an isinstance() of our own.
     problems = schema_problems(validator_for(SCHEMA_PATH), doc)
-    if not problems and isinstance(doc, dict):
+    if not problems:
         problems = _layout_problems(Path(path), doc)
     if problems:
         raise ConfigFileError(path, problems)

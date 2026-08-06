@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "madmp/rules/rules.schema.json",
   "title": "maDMP rules file",
-  "description": "The format of one rules/*.json file: a 'standard' declaration plus a recursive tree of DMP fields. Two orthogonal facts per field: '_cardinality' says how many values ('1', '0..1' single; '1..n', '0..n' list), '_type' says what each value is ('object' for structured entities, otherwise a scalar format). There is deliberately no 'list' type: list-ness is entirely expressed by the cardinality. Three further coherence rules are enforced by rules/loader.py rather than here. They are expressible in JSON Schema (via if/then and a separate top-level field definition), but only at the cost of errors like \"'object' should not be valid under {'const': 'object'}\" in place of a sentence naming the field and the fix. They are: only '_type: object' fields may declare child fields, '_allowed_values'/'_suggested_values' may only appear on scalar fields, and '_chapter_description' may only appear on a top-level object field.",
+  "description": "The format of one rules/*.json file: a 'standard' declaration plus a recursive tree of DMP fields. Two orthogonal facts per field: '_cardinality' says how many values ('1', '0..1' single; '1..n', '0..n' list), '_type' says what each value is ('object' for structured entities, otherwise a scalar format). There is deliberately no 'list' type: list-ness is entirely expressed by the cardinality. Five further coherence rules are enforced by rules/loader.py rather than here. They are expressible in JSON Schema (via if/then and a separate top-level field definition), but only at the cost of errors like \"'object' should not be valid under {'const': 'object'}\" in place of a sentence naming the field and the fix. They are: only '_type: object' fields may declare child fields, every '_type: object' field must declare at least one, '_allowed_values'/'_suggested_values' may only appear on scalar fields, the two may never appear together on one field, and '_chapter_description' may only appear on a top-level object field.",
   "type": "object",
   "required": ["standard", "version", "extends", "dmp"],
   "additionalProperties": false,
@@ -56,7 +56,7 @@
             "country_code",
             "language"
           ],
-          "description": "What each value is: 'object' for a structured entity with child fields, otherwise the scalar's expected format."
+          "description": "What each value is: 'object' for a structured entity with child fields — at least one, an object is its children — otherwise the scalar's expected format."
         },
         "_description": {
           "type": "string",
@@ -71,14 +71,14 @@
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Closed vocabulary: a value outside this list is a violation of the standard."
+          "description": "Closed vocabulary: a value outside this list is a violation of the standard. Excludes '_suggested_values' on the same field — rules/loader.py rejects the pair."
         },
         "_suggested_values": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Recommended vocabulary: a value outside this list is only worth a warning."
+          "description": "Recommended vocabulary: a value outside this list is only worth a warning. Excludes '_allowed_values' on the same field — rules/loader.py rejects the pair."
         }
       },
       "patternProperties": { "^[a-z][a-z0-9_]*$": { "$ref": "#/$defs/field" } },

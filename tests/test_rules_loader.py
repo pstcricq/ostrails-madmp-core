@@ -149,6 +149,29 @@ def test_children_on_scalar_rejected(tmp_path):
     assert "only 'object' fields may have children" in problems
 
 
+def test_childless_object_rejected(tmp_path):
+    """An object is its children: without one it collects nothing, and the
+    generators say so in four different ways depending on the cardinality —
+    none of them an error. A base standard has no reason to declare one as a
+    hook for an extension to fill, since it always has a field of its own to
+    put there."""
+    doc = _minimal_doc(cost={"_cardinality": "0..n", "_type": "object"})
+    problems = _load_problems(tmp_path, doc)
+    assert "dmp.cost" in problems
+    assert "declares no child fields" in problems
+
+
+def test_childless_object_rejected_deep_in_the_tree(tmp_path):
+    doc = _minimal_doc(
+        dataset={
+            "_cardinality": "1..n",
+            "_type": "object",
+            "distribution": {"_cardinality": "0..1", "_type": "object"},
+        }
+    )
+    assert "dmp.dataset.distribution" in _load_problems(tmp_path, doc)
+
+
 def test_vocabulary_on_object_rejected(tmp_path):
     doc = _minimal_doc(
         dataset={
@@ -159,6 +182,34 @@ def test_vocabulary_on_object_rejected(tmp_path):
         }
     )
     assert "_allowed_values on an 'object' field" in _load_problems(tmp_path, doc)
+
+
+def test_both_vocabularies_on_one_field_rejected(tmp_path):
+    """A closed vocabulary and a recommended one contradict each other, and
+    `field_kind` reads `_allowed_values` first: the suggested values would
+    never reach a generator. Same fault as a misplaced `_chapter_description`
+    — a declaration nothing carries."""
+    doc = _minimal_doc(
+        language={
+            "_cardinality": "1",
+            "_type": "string",
+            "_allowed_values": ["eng"],
+            "_suggested_values": ["spa"],
+        }
+    )
+    problems = _load_problems(tmp_path, doc)
+    assert "dmp.language" in problems
+    assert "either closed or recommended" in problems
+
+
+def test_one_vocabulary_at_a_time_accepted(tmp_path):
+    """The rule is about the pair, not about either key: each on its own is
+    the normal case."""
+    for vocab_key in ("_allowed_values", "_suggested_values"):
+        doc = _minimal_doc(
+            language={"_cardinality": "1", "_type": "string", vocab_key: ["eng"]}
+        )
+        assert load_rules_file(_write(tmp_path, doc))["standard"] == "test"
 
 
 def test_chapter_description_on_top_level_object_accepted(tmp_path):

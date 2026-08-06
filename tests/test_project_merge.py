@@ -325,10 +325,21 @@ def test_dotted_path_marks_every_list_ancestor(tmp_path):
                 },
             }
         },
-        # Nothing to add: a rules file may no longer declare no field at all,
-        # so the extension redeclares a base parent identically — the merge's
-        # no-op, and it leaves the walk untouched.
-        {"dataset": {"_cardinality": "1..n", "_type": "object"}},
+        # Nothing to add: a rules file may declare neither no field at all nor
+        # a childless object, so the extension redeclares a whole base branch
+        # identically, down to a leaf — the merge's no-op, and it leaves the
+        # walk untouched.
+        {
+            "dataset": {
+                "_cardinality": "1..n",
+                "_type": "object",
+                "distribution": {
+                    "_cardinality": "0..n",
+                    "_type": "object",
+                    "title": dict(STRING_1),
+                },
+            }
+        },
     )
     paths = [f.dotted_path for f in model.walk()]
     assert paths == [
