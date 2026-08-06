@@ -28,8 +28,15 @@ from dsw.generate_template import (
     FORMATS,
     TEMPLATE_METAMODEL_VERSION,
     build_template_bundle,
+    q,
 )
-from dsw.uuids import answer_uuid, chapter_uuid, other_answer_uuid, question_uuid
+from dsw.uuids import (
+    answer_uuid,
+    chapter_uuid,
+    other_answer_uuid,
+    other_followup_uuid,
+    question_uuid,
+)
 from project import Project, assemble_project, merge_rules, resolve_pins
 
 ROOT = Path(__file__).parent.parent
@@ -59,6 +66,38 @@ ANCHORLESS = {
         "mbox": {"_cardinality": "0..1", "_type": "email"},
     }
 }
+
+# A vocabulary spelling its values the way an institution's name is spelt. The
+# apostrophe is the one that used to take the whole template down: it closed
+# the Jinja literal `AL` holds the label in, and the body stopped parsing.
+AWKWARD_VOCABULARY = {
+    "funder": {
+        "_cardinality": "1",
+        "_type": "string",
+        "_allowed_values": ["Institut d'Optique", 'the "big" one', "back\\slash"],
+    }
+}
+
+# The same, as a multi-choice: its labels reach the document through a
+# different expression, and an array is where a bad one is least visible.
+AWKWARD_MULTI = {
+    "keyword": {
+        "_cardinality": "0..n",
+        "_type": "string",
+        "_suggested_values": ["Institut d'Optique", 'the "big" one'],
+    }
+}
+
+# What a researcher can put in a text field and what it costs. Each of these
+# used to end the JSON string it was sitting in, or — the tab — sit inside one
+# as a control character JSON does not allow there.
+TYPED_BY_HAND = [
+    'a "quoted" answer',
+    "back\\slash",
+    "two\nlines",
+    "a\ttab",
+    "a\r\nwindows line",
+]
 
 
 @pytest.fixture(scope="module")
@@ -116,16 +155,27 @@ class _Answered:
     Which paths a template reads is the template's own business, and a test
     that listed them would be rebuilding the chain logic it is meant to check.
     Saying yes to all of them opens every conditional block without knowing one.
+
+    ``value`` is what every one of them answers, so that a single render puts
+    the same string through every route text takes to the document at once.
     """
+
+    def __init__(self, value: str = "answered") -> None:
+        self.value = value
 
     def __contains__(self, path: str) -> bool:
         return True
 
     def __getitem__(self, path: str) -> _AnyValue:
-        return _AnyValue("answered")
+        return _AnyValue(self.value)
 
 
-def _render(body: str, replies, chains: list[list[str]] | None = None) -> dict:
+def _render(
+    body: str,
+    replies,
+    chains: list[list[str]] | None = None,
+    items=lambda reply: [ITEM],
+) -> dict:
     """The template run by Jinja itself, and the document it produced.
 
     DSW's three reply filters are stubbed: ``reply_path`` joins a chain of
@@ -135,6 +185,11 @@ def _render(body: str, replies, chains: list[list[str]] | None = None) -> dict:
     ``chains`` collects every path the template asks ``reply_path`` for, each
     flattened to its UUIDs — a chain built on another chain arrives already
     joined, since that is what the filter returned the first time.
+
+    ``items`` overrides the ``reply_items`` stub. The default hands back one
+    item that is not an entity of anything, which is what a list *question*
+    stores; a multi-choice stores the UUIDs of the answers that were chosen,
+    and the one test that needs a real label to come back out says so.
     """
     env = jinja2.Environment()
 
@@ -146,7 +201,7 @@ def _render(body: str, replies, chains: list[list[str]] | None = None) -> dict:
 
     env.filters["reply_path"] = reply_path
     env.filters["reply_str_value"] = lambda reply: reply
-    env.filters["reply_items"] = lambda reply: [ITEM]
+    env.filters["reply_items"] = items
     ctx = _Ctx(
         project=_Ctx(
             replies=replies,
@@ -321,6 +376,69 @@ def test_an_object_whose_every_key_is_optional_still_renders_valid_json(tmp_path
         "mbox": "marie@example.org"
     }
     assert _render(body, {})["dmp"]["contact"] == {}
+
+
+# Nothing that reaches the document can end the string it sits in
+
+
+@pytest.mark.parametrize("typed", TYPED_BY_HAND, ids=lambda t: repr(t))
+def test_anything_a_researcher_can_type_still_renders_valid_json(body, typed):
+    """The document is assembled as literal JSON text, so a quote, a backslash
+    or a newline in a reply used to end the string it was in and take the whole
+    export with it — not one field, the file.
+
+    Answering *every* path with the same string is what makes one render walk
+    every route text takes: a plain value, a vocabulary label, and the free
+    text behind a synthetic "Other", which is the one field in the
+    questionnaire built to receive arbitrary input and was the one with no
+    escaping at all.
+    """
+    document = _render(body, _Answered(typed))
+    assert document["dmp"]["title"] == typed
+    assert document["dmp"]["dataset"][0]["dataset_id"]["type"] == typed
+
+
+def test_a_vocabulary_label_with_an_apostrophe_still_gives_a_template(tmp_path):
+    """`AL` holds each label as a Jinja literal, so a label is not only data:
+    it is *source* the generator writes. `Institut d'Optique` closed its
+    literal early, and the body stopped being Jinja at all — which nothing
+    before the render, in front of a researcher, would have found out."""
+    body = _body_from_rules(tmp_path, AWKWARD_VOCABULARY)
+    jinja2.Environment().parse(body)
+
+    asked = f"{chapter_uuid('general')}.{question_uuid(('funder',))}"
+    for label in AWKWARD_VOCABULARY["funder"]["_allowed_values"]:
+        chosen = answer_uuid(("funder",), label)
+        assert _render(body, {asked: chosen})["dmp"]["funder"] == label
+
+
+def test_a_multi_choice_array_carries_its_labels_and_its_free_text_intact(tmp_path):
+    """The two expressions the glider project cannot reach: a label emitted
+    inside an array, and the free text beside a multi-choice — a multi has no
+    "Other" choice to hang a question off, so the manual entry sits next to it
+    and is appended to the array. No standard on disk gives a multi-choice a
+    synthetic escape today, and both were emitted raw.
+
+    `reply_items` gives back what a multi-choice actually stores, the UUIDs of
+    the answers that were chosen, because a label that never comes out of `AL`
+    cannot show it arrived whole."""
+    body = _body_from_rules(tmp_path, AWKWARD_MULTI)
+    labels = AWKWARD_MULTI["keyword"]["_suggested_values"]
+    asked = f"{chapter_uuid('general')}.{question_uuid(('keyword',))}"
+    typed = f"{chapter_uuid('general')}.{other_followup_uuid(('keyword',))}"
+    replies = {
+        asked: [answer_uuid(("keyword",), label) for label in labels],
+        typed: 'a "manual" keyword',
+    }
+
+    document = _render(body, replies, items=lambda reply: reply)
+    assert document["dmp"]["keyword"] == [*labels, 'a "manual" keyword']
+
+
+def test_a_uuid_is_quoted_the_same_way_it_always_was():
+    """One function writes every Jinja literal now, and it must not have moved
+    what it writes for the only thing it used to be given."""
+    assert q(chapter_uuid("general")) == f"'{chapter_uuid('general')}'"
 
 
 def test_only_an_available_format_becomes_a_dsw_format(bundle):

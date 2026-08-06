@@ -13,6 +13,13 @@ Conventions in the generated Jinja:
 - ``sv(path)`` / ``av(path, default)`` / ``jv(path)`` macros over
   ``r = ctx.project.replies``, plus DSW's own ``reply_path`` /
   ``reply_str_value`` / ``reply_items`` filters.
+- ``js(text)`` escapes a string for the inside of a JSON one, and **everything
+  that renders text goes through it** — ``jv`` is ``js`` over a reply, and a
+  vocabulary label read through ``av`` is wrapped in it at the point it is
+  emitted. ``sv`` and ``av`` are the raw readers, left for the comparisons that
+  need the value itself and never for output. The document is assembled as
+  literal JSON text, so this macro is the whole of what stands between a reply
+  and the file.
 - The output is assembled as literal JSON text: every key carries its comma in
   front of it and each optional one is wrapped in its own ``{%- if ... %}``
   block, so an object's body is captured and its first comma stripped at render
@@ -98,9 +105,55 @@ def reply_path_expr(chain: list[str]) -> str:
     return "[" + ", ".join(chain) + "]|reply_path"
 
 
-def q(uuid_str: str) -> str:
-    """Quote a UUID, or a variable name, as a Jinja string literal."""
-    return f"'{uuid_str}'"
+def q(text: str) -> str:
+    """``text`` as a Jinja string literal.
+
+    Jinja decodes a literal with ``unicode-escape``, so a backslash, a quote of
+    its own and any control character have to be written as escapes. A UUID
+    comes through untouched — nothing in one needs escaping — and a vocabulary
+    label does not: ``Institut d'Optique`` closed its literal early and left
+    the whole template unparsable, which DSW only finds out at render time, in
+    front of a researcher.
+
+    One function for both, rather than a safe one beside a fast one: a second
+    way to write a Jinja string is a second place for a label to end up in the
+    wrong one.
+    """
+    escaped = text.replace("\\", "\\\\").replace("'", "\\'")
+    return "'" + "".join(c if c >= " " else f"\\u{ord(c):04x}" for c in escaped) + "'"
+
+
+# What a JSON string may not carry unescaped: a backslash, a double quote, and
+# every character below U+0020. The backslash comes first — escaping it after
+# the others would escape the backslashes the others just produced.
+#
+# Written out rather than deferred to Jinja's `tojson`, which is HTML-safe as
+# well: it escapes the ampersand and the apostrophe to their \u form too, and a
+# maDMP is committed to the registry to be read and diffed. Both are ordinary
+# in an institution's name.
+_JSON_ESCAPES: tuple[tuple[str, str], ...] = (
+    ("\\", "\\\\"),
+    ('"', '\\"'),
+    ("\b", "\\b"),
+    ("\f", "\\f"),
+    ("\n", "\\n"),
+    ("\r", "\\r"),
+    ("\t", "\\t"),
+    *(
+        (chr(code), f"\\u{code:04x}")
+        for code in range(0x20)
+        if chr(code) not in "\b\f\n\r\t"
+    ),
+)
+
+
+def _json_escape_chain(expression: str) -> str:
+    """``expression`` followed by the ``|replace`` chain that turns whatever it
+    evaluates to into the body of a JSON string."""
+    return expression + "".join(
+        f"\n  |replace({q(search)}, {q(replacement)})"
+        for search, replacement in _JSON_ESCAPES
+    )
 
 
 class OutputField:
@@ -215,10 +268,15 @@ class TemplateBuilder:
             # uuid is deliberately kept out of AL, so the lookup falling back
             # to 'other' is what identifies it. Do not add it to AL. The value
             # finally emitted falls back to '' instead, never to 'other'.
+            #
+            # `jv` and `js` rather than `sv` and `av`: this is the one branch
+            # that renders something a researcher typed by hand, so it is the
+            # one that most needs escaping — a single quote in it used to end
+            # the JSON string and take the whole document down with it.
             value_expr = (
-                f"sv({other_path}) if (av({own_path}, 'other') == 'other' and "
+                f"jv({other_path}) if (av({own_path}, 'other') == 'other' and "
                 f"{other_path} in r and r[{other_path}]|reply_str_value) "
-                f"else av({own_path}, '')"
+                f"else js(av({own_path}, ''))"
             )
         elif kind in ("options_strict", "options_suggested"):
             # A closed vocabulary, or a suggested one naming its own escape:
@@ -230,7 +288,10 @@ class TemplateBuilder:
             # legitimate answer for ethical_issues_exist, personal_data and
             # sensitive_data, so an unanswered question would be
             # indistinguishable from a deliberate "I don't know".
-            value_expr = f"av({own_path}, '')"
+            #
+            # Escaped like any other string: a label is a standard's prose, and
+            # a standard is free to spell a value with a quote in it.
+            value_expr = f"js(av({own_path}, ''))"
         elif kind == "boolean":
             for value in ("yes", "no"):
                 self.answer_labels[answer_uuid(field.path, value)] = value
@@ -288,6 +349,10 @@ class TemplateBuilder:
         other_var = None
         if needs_a_synthetic_escape(field):
             other_path = reply_path_expr(chain + [q(other_followup_uuid(field.path))])
+            # Held raw, escaped where it is emitted: the same variable decides
+            # whether the array has a last comma and whether the key renders at
+            # all, and both of those are questions about the value the
+            # researcher typed, not about its JSON spelling.
             other_var = f"{item_var}_other"
             preamble += (
                 f"{{%- set {other_var} = sv({other_path}) if {other_path} in r and "
@@ -301,7 +366,7 @@ class TemplateBuilder:
             "[",
             f"{{%- for {item_var}_uuid in {item_var}_items %}}",
             (
-                f"{item_indent}\"{{{{ AL.get({item_var}_uuid, 'unknown') }}}}\""
+                f"{item_indent}\"{{{{ js(AL.get({item_var}_uuid, 'unknown')) }}}}\""
                 f"{{% if not loop.last{comma_guard} %}},{{% endif %}}"
             ),
             "{%- endfor %}",
@@ -309,7 +374,7 @@ class TemplateBuilder:
         if other_var:
             lines += [
                 f"{{%- if {other_var} %}}",
-                f'{item_indent}"{{{{ {other_var} }}}}"',
+                f'{item_indent}"{{{{ js({other_var}) }}}}"',
                 "{%- endif %}",
             ]
         lines.append(f"{closing_indent}]")
@@ -518,9 +583,14 @@ def build_template_bundle(
         "{% autoescape false %}\n"
         "{%- set r = ctx.project.replies -%}\n\n"
         f"{{%- set AL = {al_dict} -%}}\n\n"
+        "{#- js() is what makes a string safe to sit between two quotes; every\n"
+        "    macro and every expression below that renders text goes through it,\n"
+        "    because the document is assembled as literal JSON and there is\n"
+        "    nothing else standing between a reply and the file. -#}\n"
+        f"{{%- macro js(text) -%}}{{{{ {_json_escape_chain('text')} }}}}{{%- endmacro -%}}\n"
         "{%- macro sv(path) -%}{{ r[path]|reply_str_value if path in r else '' }}{%- endmacro -%}\n"
         "{%- macro av(path, default='') -%}{{ AL.get(r[path]|reply_str_value, default) if path in r else default }}{%- endmacro -%}\n"
-        "{%- macro jv(path) -%}{{ r[path]|reply_str_value|replace('\\\\', '\\\\\\\\')|replace('\"', '\\\\\"')|replace('\\n', '\\\\n')|replace('\\r', '') if path in r else '' }}{%- endmacro -%}\n\n"
+        "{%- macro jv(path) -%}{{ js(r[path]|reply_str_value) if path in r else '' }}{%- endmacro -%}\n\n"
         "{#- All chapter/question UUIDs below come from dsw/uuids.py, the exact\n"
         "    same functions generate_km.py uses, so they always match the\n"
         "    published KM by construction, never a hand-copied table. -#}\n\n"

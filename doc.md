@@ -740,6 +740,73 @@ s'ouvre, donc aucune virgule ne peut être orpheline : c'est le seul état sous
 lequel la faute ne peut pas se produire. Il faut un objet **rempli** pour la
 voir.
 
+### Tout ce qui est du texte passe par `js()`
+
+Le document étant assemblé en **texte JSON littéral**, rien ne s'interpose entre
+une réponse et le fichier : une valeur est écrite entre deux guillemets, et si
+elle en contient un elle ferme la chaîne. Ce n'est pas un champ abîmé, c'est
+l'export entier qui cesse d'être du JSON.
+
+Le template déclare donc une macro `js(text)` qui rend le corps d'une chaîne
+JSON, et **toute expression qui rend du texte y passe** :
+
+| macro / expression | ce qu'elle rend | échappée |
+| --- | --- | --- |
+| `js(text)` | n'importe quel texte, prêt à tenir entre guillemets | — |
+| `jv(path)` | une réponse, c'est-à-dire `js()` sur une lecture brute | oui |
+| `js(av(path, ''))` | un libellé de vocabulaire | oui |
+| `js(AL.get(..., 'unknown'))` | un libellé dans un tableau multi-choix | oui |
+| `sv(path)` / `av(path, d)` | les lecteurs **bruts** | non — jamais émis |
+
+`sv` et `av` restent nus parce que ce qu'ils servent, ce sont les
+**comparaisons** : `av(...) == 'other'` détecte la réponse « Other »
+synthétique, `av(...) == 'yes'` décide d'un booléen. Une valeur qu'on compare
+n'est pas une valeur qu'on écrit, et les mélanger est exactement ce qui avait
+laissé le texte libre sans échappement.
+
+**Ce qui était cassé.** `jv()` existait déjà, mais n'était appliqué qu'aux
+valeurs simples. Les libellés passaient bruts, et surtout la réponse libre
+derrière « Other » aussi — c'est-à-dire le seul champ du questionnaire conçu
+pour recevoir une saisie arbitraire, sur les 16 champs qui en reçoivent une
+aujourd'hui. Un guillemet, un antislash ou un retour à la ligne dans ce champ,
+et le maDMP n'était plus parsable. Et `jv()` lui-même était incomplet : il
+traitait `\`, `"`, `\n`, supprimait `\r`, et laissait passer la tabulation, que
+JSON interdit telle quelle dans une chaîne.
+
+**Ce que `js()` couvre.** L'antislash, le guillemet double, et **tout**
+caractère sous U+0020 — les cinq à échappement nommé (`\b \f \n \r \t`), les
+autres en `\u00XX`. La table est écrite en Python (`_JSON_ESCAPES`) et la
+chaîne de `|replace` est engendrée à partir d'elle : personne n'a à retenir la
+liste, et rien n'y manque par oubli. L'antislash vient en premier, sinon il
+échapperait les antislashs que les autres substitutions viennent de produire.
+
+`\r` est désormais **échappé** et non plus supprimé : un texte collé depuis
+Windows garde ses fins de ligne au lieu d'être discrètement réécrit.
+
+**Pourquoi pas `|tojson`.** Le filtre de Jinja ferait le travail, mais il est
+aussi *HTML-safe* : il rend l'esperluette et l'apostrophe sous leur forme
+`\u`. Un maDMP est commité dans le registre pour être lu et diffé, et les deux
+sont ordinaires dans un nom d'institution.
+
+### Un libellé de vocabulaire est du *code*, pas seulement une donnée
+
+La table `AL` traduit un uuid de réponse stocké en son libellé, et elle est
+écrite dans le template sous forme de littéraux Jinja. Un libellé n'y est donc
+pas une donnée que le template lit : c'est de la **source** que le générateur
+écrit.
+
+`Institut d'Optique` fermait son littéral avant la fin, et le corps cessait
+d'être du Jinja — pas d'être du JSON, d'être du Jinja. Rien ne l'aurait vu :
+le test qui parse le corps ne couvre que `glider`, et le contrôle par config
+ne parse pas ce qu'il engendre. La panne serait arrivée au rendu, devant un
+chercheur.
+
+`q()` échappe donc maintenant l'antislash, l'apostrophe et les caractères de
+contrôle. Une seule fonction pour les uuid et pour les libellés, et non une
+sûre à côté d'une rapide : une deuxième façon d'écrire une chaîne Jinja est un
+deuxième endroit où un libellé peut finir dans la mauvaise. Un uuid, lui, en
+ressort inchangé — il n'y a rien à y échapper.
+
 ### Un champ requis est émis même sans réponse — et c'est maintenant un choix
 
 Avant, ce comportement était **forcé** par l'ancre de virgules. L'ancre partie,

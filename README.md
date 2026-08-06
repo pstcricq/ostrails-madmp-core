@@ -188,6 +188,14 @@ generated, which is why it comes straight after validation.
   standard declare an object with nothing required in it. A required field is
   still emitted when nothing answered it, now as a choice rather than a
   constraint: a required field that is empty says so, an absent one does not.
+  Because the document *is* literal text, nothing stands between a reply and
+  the file but the `js()` macro, so everything that renders text goes through
+  it — a value, a vocabulary label, and above all the free text behind a
+  synthetic "Other", the one field built to take arbitrary input. `sv` and
+  `av` stay raw and are never emitted: what they serve are the comparisons
+  that detect an "Other" answer or a boolean. A label is also *source* rather
+  than data — `AL` holds it as a Jinja literal — so `q()` escapes it too, and
+  `Institut d'Optique` no longer leaves a body that is not Jinja at all.
 - `dsw/publish.py` — the three targets, and `DswClient`, the wizard-api calls
   this needs. Standard library only, like the GitHub client. One asymmetry
   between the two: the registry's token is read from the environment, DSW's is
