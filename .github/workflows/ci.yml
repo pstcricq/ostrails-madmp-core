@@ -236,19 +236,26 @@ jobs:
       # every project is offered every time and only a bumped `version`
       # actually publishes.
       #
-      # The two packages only, for now. `submission` would write a service
-      # pointing at the webhook, and the webhook is deployed nowhere a remote
-      # DSW can reach — it exists as a container on the local compose network.
-      # Publishing that route would advertise a Submit that cannot work, which
-      # is the one thing this target exists to avoid. Restore `all` when the
-      # webhook has a public address; the two names it needs are already
-      # wired below.
-      - name: Publish every project's KM and document template
+      # `all`, so the submission service goes up with the two packages and in
+      # that order: a service names the document template's uuid, which does
+      # not exist until the template is published.
+      #
+      # SUBMISSION_URL names the webhook as the **instance** reaches it, and
+      # this deployment runs the webhook beside DSW on the same compose
+      # network, so that address is a service name and not a public one. It is
+      # therefore right for an instance running this deployment and wrong for
+      # any other, and nothing in the code can tell the two apart. Today the
+      # target instance does not run the webhook yet, so the service is
+      # written before anything answers it: a Submit button that exists ahead
+      # of what it calls, which is the one thing `publish submission`
+      # otherwise refuses to do. It is deliberate here, and the claim being
+      # made is that the service can be created, not that a submission
+      # completes. The day the instance deploys the webhook the value stops
+      # being a promise, with nothing to change here.
+      - name: Publish every project's KM, document template and submission service
         run: |
           for cfg in configs/projects/*.yaml; do
-            uv run python -m dsw.publish km "$cfg"
-            uv run python -m dsw.publish template "$cfg"
-            # uv run python -m dsw.publish all "$cfg"
+            uv run python -m dsw.publish all "$cfg"
           done
         env:
           DSW_API_URL: ${{ vars.DSW_API_URL }}
