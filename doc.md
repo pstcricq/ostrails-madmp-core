@@ -1425,10 +1425,11 @@ d'écrire que l'écart s'est vu.
 Le secret est exigé autant que l'adresse, corrigé le 05/08/2026. Le code le
 disait facultatif au motif qu'« un webhook déployé sans secret accepte les
 appels non authentifiés » : ce déploiement n'existe pas. Le webhook de
-`dsw-test` répond **500** quand il n'en détient aucun et **401** quand l'en-tête
-ne correspond pas ([`submission/app.py`]). Un service écrit sans secret est donc
-un bouton Submit qui échoue à tous les coups — et il serait écrit *par-dessus*
-un service qui marchait, sur la seule absence d'un nom dans une exécution. Même
+`madmp-dsw` refuse de démarrer quand il n'en détient aucun, les quatre variables
+étant lues au démarrage, et répond **401** quand l'en-tête ne correspond pas
+([`submission/app.py`]). Un service écrit sans secret est donc un bouton Submit
+qui échoue à tous les coups — et il serait écrit *par-dessus* un service qui
+marchait, sur la seule absence d'un nom dans une exécution. Même
 faute que le repli sur `GITHUB_TOKEN` : un cas d'usage justifié par un mécanisme
 inexistant.
 
