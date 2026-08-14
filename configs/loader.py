@@ -1,27 +1,14 @@
 """One ``configs/projects/*.yaml`` file, and everything that can be wrong with it.
 
-:func:`load_config_file` is the only entry point — it reads *and* validates in one
-step, so a config that reaches a caller is a config that passed. Two layers,
-reported together:
+``load_config_file()`` is the only entry point. It validates in two layers,
+and a failing layer reports every problem it found rather than the first one:
 
-1. Structural — against :data:`configs/config.schema.json`, which is strict:
-   every field required, none extra. A missing ``rules`` or a ``rule:`` typo
-   fails here rather than deep inside generation.
-2. Layout — the filename must equal ``id``. A project has one machine name,
-   declared once: it is what this file is called (how a config is selected, and
-   what CI iterates over), its destination folder in the dmp-registry, and what
-   the KM, the template and the DSW project are named after. Declaring it and
-   filing it are two ways of saying it, and they agree only by convention:
-   renaming the file would silently publish the project somewhere else. The
-   check is inside the load rather than beside it, for the reason ``rules``
-   gives — a check a caller has to remember to run is a check that gets
-   forgotten. ``name`` is not checked against anything: it is prose, and the
-   only field a reader ever sees.
+1. Structural, against ``config.schema.json``, which is strict: every field
+   required, none extra.
+2. Layout, only once the schema passed: the filename must equal the declared
+   ``id``.
 
-Same shape as ``rules/loader.py``, down to the ordering being a precondition
-rather than a courtesy: both build on the shared ``utils.schema`` plumbing and
-add only their own ``…FileError`` subclass, schema file, and domain checks.
-Configs need no coherence pass — the schema says it all.
+``name`` is checked against nothing, it is prose.
 """
 
 from __future__ import annotations
@@ -41,14 +28,16 @@ class ConfigFileError(SchemaFileError):
 
 
 def _layout_problems(path: Path, doc: dict[str, Any]) -> list[str]:
-    """The ways the file disagrees with the path it sits at: today, only its
-    id. Kept as a list so a second check joins the first without changing how
-    :func:`load_config_file` reads."""
+    """Every way the file disagrees with the path it sits at, at once.
+
+    Today that is only the declared ``id`` against the filename, returned as a
+    list so a second check can join it.
+    """
     identifier = doc["id"]
     if identifier != path.stem:
         return [
             (
-                f"declares id {identifier!r} but is filed as {path.stem!r}; "
+                f"declares id {identifier!r} but is filed as {path.stem!r}, "
                 f"the two must agree."
             )
         ]
@@ -58,10 +47,9 @@ def _layout_problems(path: Path, doc: dict[str, Any]) -> list[str]:
 def load_config_file(path: str | Path) -> dict[str, Any]:
     """Load one project config (YAML), fully validated.
 
-    Returns the parsed document. Raises :class:`ConfigFileError` listing every
-    problem found — a path that cannot be read and a syntax error included, so
-    that one exception type covers every way a config can be wrong and callers
-    need catch nothing else.
+    Returns the parsed document. Raises ``ConfigFileError`` listing every
+    problem found, an unreadable path and a syntax error included, so a caller
+    needs to catch nothing else.
     """
     try:
         doc = yaml.safe_load(Path(path).read_text())
@@ -69,11 +57,10 @@ def load_config_file(path: str | Path) -> dict[str, Any]:
         raise ConfigFileError(path, [f"cannot be read: {err.strerror}."]) from err
     except yaml.YAMLError as err:
         raise ConfigFileError(path, [f"invalid YAML: {err}"]) from err
-    # The layout check only once the schema passed, and not only to spare the
-    # noise: it reads doc["id"] without a guard, which is safe precisely
-    # because the schema pass guaranteed the key is there and typed. An empty
-    # file — safe_load returns None — is a non-object, so the schema is what
-    # stops it here rather than an isinstance() of our own.
+    # The layout check reads doc["id"] unguarded, which the schema pass has
+    # just guaranteed to be there and typed, so it only runs when that pass
+    # found nothing. An empty file, where safe_load returns None, fails the
+    # schema as a non-object.
     problems = schema_problems(validator_for(SCHEMA_PATH), doc)
     if not problems:
         problems = _layout_problems(Path(path), doc)

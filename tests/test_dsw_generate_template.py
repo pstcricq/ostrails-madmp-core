@@ -3,10 +3,10 @@
 The two are published as separate packages and DSW never checks that they
 agree, so the tests that matter here build both from one project and confront
 them. Agreement has two halves, and each needs its own: every UUID the
-template reads must be one the KM emitted, *and* must be read from where the
-KM hangs it — a reply path is a chain of parenthood, so the right entity
-sought under the wrong parent finds nothing. Neither needs an expected output,
-and both hold for any project.
+template reads must be one the KM emitted, and must be read from where the KM
+hangs it, a reply path being a chain of parenthood, so the right entity sought
+under the wrong parent finds nothing. Neither needs an expected output, and
+both hold for any project.
 
 The rest is what has a specification: the template body must be Jinja that
 parses, it must render to a document that parses, the answer-label table must
@@ -75,9 +75,9 @@ REQUIRED_BOOLEAN = {
     "title": {"_cardinality": "1", "_type": "string"},
 }
 
-# A vocabulary spelling its values the way an institution's name is spelt. The
-# apostrophe is the one that used to take the whole template down: it closed
-# the Jinja literal `AL` holds the label in, and the body stopped parsing.
+# A vocabulary spelling its values the way an institution's name is spelt.
+# The apostrophe is the character that closes the Jinja literal `AL` holds the
+# label in, taking the whole template down with it.
 AWKWARD_VOCABULARY = {
     "funder": {
         "_cardinality": "1",
@@ -97,8 +97,8 @@ AWKWARD_MULTI = {
 }
 
 # What a researcher can put in a text field and what it costs. Each of these
-# used to end the JSON string it was sitting in, or — the tab — sit inside one
-# as a control character JSON does not allow there.
+# ends the JSON string it sits in, or, for the tab, sits inside one as a
+# control character JSON does not allow there.
 TYPED_BY_HAND = [
     'a "quoted" answer',
     "back\\slash",
@@ -134,8 +134,8 @@ class _Ctx:
         self.__dict__.update(attrs)
 
 
-#: The one list item every list question is given, standing in for a UUID DSW
-#: would mint at runtime. It is not an entity of the KM.
+# The one list item every list question is given, standing in for a UUID DSW
+# would mint at runtime. It is not an entity of the KM.
 ITEM = "item-0"
 
 
@@ -191,12 +191,12 @@ def _render(
     ``reply_items`` gives a list question one item to iterate.
 
     ``chains`` collects every path the template asks ``reply_path`` for, each
-    flattened to its UUIDs — a chain built on another chain arrives already
-    joined, since that is what the filter returned the first time.
+    flattened to its UUIDs, a chain built on another chain arriving already
+    joined since that is what the filter returned the first time.
 
     ``items`` overrides the ``reply_items`` stub. The default hands back one
-    item that is not an entity of anything, which is what a list *question*
-    stores; a multi-choice stores the UUIDs of the answers that were chosen,
+    item that is not an entity of anything, which is what a list question
+    stores. A multi-choice stores the UUIDs of the answers that were chosen,
     and the one test that needs a real label to come back out says so.
     """
     env = jinja2.Environment()
@@ -226,8 +226,7 @@ def _body_from_rules(tmp_path: Path, dmp: dict) -> str:
     """A template built from a rules tree of one's own, on the real config.
 
     A shape no standard on disk has today is still a shape a standard may
-    have, and the template has to hold for it — so it is written here rather
-    than waited for.
+    have, and the template has to hold for it.
     """
     path = tmp_path / "synthetic" / "1.0.0.json"
     path.parent.mkdir(parents=True)
@@ -248,10 +247,10 @@ def _body_from_rules(tmp_path: Path, dmp: dict) -> str:
 
 def test_every_uuid_the_template_reads_is_an_entity_the_km_emits(project, body):
     """Half of the pair's invariant, the half about identity. They are
-    published as two packages and nothing in DSW checks they agree: a UUID
-    drifting on either side is a question whose answer silently never reaches
-    the document. The other half — where each of those entities hangs — is
-    below."""
+    published as two packages and nothing in DSW checks they agree, so a
+    UUID drifting on either side is a question whose answer silently never
+    reaches the document. The other half, where each of those entities hangs,
+    is below."""
     km_entities = {
         event["entityUuid"]
         for event in build_km_bundle(project, created_at=STAMP)["packages"][0]["events"]
@@ -260,20 +259,19 @@ def test_every_uuid_the_template_reads_is_an_entity_the_km_emits(project, body):
 
 
 def test_the_template_reads_every_question_where_the_km_hangs_it(project, body):
-    """The other half, and the one an existing UUID cannot cover: a reply path
-    *is* a chain of parenthood, so reading the right entity from the wrong
+    """The other half, and the one an existing UUID cannot cover: a reply
+    path is a chain of parenthood, so reading the right entity from the wrong
     place finds nothing. Both generators build those chains from `dsw.uuids`,
-    but they build them separately, in code that never meets — nothing before
-    this compared the two.
+    separately, in code that never meets.
 
-    Rendering is how the chains are collected rather than parsed: DSW hands
+    Rendering is how the chains are collected rather than parsed, DSW handing
     `reply_path` the very list the template assembled, so the filter sees what
     the instance would see. The list item DSW would mint at runtime is not an
     entity, so it drops out and the question beneath a list answers to the
     list itself.
 
     It holds in both directions. Every chapter and question the KM asks is
-    read, so no answer is stranded in a questionnaire nothing exports; and
+    read, so no answer is stranded in a questionnaire nothing exports, and
     nothing is read that the KM never emitted."""
     chains: list[list[str]] = []
     _render(body, _Answered(), chains)
@@ -307,8 +305,8 @@ def test_the_template_is_allowed_to_render_exactly_its_own_km(project, bundle):
 
 
 def test_the_answer_table_translates_what_the_km_stores(project, body):
-    """DSW stores an answer's UUID, not its label; AL is how the document
-    gets the word back. Every key must therefore be a KM answer."""
+    """DSW stores an answer's UUID and not its label, so AL is how the
+    document gets the word back. Every key must therefore be a KM answer."""
     km_entities = {
         event["entityUuid"]
         for event in build_km_bundle(project, created_at=STAMP)["packages"][0]["events"]
@@ -318,10 +316,10 @@ def test_the_answer_table_translates_what_the_km_stores(project, body):
 
 
 def test_a_vocabulary_that_names_its_own_escape_can_render_that_value(tmp_path):
-    """Picking it must put the word in the document. It used to put nothing
-    there: the declared value was dropped and its UUID reused by the synthetic
-    "Other", whose label is deliberately absent from AL — so the lookup fell
-    back, and a DMP that should have said `other` said `""` instead."""
+    """Picking it must put the word in the document. The synthetic "Other"
+    shares its UUID and is deliberately absent from AL, so a declared value
+    dropped in its favour would make the lookup fall back and a DMP that
+    should say `other` say `""` instead."""
     body = _body_from_rules(tmp_path, OWN_ESCAPE)
     asked = f"{chapter_uuid('general')}.{question_uuid(('id_type',))}"
     chosen = answer_uuid(("id_type",), "other")
@@ -340,9 +338,8 @@ def test_the_other_sentinel_is_kept_out_of_the_answer_table(body):
 
 
 def test_the_body_is_jinja_that_parses(body):
-    """The generator writes Jinja and never runs it, so nothing else in the
-    pipeline would notice a syntax error before DSW hits it at render time,
-    in front of a researcher."""
+    """The generator writes Jinja and never runs it, so nothing else would
+    notice a syntax error before DSW hits it at render time."""
     jinja2.Environment().parse(body)
 
 
@@ -371,9 +368,8 @@ def test_an_answered_project_still_renders_valid_json(body):
 def test_an_object_whose_every_key_is_optional_still_renders_valid_json(tmp_path):
     """A key is emitted with a comma in front of it, so an object closes only
     if something else emitted a key first. Nothing entitles the template to
-    that: `cost { type?, unit? }` is an ordinary shape for a standard to
-    declare, and forbidding it would be asking the rules to lie about the
-    standard so that the generator has an easier time.
+    that, `cost { type?, unit? }` being an ordinary shape for a standard to
+    declare.
 
     It takes a filled object to fail. Answer nothing and every block stays
     shut, which is why both are asserted here."""
@@ -391,15 +387,14 @@ def test_an_object_whose_every_key_is_optional_still_renders_valid_json(tmp_path
 
 @pytest.mark.parametrize("typed", TYPED_BY_HAND, ids=lambda t: repr(t))
 def test_anything_a_researcher_can_type_still_renders_valid_json(body, typed):
-    """The document is assembled as literal JSON text, so a quote, a backslash
-    or a newline in a reply used to end the string it was in and take the whole
-    export with it — not one field, the file.
+    """The document is assembled as literal JSON text, so a quote, a
+    backslash or a newline in a reply ends the string it sits in and takes the
+    whole export with it, not one field but the file.
 
-    Answering *every* path with the same string is what makes one render walk
+    Answering every path with the same string is what makes one render walk
     every route text takes: a plain value, a vocabulary label, and the free
-    text behind a synthetic "Other", which is the one field in the
-    questionnaire built to receive arbitrary input and was the one with no
-    escaping at all.
+    text behind a synthetic "Other", the one field in the questionnaire built
+    to receive arbitrary input.
     """
     document = _render(body, _Answered(typed))
     assert document["dmp"]["title"] == typed
@@ -407,10 +402,10 @@ def test_anything_a_researcher_can_type_still_renders_valid_json(body, typed):
 
 
 def test_a_vocabulary_label_with_an_apostrophe_still_gives_a_template(tmp_path):
-    """`AL` holds each label as a Jinja literal, so a label is not only data:
-    it is *source* the generator writes. `Institut d'Optique` closed its
-    literal early, and the body stopped being Jinja at all — which nothing
-    before the render, in front of a researcher, would have found out."""
+    """`AL` holds each label as a Jinja literal, so a label is not only
+    data, it is source the generator writes. `Institut d'Optique` closes that
+    literal early and the body stops being Jinja at all, which nothing before
+    the render would find out."""
     body = _body_from_rules(tmp_path, AWKWARD_VOCABULARY)
     jinja2.Environment().parse(body)
 
@@ -422,10 +417,10 @@ def test_a_vocabulary_label_with_an_apostrophe_still_gives_a_template(tmp_path):
 
 def test_a_multi_choice_array_carries_its_labels_and_its_free_text_intact(tmp_path):
     """The two expressions the glider project cannot reach: a label emitted
-    inside an array, and the free text beside a multi-choice — a multi has no
+    inside an array, and the free text beside a multi-choice. A multi has no
     "Other" choice to hang a question off, so the manual entry sits next to it
     and is appended to the array. No standard on disk gives a multi-choice a
-    synthetic escape today, and both were emitted raw.
+    synthetic escape today.
 
     `reply_items` gives back what a multi-choice actually stores, the UUIDs of
     the answers that were chosen, because a label that never comes out of `AL`
@@ -444,14 +439,14 @@ def test_a_multi_choice_array_carries_its_labels_and_its_free_text_intact(tmp_pa
 
 
 def test_a_required_boolean_nobody_answered_is_null_and_never_false(tmp_path):
-    """A required key is emitted answered or not — that is the choice: a DMP
-    missing a mandatory field has to say so. A scalar says it with `""`, and a
-    boolean has no empty value, so it used to say it with `false`.
+    """A required key is emitted answered or not, so a DMP missing a
+    mandatory field says so. A scalar says it with `""`, and a boolean has no
+    empty value.
 
-    But `false` is not a silence, it is an answer. "Nobody answered" and
-    "answered no" rendered the same document, and on `is_reused` the two are
-    not remotely the same claim. `null` is what a boolean has instead of an
-    empty string, and the three states are three values again."""
+    `false` would not be a silence, it is an answer, and on `is_reused`
+    "nobody answered" and "answered no" are not remotely the same claim.
+    `null` is what a boolean has instead of an empty string, so the three
+    states are three values."""
     body = _body_from_rules(tmp_path, REQUIRED_BOOLEAN)
     asked = f"{chapter_uuid('general')}.{question_uuid(('is_reused',))}"
 
@@ -469,7 +464,7 @@ def test_a_required_boolean_nobody_answered_is_null_and_never_false(tmp_path):
 
 def test_an_optional_boolean_is_absent_until_it_is_answered(tmp_path):
     """The other half. Optional keys are conditional, so an unanswered one
-    renders nothing at all rather than a null — `dataset.is_reused` is `0..1`
+    renders nothing at all rather than a null. `dataset.is_reused` is `0..1`
     in RDA DCS, which is every boolean on disk today."""
     optional = dict(
         REQUIRED_BOOLEAN, is_reused={"_cardinality": "0..1", "_type": "boolean"}
@@ -485,8 +480,8 @@ def test_an_optional_boolean_is_absent_until_it_is_answered(tmp_path):
 
 
 def test_a_uuid_is_quoted_the_same_way_it_always_was():
-    """One function writes every Jinja literal now, and it must not have moved
-    what it writes for the only thing it used to be given."""
+    """One function writes every Jinja literal, and a UUID must come out of
+    it unchanged."""
     assert q(chapter_uuid("general")) == f"'{chapter_uuid('general')}'"
 
 
@@ -512,7 +507,7 @@ def test_a_computed_field_is_rendered_from_the_project_and_not_from_a_reply(body
 
 
 def test_two_runs_of_one_project_give_the_same_bundle(project):
-    """Including the file UUID: derived from the package id, so that two
+    """Including the file UUID, derived from the package id, so that two
     generations of one project differ in nothing a reader can see."""
     assert build_template_bundle(project, created_at=STAMP) == build_template_bundle(
         project, created_at=STAMP
@@ -520,7 +515,7 @@ def test_two_runs_of_one_project_give_the_same_bundle(project):
 
 
 def test_bumping_the_project_version_gives_the_file_a_new_uuid(project, bundle):
-    """DSW keys a file's content by this UUID: reuse it across published
+    """DSW keys a file's content by this UUID, reuse it across published
     versions and the old content is served for the new package."""
     config = dict(project.config, version="2.0.0")
     other = build_template_bundle(

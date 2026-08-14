@@ -1,19 +1,16 @@
 """Knowledge Model generator: a merged rules model -> a DSW event bundle.
 
 Walks the model and emits a full DS Wizard Knowledge Model (``.km``) event
-bundle — chapters, questions, answers and gates — ready to publish through the
+bundle, chapters, questions, answers and gates, ready to publish through the
 ``knowledge-model-packages/bundle`` endpoint.
 
-Which DSW entity a field becomes is :func:`dsw.common.field_kind`'s call and
-never this module's; :func:`KmBuilder.process_field` only dispatches on the
-answer. What each entity's UUID is, is :mod:`dsw.uuids`' call.
+Which DSW entity a field becomes is ``field_kind()``'s call and never this
+module's, ``process_field()`` only dispatches on the answer. What each
+entity's UUID is, is ``dsw.uuids``' call.
 
 Emission order matters: DSW infers the order of sibling entities from the
 order of the events sharing a ``parentUuid``, so the order questions are
 emitted in is the order a researcher reads them.
-
-The full rules-to-entity mapping, and why it is that way, is in ``doc.md``
-("Le questionnaire").
 """
 
 from __future__ import annotations
@@ -53,17 +50,15 @@ from dsw.uuids import (
 from project import Field, Model, Project, assemble_project
 
 # The DSW metamodel schema version this bundle targets. Tied to the DSW
-# instance and not to the project: `knowledgeModelMetamodelVersion` is 20 in
+# instance and not to the project, `knowledgeModelMetamodelVersion` is 20 in
 # engine-backend at v4.31.0, and `kmp_schema_v20.json` in
 # https://github.com/ds-wizard/dsw-schemas is what an event of this bundle has
 # to look like. Each schema is `additionalProperties: false`, so a field it
-# does not define is not a field this may send — see `tests` for the fields it
-# defines, held there rather than believed here.
+# does not define is not a field this may send.
 METAMODEL_VERSION = 20
 
 # A scalar field type, as the matching DSW ValueQuestion value type. Several
-# rules types share one DSW type: DSW validates the shape it knows, and the
-# narrower constraint stays the QC's to check.
+# rules types share one DSW type, DSW validates only the shape it knows.
 VALUE_TYPE_MAP: dict[str, str] = {
     "string": "StringQuestionValueType",
     "number": "NumberQuestionValueType",
@@ -88,9 +83,7 @@ def humanize(key: str) -> str:
 
 
 def title_for(field: Field) -> str:
-    """A question or chapter title, from the field's own key. The rules
-    declare a description, never a title: a title that had to be written
-    would be a title that could disagree with the field it names."""
+    """A question or chapter title, from the field's own key."""
     return humanize(field.name)
 
 
@@ -182,9 +175,8 @@ class KmBuilder:
                 },
             )
         # One tag per standard, derived from each file's own `standard`
-        # declaration, so that adding a rules file never means wiring its tag
-        # by hand. Identity from the code name, display from `standard_label`:
-        # the uuid stays put whatever a reader is shown.
+        # declaration. Identity from the code name, display from
+        # `standard_label`, so the uuid stays put whatever a reader is shown.
         for i, origin in enumerate(self.model.standards):
             label = standard_label(origin)
             self.emit(
@@ -233,13 +225,11 @@ class KmBuilder:
     def emit_options_question(
         self, field: Field, parent_uuid: str, values: list[str], escape: bool
     ) -> None:
-        """An ``OptionsQuestion`` with one answer per value, plus — when
-        ``escape`` — an extra "Other" answer opening a free-text follow-up.
+        """An ``OptionsQuestion`` with one answer per value, plus, when
+        ``escape``, an extra "Other" answer opening a free-text follow-up.
 
-        ``escape`` is :func:`dsw.common.needs_a_synthetic_escape`'s call, never
-        this method's: a vocabulary naming an escape of its own is emitted with
-        it and given nothing else, which is also what keeps the synthetic
-        answer from claiming a UUID the declared one already has."""
+        ``escape`` is ``needs_a_synthetic_escape()``'s call, never this
+        method's."""
         q_uuid = question_uuid(field.path)
         self.emit(
             q_uuid,
@@ -347,7 +337,7 @@ class KmBuilder:
         )
 
     def emit_multi_value_question(self, field: Field, parent_uuid: str) -> None:
-        """A ListQuestion whose single item template is a ValueQuestion — a
+        """A ListQuestion whose single item template is a ValueQuestion, a
         scalar repeated through its cardinality, DSW having no other way to
         ask for several of one value."""
         q_uuid = question_uuid(field.path)
@@ -370,12 +360,10 @@ class KmBuilder:
             {
                 "eventType": "AddQuestionEvent",
                 "questionType": "ValueQuestion",
-                # The same path as the ListQuestion above it, and that is the
-                # truth about a repeated scalar: one rules field, asked through
-                # two entities because DSW has no other way to want several of
-                # one value. The wrapper holds the items, this holds a value —
-                # and it is the one a reply is stored against, so it is the one
-                # a consumer mapping an answer back to its field must find.
+                # The same path as the ListQuestion above it, one rules field
+                # asked through two entities. The wrapper holds the items,
+                # this holds a value, and it is the one a reply is stored
+                # against.
                 "annotations": path_annotation(field.path),
                 "title": title_for(field),
                 "text": field.description,
@@ -389,7 +377,7 @@ class KmBuilder:
     def emit_gate(
         self, field: Field, parent_uuid: str, on_yes: Callable[[str], None]
     ) -> None:
-        """A Yes/No gate question for a ``0..1`` object; ``on_yes`` emits the
+        """A Yes/No gate question for a ``0..1`` object, ``on_yes`` emits the
         field's children under the "Yes" answer, so an optional block asks
         nothing until it is opted into."""
         gate_q_uuid = gate_uuid(field.path)
@@ -483,9 +471,9 @@ class KmBuilder:
         elif kind == "value":
             self.emit_value_question(field, parent_uuid)
         else:
-            # Named rather than defaulted: a kind this generator does not know
-            # emitted as a plain value question is a KM that looks fine and a
-            # template that reads something else.
+            # Named rather than defaulted, a kind this generator does not know
+            # emitted as a plain value question would be a KM that looks fine
+            # and a template that reads something else.
             raise ValueError(f"{field.dotted_path}: no DSW entity for kind {kind!r}")
 
     def emit_chapters(self, general: list[Field], chapters: list[Field]) -> None:
@@ -556,8 +544,7 @@ def build_km_bundle(project: Project, created_at: str | None = None) -> dict[str
     ready for the ``knowledge-model-packages/bundle`` endpoint.
 
     ``created_at`` is injectable so that two runs of the same project produce
-    the same bytes: everything else in the bundle is derived from the project,
-    and the timestamp is the only thing that would otherwise move.
+    the same bytes, everything else in the bundle is derived from the project.
     """
     created_at = created_at or utc_timestamp()
     config = project.config

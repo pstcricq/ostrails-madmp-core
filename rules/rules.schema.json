@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "madmp/rules/rules.schema.json",
   "title": "maDMP rules file",
-  "description": "The format of one rules/*.json file: a 'standard' declaration plus a recursive tree of DMP fields. Two orthogonal facts per field: '_cardinality' says how many values ('1', '0..1' single; '1..n', '0..n' list), '_type' says what each value is ('object' for structured entities, otherwise a scalar format). There is deliberately no 'list' type: list-ness is entirely expressed by the cardinality. Five further coherence rules are enforced by rules/loader.py rather than here. They are expressible in JSON Schema (via if/then and a separate top-level field definition), but only at the cost of errors like \"'object' should not be valid under {'const': 'object'}\" in place of a sentence naming the field and the fix. They are: only '_type: object' fields may declare child fields, every '_type: object' field must declare at least one, '_allowed_values'/'_suggested_values' may only appear on scalar fields, the two may never appear together on one field, and '_chapter_description' may only appear on a top-level object field.",
+  "description": "The format of one rules/*.json file: a 'standard' declaration plus a recursive tree of DMP fields. Two orthogonal facts per field: '_cardinality' says how many values ('1' and '0..1' single, '1..n' and '0..n' list), '_type' says what each value is ('object' for structured entities, otherwise a scalar format). There is no 'list' type, list-ness is expressed by the cardinality alone. Five further coherence rules are not expressed here: only '_type: object' fields may declare child fields, every '_type: object' field must declare at least one, '_allowed_values'/'_suggested_values' may only appear on scalar fields, the two may never appear together on one field, and '_chapter_description' may only appear on a top-level object field.",
   "type": "object",
   "required": ["standard", "version", "extends", "dmp"],
   "additionalProperties": false,
@@ -10,7 +10,7 @@
     "standard": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9_]*$",
-      "description": "Identifier of the standard this file defines, snake_case (e.g. 'rda_dcs'), unique across the files a project pins. It is the directory this file sits in, and the name a config's 'rules:' pin writes. Anything shown to a reader — DSW tags, QC reports — derives its label from it rather than carrying a second spelling."
+      "description": "Identifier of the standard this file defines, snake_case (e.g. 'rda_dcs'), and the name of the directory this file sits in."
     },
     "version": {
       "type": "string",
@@ -27,7 +27,7 @@
     },
     "dmp": {
       "type": "object",
-      "description": "The root of the field tree, every key is a top-level DMP field. At least one: a rules file that declares no field constrains nothing.",
+      "description": "The root of the field tree, every key is a top-level DMP field. At least one.",
       "minProperties": 1,
       "patternProperties": { "^[a-z][a-z0-9_]*$": { "$ref": "#/$defs/field" } },
       "additionalProperties": false
@@ -56,29 +56,29 @@
             "country_code",
             "language"
           ],
-          "description": "What each value is: 'object' for a structured entity with child fields — at least one, an object is its children — otherwise the scalar's expected format."
+          "description": "What each value is: 'object' for a structured entity with child fields, at least one, otherwise the scalar's expected format."
         },
         "_description": {
           "type": "string",
-          "description": "Human-facing description of the field (question help text, QC reports)."
+          "description": "Human-facing description of the field."
         },
         "_chapter_description": {
           "type": "string",
-          "description": "Description of the DSW chapter generated for a top-level object field. Only valid there — rules/loader.py rejects it anywhere else, where the generators would ignore it."
+          "description": "Description of the DSW chapter generated for a top-level object field, the only place it is valid."
         },
         "_allowed_values": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Closed vocabulary: a value outside this list is a violation of the standard. Excludes '_suggested_values' on the same field — rules/loader.py rejects the pair."
+          "description": "Closed vocabulary: a value outside this list is a violation of the standard. Never together with '_suggested_values' on the same field."
         },
         "_suggested_values": {
           "type": "array",
           "items": { "type": "string", "minLength": 1 },
           "minItems": 1,
           "uniqueItems": true,
-          "description": "Recommended vocabulary: a value outside this list is only worth a warning. Excludes '_allowed_values' on the same field — rules/loader.py rejects the pair."
+          "description": "Recommended vocabulary: a value outside this list is only worth a warning. Never together with '_allowed_values' on the same field."
         }
       },
       "patternProperties": { "^[a-z][a-z0-9_]*$": { "$ref": "#/$defs/field" } },

@@ -1,18 +1,10 @@
-# ONE self-contained config per project: it carries everything needed to
-# generate and publish that project's own stack — KM, Document Template,
-# baseline Project Template, and (on publish) its submission service. Nothing
-# is shared at runtime; the project evolves only when THIS file is edited and
-# its `version` bumped.
+# One self-contained config per project. The project evolves only when this
+# file is edited and its `version` bumped.
 #
 # Read top to bottom: who this project is, which rules it is built from, and
 # what the generated DSW packages carry.
 
 # --- Project: its own facts ---
-# `id` is THE machine name, declared once: this file is named after it, so is
-# the project's folder in the dmp-registry, and so are the KM, the document
-# template, the seed and the DSW baseline project. Nothing repeats it.
-# `name` is what a reader sees, and only that: the DSW package name, the KM
-# title, and the registry meta.yaml.
 id: glider
 name: "SOCIB Glider"
 version: "1.0.0" # bump to publish a change
@@ -46,5 +38,3 @@ references:
   - label: "SOCIB"
     url: "https://www.socib.es"
 auto_timestamps: true
-# dmp_id needs no config — the template derives it from the DSW render context
-# (ctx.config.clientUrl + /projects/<uuid>); the webhook rewrites it on commit.

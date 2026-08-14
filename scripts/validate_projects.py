@@ -1,29 +1,16 @@
 """Check that every project names rules that exist, and that they hold together.
 
-The one check that crosses the data packages. `validate_rules.py` and
-`validate_configs.py` each stay inside their own, which is what makes them
-legible — and what leaves a hole between them: a config pinning a version
-nobody ever wrote passes both. Here every `configs/projects/*.yaml` is loaded
-the way a generator will load it, through `assemble_project`: its pins resolved
-against `rules/standards/`, and the files behind them merged.
+The one check that crosses the data packages. A config pinning a version
+nobody ever wrote passes every per-file check there is, so here every
+`configs/projects/*.yaml` is loaded the way a generator will load it, through
+`assemble_project`, its pins resolved against `rules/standards/` and the files
+behind them merged.
 
-Whether a *file* is well formed stays the other jobs' answer, and they check
-every file in the tree, so anything pinned here is already known good on its
-own. What no per-file job can see is the *set*: two pinned standards
-disagreeing on a shared field is a property of the combination. The unit tests
-merge the real standards too, but from a list written in the test — this is the
-only place the set a project actually pins gets merged, so bumping a pin or
-adding a standard is covered by the same check that covers writing them.
-
-It calls `assemble_project` rather than resolving and merging itself, which is the
-whole point of that function existing: the CI checks what a generator will
-get, not a sequence that resembles it.
-
-Runs beside the other jobs rather than after them, deliberately: a project
-whose pins do not resolve is broken whether or not some other file is also
-broken, and gating this behind them would cost a second push to find out. A
-config this script cannot even load is handed back to the `configs` job, which
-says why, rather than having its verdict reprinted here.
+Whether a file is well formed is answered file by file elsewhere. What no
+per-file check can see is the set: two pinned standards disagreeing on a
+shared field is a property of the combination, and this is the only place the
+set a project actually pins gets merged, so bumping a pin or adding a standard
+is covered by the same check that covers writing them.
 """
 
 from __future__ import annotations
@@ -51,7 +38,7 @@ def main() -> int:
             project = assemble_project(path)
         except ConfigFileError:
             print(
-                f"SKIP {path}\n     does not load; the configs job says why.",
+                f"SKIP {path}\n     does not load, run scripts/validate_configs.py to see why.",
                 file=sys.stderr,
             )
             failures += 1

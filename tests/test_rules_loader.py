@@ -23,7 +23,7 @@ def test_real_rules_file_loads(filename):
 
 
 def _write(tmp_path, doc):
-    """Writes at <slug>/<version>.json — load_rules_file checks placement, so
+    """Writes at <slug>/<version>.json, load_rules_file checks placement, so
     a fixture that wants to exercise anything else must sit where it says."""
     # .get: a doc missing these keys is exactly what some tests are checking,
     # and it still has to reach the loader to be rejected there.
@@ -50,8 +50,8 @@ def _load_problems(tmp_path, doc) -> str:
 
 
 def test_syntactically_broken_json_is_a_rules_file_error(tmp_path):
-    """A trailing comma must not escape as a raw JSONDecodeError: callers
-    (and scripts/validate_rules.py) catch RulesFileError and nothing else."""
+    """A trailing comma must not escape as a raw JSONDecodeError, a caller
+    catches RulesFileError and nothing else."""
     path = tmp_path / "test" / "1.0.0.json"
     path.parent.mkdir(parents=True)
     path.write_text('{"standard": "test", "extends": false, "dmp": {},}')
@@ -60,9 +60,8 @@ def test_syntactically_broken_json_is_a_rules_file_error(tmp_path):
 
 
 def test_unreadable_path_is_a_rules_file_error(tmp_path):
-    """Same promise for a path that is not there: whoever resolved it says
-    which standard is missing and what exists instead, but a caller holding
-    this entry point still catches one type and not two."""
+    """Same promise for a path that is not there, a caller of this entry
+    point catches one type and not two."""
     with pytest.raises(RulesFileError, match="cannot be read"):
         load_rules_file(tmp_path / "absent" / "1.0.0.json")
 
@@ -73,17 +72,16 @@ def test_minimal_valid_doc_loads(tmp_path):
 
 
 def test_non_snake_case_standard_rejected(tmp_path):
-    """`standard` is the directory name and the spelling a config's pin
-    writes, so it is a code identifier: one spelling, checked at the door.
-    Anything a reader sees is derived from it."""
+    """`standard` is a code identifier, the name of the directory the file
+    sits in, so its spelling is checked at the door."""
     doc = _minimal_doc(title={"_cardinality": "1", "_type": "string"})
     doc["standard"] = "RDA DCS"
     assert "standard" in _load_problems(tmp_path, doc)
 
 
 def test_non_snake_case_field_name_rejected(tmp_path):
-    """Field names reach the generators as question keys and reach QC as rule
-    paths, so their shape is fixed here rather than apologised for there."""
+    """A field name travels as an identifier, so its shape is fixed at the
+    door."""
     doc = _minimal_doc(Title={"_cardinality": "1", "_type": "string"})
     assert "'Title'" in _load_problems(tmp_path, doc)
 
@@ -150,11 +148,8 @@ def test_children_on_scalar_rejected(tmp_path):
 
 
 def test_childless_object_rejected(tmp_path):
-    """An object is its children: without one it collects nothing, and the
-    generators say so in four different ways depending on the cardinality —
-    none of them an error. A base standard has no reason to declare one as a
-    hook for an extension to fill, since it always has a field of its own to
-    put there."""
+    """An object is its children, without one it collects nothing and could
+    never carry a value."""
     doc = _minimal_doc(cost={"_cardinality": "0..n", "_type": "object"})
     problems = _load_problems(tmp_path, doc)
     assert "dmp.cost" in problems
@@ -186,9 +181,8 @@ def test_vocabulary_on_object_rejected(tmp_path):
 
 def test_both_vocabularies_on_one_field_rejected(tmp_path):
     """A closed vocabulary and a recommended one contradict each other, and
-    `field_kind` reads `_allowed_values` first: the suggested values would
-    never reach a generator. Same fault as a misplaced `_chapter_description`
-    — a declaration nothing carries."""
+    only one of the two would ever be read, so the pair is refused rather than
+    silently halved."""
     doc = _minimal_doc(
         language={
             "_cardinality": "1",
@@ -266,12 +260,11 @@ def test_all_problems_reported_at_once(tmp_path):
 
 
 def test_coherence_waits_for_a_schema_valid_document(tmp_path):
-    """The layers are ordered, and the order is a precondition rather than a
-    courtesy: layers 2 and 3 read `standard`, `version` and `dmp` unguarded,
-    which is only safe once the schema has vouched for them. So a document
-    wrong on both counts reports the schema alone — the coherence problem
-    below (a child field under a string) stays unsaid until the first is
-    fixed."""
+    """The order of the layers is a precondition: layers 2 and 3 read
+    `standard`, `version` and `dmp` unguarded, which is only safe once the
+    schema has vouched for them. A document wrong on both counts therefore
+    reports the schema alone, and the coherence problem below (a child field
+    under a string) stays unsaid until the first is fixed."""
     doc = _minimal_doc(
         title={
             "_cardinality": "2..n",
@@ -308,7 +301,7 @@ def test_coherence_checked_deep_in_the_tree(tmp_path):
 
 def _placed(tmp_path, directory, filename, standard, version):
     """One rules file at <directory>/<filename>.json, declaring whatever
-    `standard` and `version` say — so it can be made to contradict its path."""
+    `standard` and `version` say, so it can be made to contradict its path."""
     path = tmp_path / directory / f"{filename}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -363,17 +356,17 @@ def test_a_file_wrong_on_both_counts_reports_both(tmp_path):
 
 
 def test_placement_is_checked_on_load_so_nobody_has_to_remember(tmp_path):
-    """The price of that: a rules file only loads from <standard>/<version>.json.
-    A scratch copy elsewhere is refused even though its contents are valid."""
+    """The price of that: a rules file only loads from
+    <standard>/<version>.json, and a scratch copy elsewhere is refused even
+    though its contents are valid."""
     path = _placed(tmp_path, "somewhere", "scratch", "rda_dcs", "1.0.0")
     with pytest.raises(RulesFileError, match="must agree"):
         load_rules_file(path)
 
 
 def test_a_misplaced_and_incoherent_file_reports_both_layers(tmp_path):
-    """Coherence and layout are one verdict, not two passes: they are the two
-    checks a schema-valid document still has to face, and a file that fails
-    both says so once."""
+    """Coherence and layout are one verdict, the two checks a schema-valid
+    document still has to face, so a file failing both says so once."""
     path = tmp_path / "ostrails" / "1.0.0.json"
     path.parent.mkdir(parents=True)
     path.write_text(

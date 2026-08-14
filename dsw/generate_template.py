@@ -3,30 +3,25 @@
 Emits a Jinja2 Document Template producing a plain JSON export. DSW renders it
 against a project's replies to produce the final maDMP JSON document.
 
-Every question UUID it references comes from :mod:`dsw.uuids`, applied to the
-same merged model :mod:`dsw.generate_km` walks. Never write a UUID by hand
-here, and never copy one out of a published KM: deriving them is the whole
-reason the template and its KM stay in step.
+Every question UUID it references comes from ``dsw.uuids``, applied to the
+same merged model ``dsw.generate_km`` walks. Never write a UUID by hand here,
+and never copy one out of a published KM.
 
 Conventions in the generated Jinja:
 
 - ``sv(path)`` / ``av(path, default)`` / ``jv(path)`` macros over
   ``r = ctx.project.replies``, plus DSW's own ``reply_path`` /
   ``reply_str_value`` / ``reply_items`` filters.
-- ``js(text)`` escapes a string for the inside of a JSON one, and **everything
-  that renders text goes through it** — ``jv`` is ``js`` over a reply, and a
+- ``js(text)`` escapes a string for the inside of a JSON one, and everything
+  that renders text goes through it. ``jv`` is ``js`` over a reply, and a
   vocabulary label read through ``av`` is wrapped in it at the point it is
-  emitted. ``sv`` and ``av`` are the raw readers, left for the comparisons that
-  need the value itself and never for output. The document is assembled as
-  literal JSON text, so this macro is the whole of what stands between a reply
-  and the file.
-- The output is assembled as literal JSON text: every key carries its comma in
-  front of it and each optional one is wrapped in its own ``{%- if ... %}``
-  block, so an object's body is captured and its first comma stripped at render
-  time. **No key has to be unconditional** — an object whose fields are all
-  optional is a shape a standard may declare, and closing it is the
-  generator's problem, not the rules'. See ``doc.md`` ("Le template de
-  document").
+  emitted. ``sv`` and ``av`` are the raw readers, left for the comparisons
+  that need the value itself and never for output. The document is assembled
+  as literal JSON text, so this macro is the whole of what stands between a
+  reply and the file.
+- Every key carries its comma in front of it and each optional one is wrapped
+  in its own ``{%- if ... %}`` block, so an object's body is captured and its
+  first comma stripped at render time. No key has to be unconditional.
 """
 
 from __future__ import annotations
@@ -65,7 +60,7 @@ from dsw.uuids import (
 )
 from project import Field, Project, assemble_project
 
-# The DSW document-template metamodel version — a separate concept from the
+# The DSW document-template metamodel version, a separate concept from the
 # KM's own metamodelVersion (20). Tied to the DSW instance, not the project.
 TEMPLATE_METAMODEL_VERSION = "18.0"
 
@@ -82,7 +77,7 @@ COMPUTED_FIELD_EXPR: dict[str, str] = {
 # format) and the README's table.
 FORMATS: list[dict[str, Any]] = [
     {
-        # Named from `common` rather than spelt here: this is the format the
+        # Named from `common` rather than spelt here, this is the format the
         # submission service points at, and `publish` has to name the same one.
         "name": SUBMISSION_FORMAT,
         "available": True,
@@ -114,27 +109,21 @@ def q(text: str) -> str:
 
     Jinja decodes a literal with ``unicode-escape``, so a backslash, a quote of
     its own and any control character have to be written as escapes. A UUID
-    comes through untouched — nothing in one needs escaping — and a vocabulary
-    label does not: ``Institut d'Optique`` closed its literal early and left
-    the whole template unparsable, which DSW only finds out at render time, in
-    front of a researcher.
-
-    One function for both, rather than a safe one beside a fast one: a second
-    way to write a Jinja string is a second place for a label to end up in the
-    wrong one.
+    comes through untouched, nothing in one needs escaping, but a vocabulary
+    label is a standard's prose and can carry a quote that would close the
+    literal early and leave the whole template unparsable.
     """
     escaped = text.replace("\\", "\\\\").replace("'", "\\'")
     return "'" + "".join(c if c >= " " else f"\\u{ord(c):04x}" for c in escaped) + "'"
 
 
 # What a JSON string may not carry unescaped: a backslash, a double quote, and
-# every character below U+0020. The backslash comes first — escaping it after
+# every character below U+0020. The backslash comes first, escaping it after
 # the others would escape the backslashes the others just produced.
 #
 # Written out rather than deferred to Jinja's `tojson`, which is HTML-safe as
-# well: it escapes the ampersand and the apostrophe to their \u form too, and a
-# maDMP is committed to the registry to be read and diffed. Both are ordinary
-# in an institution's name.
+# well and escapes the ampersand and the apostrophe to their \u form. Both are
+# ordinary in an institution's name, in a file meant to be read and diffed.
 _JSON_ESCAPES: tuple[tuple[str, str], ...] = (
     ("\\", "\\\\"),
     ('"', '\\"'),
@@ -163,11 +152,10 @@ def _json_escape_chain(expression: str) -> str:
 class OutputField:
     """One emitted JSON ``"key": value`` pair of the output template.
 
-    ``required`` keys are always emitted; optional keys are each wrapped in
+    ``required`` keys are always emitted, optional keys are each wrapped in
     their own ``{%- if condition %}`` block. Both carry their separating comma
-    **in front of them**, and :func:`render_object` strips the one that ends up
-    first — so which keys render is decided at render time and no key has to be
-    there for the others to hang off.
+    in front of them, and ``render_object()`` strips the one that ends up
+    first, so which keys render is decided at render time.
 
     ``is_object`` marks ``value_expr`` as raw JSON/Jinja text rather than a
     scalar to quote, and ``preamble`` holds the ``{% set %}`` statements that
@@ -193,7 +181,7 @@ class OutputField:
     def render(self, depth: int) -> str:
         """Render as an indented fragment, comma first. For object and array
         values the caller must have built ``value_expr`` with ``depth + 1`` for
-        its children — see :func:`render_object`."""
+        its children, see ``render_object()``."""
         indent = "  " * depth
         v = self.value_expr if self.is_object else f'"{{{{ {self.value_expr} }}}}"'
         line = f'{indent}"{self.key}": {v}'
@@ -209,9 +197,8 @@ def object_var(path: tuple[str, ...]) -> str:
     The leading underscore keeps it out of the way of the item variables built
     from a field path, which start with a letter because a rules field name
     does. Two paths can still join to one name (``("a", "b")`` and ``("a_b",)``
-    both give ``_obj_a_b``), and it does not matter: a capture is read on the
-    line that follows it, and a nested object's path always extends its
-    parent's, so the pair that could overwrite each other cannot be nested.
+    both give ``_obj_a_b``), which is harmless: a capture is read on the line
+    that follows it, and a nested object's path always extends its parent's.
     """
     return "_obj" + "".join(f"_{part}" for part in path)
 
@@ -221,9 +208,9 @@ def render_object(fields: list[OutputField], depth: int, var: str) -> str:
 
     Every key renders with a comma in front of it, so the body is captured and
     the first comma stripped off whatever survived. An object therefore needs
-    no unconditional key of its own: one whose fields are all optional renders
+    no unconditional key of its own, one whose fields are all optional renders
     as ``{}`` until one of them is answered. Ordering required keys first is
-    only about how the document reads — it is no longer what makes it parse.
+    only about how the document reads.
 
     The newline after the ``{`` is load-bearing twice over: it separates the
     brace from the ``{%-`` that follows (``{{%`` would lex as a variable), and
@@ -252,9 +239,8 @@ class TemplateBuilder:
         self.answer_labels: dict[str, str] = {}
 
     def build_scalar_field(self, field: Field, chain: list[str]) -> OutputField:
-        """A scalar field — plain value, strict or suggested options with
-        their "Other" follow-up, or boolean. Always one line, hence no
-        depth."""
+        """A scalar field, plain value, strict or suggested options with their
+        "Other" follow-up, or boolean. Always one line, hence no depth."""
         kind = field_kind(field, self.computed_fields)
         own_chain = chain + [q(question_uuid(field.path))]
         own_path = reply_path_expr(own_chain)
@@ -268,22 +254,21 @@ class TemplateBuilder:
                 q(other_followup_uuid(field.path)),
             ]
             other_path = reply_path_expr(other_chain)
-            # 'other' is the sentinel that *detects* the "Other" answer: its
-            # uuid is deliberately kept out of AL, so the lookup falling back
-            # to 'other' is what identifies it. Do not add it to AL. The value
-            # finally emitted falls back to '' instead, never to 'other'.
+            # 'other' is the sentinel that detects the "Other" answer, its
+            # uuid is kept out of AL so the lookup falling back to 'other' is
+            # what identifies it. Do not add it to AL. The value finally
+            # emitted falls back to '' instead, never to 'other'.
             #
-            # `jv` and `js` rather than `sv` and `av`: this is the one branch
-            # that renders something a researcher typed by hand, so it is the
-            # one that most needs escaping — a single quote in it used to end
-            # the JSON string and take the whole document down with it.
+            # `jv` and `js` rather than `sv` and `av`, this is the one branch
+            # that renders something a researcher typed by hand, so the one
+            # that most needs escaping.
             value_expr = (
                 f"jv({other_path}) if (av({own_path}, 'other') == 'other' and "
                 f"{other_path} in r and r[{other_path}]|reply_str_value) "
                 f"else js(av({own_path}, ''))"
             )
         elif kind in ("options_strict", "options_suggested"):
-            # A closed vocabulary, or a suggested one naming its own escape:
+            # A closed vocabulary, or a suggested one naming its own escape,
             # either way every value is an answer of its own, so there is no
             # sentinel to detect and the label table carries the lot.
             for value in field.allowed_values or field.suggested_values:
@@ -299,18 +284,14 @@ class TemplateBuilder:
         elif kind == "boolean":
             for value in ("yes", "no"):
                 self.answer_labels[answer_uuid(field.path, value)] = value
-            # A JSON boolean, not a quoted string: the Yes/No answer maps to a
-            # bare true/false literal — and an unanswered one to `null`, never
+            # A JSON boolean, not a quoted string, the Yes/No answer maps to a
+            # bare true/false literal and an unanswered one to `null`, never
             # to `false`.
             #
-            # A required key is emitted whether or not it was answered, which
-            # is the choice doc.md defends: a DMP missing a mandatory field
-            # must say so. A scalar says it with `""`. A boolean has no empty
-            # value, so it used to say it with `false` — and `false` is not a
-            # silence, it is an answer. "Nobody answered" and "answered no"
-            # rendered the same document, on fields like `is_reused` where the
-            # two are not remotely the same claim. `null` is what a boolean has
-            # instead of an empty string.
+            # A required key is emitted whether or not it was answered, so a
+            # DMP missing a mandatory field says so. A scalar says it with
+            # `""`, and `null` is what a boolean has instead: `false` would be
+            # an answer, not a silence.
             answered = f"av({own_path}, '')"
             return OutputField(
                 field.name,
@@ -323,10 +304,10 @@ class TemplateBuilder:
         elif kind == "value":
             value_expr = f"jv({own_path})"
         else:
-            # Named rather than defaulted, for the reason `generate_km` gives:
+            # Named rather than defaulted, for the reason `generate_km` gives,
             # a kind rendered as a plain value is a document that reads a
             # question the KM asked as something else. "computed" lands here
-            # too — reaching it means a caller forgot to fill it from the
+            # too, reaching it means a caller forgot to fill it from the
             # render context.
             raise ValueError(f"{field.dotted_path}: nothing renders kind {kind!r}")
 
@@ -343,12 +324,7 @@ class TemplateBuilder:
     ) -> OutputField:
         """An ``options_*_multi`` field: a JSON array of every chosen label,
         appending the one manually-entered value from an "other" follow-up
-        where the field was given one.
-
-        Which vocabulary the values come from is all this needs of the kind:
-        both multi kinds render the same array, and whether a follow-up exists
-        is :func:`dsw.common.needs_a_synthetic_escape`'s answer, not the
-        kind's."""
+        where the field was given one."""
         own_path = reply_path_expr(chain + [q(question_uuid(field.path))])
 
         values = list(field.allowed_values or field.suggested_values)
@@ -364,10 +340,9 @@ class TemplateBuilder:
         other_var = None
         if needs_a_synthetic_escape(field):
             other_path = reply_path_expr(chain + [q(other_followup_uuid(field.path))])
-            # Held raw, escaped where it is emitted: the same variable decides
-            # whether the array has a last comma and whether the key renders at
-            # all, and both of those are questions about the value the
-            # researcher typed, not about its JSON spelling.
+            # Held raw, escaped where it is emitted, the same variable decides
+            # whether the array has a last comma and whether the key renders
+            # at all, neither being a question about its JSON spelling.
             other_var = f"{item_var}_other"
             preamble += (
                 f"{{%- set {other_var} = sv({other_path}) if {other_path} in r and "
@@ -525,10 +500,9 @@ class TemplateBuilder:
         return self.build_scalar_field(field, chain)
 
 
-# The DMP's current URL in DSW, resolved entirely from the render context:
-# ctx.config.clientUrl is the DSW instance's client base URL, ctx.project.uuid
-# the questionnaire — no config needed. A stable placeholder the submission
-# webhook rewrites to the dmp-registry location when it commits the DMP.
+# The DMP's current URL in DSW, resolved entirely from the render context,
+# ctx.config.clientUrl is the DSW instance's client base URL and
+# ctx.project.uuid the questionnaire, so no config is needed.
 DSW_DMP_ID_URL = "{{ ctx.config.clientUrl }}/projects/{{ ctx.project.uuid }}"
 
 
@@ -569,14 +543,13 @@ def build_template_bundle(
                 root_fields.append(OutputField(field.name, expr, required=True))
             continue
         # Through the same door as a chapter field, not straight to the scalar
-        # builder: a top-level field is a scalar by definition of the split,
-        # but a scalar can still be a list through its cardinality, and this
-        # one used to render as a single value while the KM asked for a list.
+        # builder, a top-level field is a scalar by definition of the split
+        # but a scalar can still be a list through its cardinality.
         root_fields.append(builder.build_any_field(field, general_chain, depth=2))
 
     for field in chapters:
         if field.name in builder.computed_fields:
-            # A computed field carries no reply to render; only dmp_id has an
+            # A computed field carries no reply to render, only dmp_id has an
             # expression to emit (see DSW_DMP_ID_URL). Any other one is simply
             # absent from the document.
             if field.name == "dmp_id":
@@ -706,11 +679,10 @@ def build_template_bundle(
             {
                 "fileName": template_filename,
                 # DSW keys a file's content by this uuid, so it must not be
-                # reused across published versions — stale content would be
-                # served for the new one. It must not be random either: two
-                # runs of one project have to give the same bundle. Deriving
-                # it from the package id satisfies both, the id carrying the
-                # project version that a publish requires bumping.
+                # reused across published versions, stale content would be
+                # served for the new one, and it must not be random either,
+                # two runs of one project have to give the same bundle.
+                # Deriving it from the package id satisfies both.
                 "uuid": u("template", "file", pid, template_filename),
                 "content": template_body,
             }

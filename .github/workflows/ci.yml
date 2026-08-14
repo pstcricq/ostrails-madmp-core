@@ -1,56 +1,45 @@
 # Jobs are split by what kind of change breaks them, and run in parallel:
 #
-#   checks  — the shape of the Python (lint, format, unit tests)
-#   rules   — the shape of the rules content (every rules file against the
-#             meta-schema, its own coherence rules, and the path it sits at)
-#   configs — the shape of the project content (every project config against
-#             its schema, and against the id it declares)
-#   projects — the one job that crosses them: every config's pins resolved
-#             against the rules they name, and those rules merged. The set is
-#             a property no per-file job can see.
-#   generate — every project through both generators. The tests generate one
-#             project deeply; this is the only place the others are generated
-#             at all. It is also what produces the artifacts, below.
-#   registry — every project's destination in the registry, read: free, or
-#             already its own.
+#   checks   the shape of the Python (lint, format, unit tests)
+#   rules    every rules file against the meta-schema, its own coherence
+#            rules, and the path it sits at
+#   configs  every project config against its schema, and against the id it
+#            declares
+#   projects every config's pins resolved against the rules they name, and
+#            those rules merged, the set being a property no per-file job can
+#            see
+#   generate every project through both generators, and the artifacts below
+#   registry every project's destination in the registry, read: free, or
+#            already its own
 #
-# They are separate jobs rather than steps of one so that the check list on a
-# pull request names the culprit: a Python change, a rules change and a new
-# project are made by different people and fixed in different files. Each pays
-# its own setup, but they run concurrently, so wall-clock is the slowest of
-# the six.
+# Separate jobs rather than steps of one, so the check list on a pull request
+# names the culprit. Each pays its own setup, and they run concurrently, so
+# wall-clock is the slowest of the six.
 #
-# `projects` has no `needs:` on purpose. It could only be held back to spare a
-# second red check when a file is also malformed, and that trade is the wrong
-# way round: a project whose pins do not resolve is broken whether or not
-# something else is, and finding out on the next push costs more than one
-# extra red mark. The same goes for `registry`: a folder taken by another
-# project is taken whatever else is wrong.
+# The line is not "before or after validation", it is report or act. The six
+# jobs above only ever report, `generate` included since an uploaded artifact
+# is scoped to its own run and reaches nothing. Two jobs act, and they are the
+# only two with `needs:`, `registry-sync` writes into the registry repository
+# and `publish` writes into a DSW instance. Both run on the default branch
+# alone, and on a pull request both appear as `skipped`, which is what makes
+# their abstention readable rather than silent.
 #
-# `generate` uploads what it built. One definition of "what this commit
-# produces", kept in one place: a reviewer downloads it to see what a rules
-# change did to the questionnaire, and the publish step will ship those exact
-# bytes rather than regenerate its own. It uploads on a pull request too,
-# where nothing is ever published — which is what the artifact means: what
-# this commit produces, not what was published. Committing it instead would
-# add a third answer, and the only one that can silently go stale.
+# `projects` has no `needs:` on purpose, and neither has `registry`. A project
+# whose pins do not resolve is broken whether or not something else is, and a
+# folder taken by another project is taken whatever else is wrong.
 #
-# Where the registry is, is written here rather than defaulted in the code:
-# this workflow *is* this deployment, so its coordinates belong in it, in the
-# open, where a diff shows them. `REGISTRY_TOKEN` is the one thing that cannot
-# be, and it is a repository secret.
+# `generate` uploads what it built, on a pull request too, where nothing is
+# ever published. That is what the artifact means: what this commit produces,
+# not what was published. The publish step ships those exact bytes rather than
+# regenerating its own.
 #
-# The line is not "before or after validation", it is **report or act**. The
-# six jobs above only ever report, so they run concurrently and each names its
-# own culprit — `generate` included: an uploaded artifact is scoped to its own
-# run and reaches nothing. Two jobs act, and they are the only two with
-# `needs:`: `registry-sync` writes into the registry repository, `publish`
-# writes into a DSW instance. Both run on the default branch alone, and on a
-# pull request both appear as `skipped` — which is what makes their abstention
-# readable rather than silent.
+# Where the registry is comes from repository variables rather than from a
+# default in the code, so one deployment's coordinates are never baked into
+# another's. `REGISTRY_OWNER` and `REGISTRY_REPO` have to be set for the two
+# jobs that touch the registry to run, and `REGISTRY_TOKEN` is a secret.
 #
-# They all install with `uv sync --frozen`: the committed lockfile decides the
-# versions, and a transitive release cannot turn CI red on its own.
+# They all install with `uv sync --frozen`, the committed lockfile decides the
+# versions and a transitive release cannot turn CI red on its own.
 name: CI
 
 on:
@@ -61,10 +50,10 @@ on:
 
 # One run at a time per branch, and queued rather than cancelled. Two pushes in
 # quick succession would otherwise have two `registry-sync` jobs converging the
-# same `meta.yaml`: the second holds a sha the first has just replaced, GitHub
-# answers 409, and the job goes red having done nothing wrong. Cancelling would
-# be worse than queueing here — the jobs that act are the last ones, so the run
-# killed is the one about to register.
+# same `meta.yaml`, the second holding a sha the first has just replaced,
+# GitHub answering 409, and the job going red having done nothing wrong. The
+# jobs that act are the last ones, so cancelling would kill the run that is
+# about to register.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
@@ -82,7 +71,7 @@ jobs:
         run: uv sync --frozen
       - name: Lint
         run: uv run ruff check .
-      # --check reports, never rewrites: CI states the verdict, the editor
+      # --check reports, never rewrites. CI states the verdict, the editor
       # (ruff on save) and `ruff format` locally do the fixing.
       - name: Format
         run: uv run ruff format --check .
@@ -140,9 +129,9 @@ jobs:
         run: uv sync --frozen
       - name: Build every project's KM and document template
         run: uv run python scripts/validate_generation.py
-      # Short retention: the artifact is a convenience for whoever is looking
-      # at this run, not a store. What is durable is the commit that produces
-      # it, and the published package in DSW.
+      # Short retention, the artifact is a convenience for whoever is looking
+      # at this run and not a store. What is durable is the commit that
+      # produces it, and the published package in DSW.
       - uses: actions/upload-artifact@v4
         with:
           name: dsw-artifacts
@@ -160,21 +149,18 @@ jobs:
           enable-cache: true
       - name: Install the locked environment
         run: uv sync --frozen
-      # Reads the registry and reports; the one fault it can find is a folder
-      # that carries another project's id. A folder that does not exist yet is
-      # not a fault — `registry-sync` below is what creates it. Without the
-      # secret (a pull request from a fork) it skips, loudly: the registry is
-      # private, so even reading it needs a token.
+      # Without the secret, on a pull request from a fork, it skips loudly,
+      # the registry being private so that even reading it needs a token.
       - name: Check every project's destination in the registry
         run: uv run python scripts/validate_registry.py
         env:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-          REGISTRY_OWNER: Pierrott64
-          REGISTRY_REPO: dmp-registry
+          REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
+          REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}
 
   registry-sync:
     # The only job that writes outside this repository, so the only one that
-    # waits for every verdict — a project is registered from a config that
+    # waits for every verdict, a project is registered from a config that
     # loads, pins that resolve and rules that merge, or it is not registered.
     needs: [checks, rules, configs, projects, generate, registry]
     if: github.ref == 'refs/heads/main'
@@ -188,34 +174,26 @@ jobs:
       - name: Install the locked environment
         run: uv sync --frozen
       # Runs on every push to the default branch, not only when a config
-      # changed: meta.yaml freezes the rules versions a project was built
-      # from, and converging every time is what makes drift impossible rather
-      # than unlikely. It sends nothing when nothing changed, so this leaves
-      # no commit behind on a push that touched no config.
+      # changed. It sends nothing when nothing changed, so a push that touched
+      # no config leaves no commit behind.
       - name: Register every project in the registry
         run: uv run python scripts/sync_registry.py
         env:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-          REGISTRY_OWNER: Pierrott64
-          REGISTRY_REPO: dmp-registry
+          REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
+          REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}
 
-  # The second job that acts, and the only one a researcher sees the effect
-  # of. After `registry-sync`, because a submission service pointing at an
-  # unregistered folder turns every Submit into a failure — `dsw.publish`
-  # refuses that on its own, and this ordering means it never has to.
+  # The second job that acts. After `registry-sync`, because a submission
+  # service pointing at an unregistered folder turns every Submit into a
+  # failure.
   #
-  # It downloads what `generate` built rather than building again: what gets
-  # published is what was produced once, not a second build nobody looked at.
+  # It downloads what `generate` built rather than building again, so what
+  # gets published is what was produced once.
   #
   # `vars.DSW_API_URL` is the switch. Until an instance is declared this shows
-  # as `skipped` in the check list, which is the whole point of gating on a
-  # variable rather than commenting the job out. It is also why that one name
-  # is a *variable* while the account is two *secrets*: the `secrets` context
-  # is not available in a job-level `if:`, so the switch could not be one. A
-  # deployment URL changes, and a variable is edited without a commit.
-  #
-  # What never changes is that the code assumes nothing — `dsw.publish` reads
-  # all five names with no default, and says which one is missing.
+  # as `skipped` in the check list rather than being commented out. It is a
+  # variable while the account is two secrets because the `secrets` context is
+  # not available in a job-level `if:`, so the switch could not be one.
   publish:
     needs: [registry-sync]
     if: vars.DSW_API_URL != ''
@@ -232,26 +210,19 @@ jobs:
         with:
           name: dsw-artifacts
           path: build/
-      # Idempotent by version: an already-published package is skipped, so
+      # Idempotent by version, an already-published package is skipped, so
       # every project is offered every time and only a bumped `version`
       # actually publishes.
       #
       # `all`, so the submission service goes up with the two packages and in
-      # that order: a service names the document template's uuid, which does
+      # that order, a service naming the document template's uuid, which does
       # not exist until the template is published.
       #
-      # SUBMISSION_URL names the webhook as the **instance** reaches it, and
-      # this deployment runs the webhook beside DSW on the same compose
-      # network, so that address is a service name and not a public one. It is
-      # therefore right for an instance running this deployment and wrong for
-      # any other, and nothing in the code can tell the two apart. Today the
-      # target instance does not run the webhook yet, so the service is
-      # written before anything answers it: a Submit button that exists ahead
-      # of what it calls, which is the one thing `publish submission`
-      # otherwise refuses to do. It is deliberate here, and the claim being
-      # made is that the service can be created, not that a submission
-      # completes. The day the instance deploys the webhook the value stops
-      # being a promise, with nothing to change here.
+      # SUBMISSION_URL names the webhook as the instance reaches it, and this
+      # deployment runs the webhook beside DSW on the same compose network, so
+      # that address is a service name and not a public one. It is therefore
+      # right for an instance running this deployment and wrong for any other,
+      # and nothing in the code can tell the two apart.
       - name: Publish every project's KM, document template and submission service
         run: |
           for cfg in configs/projects/*.yaml; do
@@ -264,5 +235,5 @@ jobs:
           SUBMISSION_URL: ${{ vars.SUBMISSION_URL }}
           SUBMISSION_TOKEN: ${{ secrets.SUBMISSION_TOKEN }}
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
-          REGISTRY_OWNER: Pierrott64
-          REGISTRY_REPO: dmp-registry
+          REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
+          REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}

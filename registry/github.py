@@ -1,18 +1,10 @@
-"""A thin GitHub Contents API client: the two calls this repository needs.
+"""A thin GitHub Contents API client, the two calls this repository needs.
 
-Read one file, write one file, in a repository nobody clones — so the size of
-the registry never has to matter here. Standard library only and synchronous,
-and worth keeping that way: registering a project is a handful of calls, not
-traffic.
+Read one file, write one file. Standard library only, and synchronous.
 
-The transport ends at this module. It hands out and takes in **bytes**; the
-base64 the API speaks, the sha an update must name and the status codes are
-its business alone, so nothing above has to know how GitHub stores a file.
-
-**The submission webhook carries its own copy of this**, deployed next to DSW.
-The two sides share the registry *layout*, not this code, so a change here
-reaches the webhook only if someone carries it over. The registry's README is
-the contract they both honour.
+The transport ends here. It hands out and takes in bytes, the base64 the API
+speaks, the sha an update must name and the status codes are its business
+alone.
 """
 
 from __future__ import annotations
@@ -43,6 +35,8 @@ class File:
 
 
 class GitHubClient:
+    """One token, against the GitHub Contents API."""
+
     def __init__(self, token: str, api_url: str = "https://api.github.com"):
         self.token = token
         self.api_url = api_url.rstrip("/")
@@ -65,11 +59,11 @@ class GitHubClient:
                 payload = response.read()
                 return response.status, json.loads(payload) if payload else None
         except urllib.error.HTTPError as e:
-            # A 404 is only ever "no such file yet", and only on a read: every
-            # caller of get_file handles that. On a write it means the
-            # repository, or the token's access to it, is wrong — GitHub
-            # answers 404 rather than 403 so as not to confirm that a private
-            # repository exists — and it must never pass for success.
+            # A 404 is only ever "no such file yet", and only on a read. On a
+            # write it means the repository, or the token's access to it, is
+            # wrong, GitHub answering 404 rather than 403 so as not to confirm
+            # that a private repository exists, and it must never pass for
+            # success.
             if e.code == 404 and method == "GET":
                 return 404, None
             raise GitHubError(e.code, e.read().decode()) from e
@@ -80,9 +74,8 @@ class GitHubClient:
         if status == 404:
             return None
         # Past a megabyte the API stops inlining the content and answers with
-        # an empty string and `"encoding": "none"`. Nothing this repository
-        # writes comes close, but decoding that would hand back an empty file
-        # as if it were the truth — the one failure worth a guard.
+        # an empty string and `"encoding": "none"`. Decoding that would hand
+        # back an empty file as if it were the truth.
         if data.get("encoding") != "base64":
             raise GitHubError(
                 200, f"{path}: content not inlined (encoding {data.get('encoding')!r})"

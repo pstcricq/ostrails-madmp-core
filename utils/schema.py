@@ -1,10 +1,7 @@
 """Generic JSON-Schema validation plumbing, for any package that validates a
 data file against a schema.
 
-Depends only on ``jsonschema`` and on :mod:`utils.errors`, so several packages
-can build on it without coupling to each other. Each keeps its own schema file,
-its own ``…FileError`` subclass, and any domain-specific checks (rules'
-coherence pass); only the mechanics live here.
+Depends only on ``jsonschema`` and on ``utils.errors``.
 """
 
 from __future__ import annotations
@@ -20,10 +17,9 @@ from utils.errors import ProblemsError
 
 
 class SchemaFileError(ProblemsError):
-    """A file is malformed against its schema. Subclassed per domain
-    (``RulesFileError``, ``ConfigFileError``) for a distinct type to catch.
+    """A file is malformed against its schema, with the path as subject.
 
-    Takes the path first, because for a file error that is the subject.
+    Subclassed per domain for a distinct type to catch.
     """
 
     def __init__(self, path: str | Path, problems: list[str]):
@@ -31,7 +27,7 @@ class SchemaFileError(ProblemsError):
 
     @property
     def path(self) -> str:
-        """The file the problems are about — :attr:`subject` in file words."""
+        """The file the problems are about, ``subject`` in file words."""
         return self.subject
 
 
@@ -43,15 +39,13 @@ def _validator(schema_path: Path) -> Draft202012Validator:
 
 
 def validator_for(schema_path: str | Path) -> Draft202012Validator:
-    """A cached validator for a schema file — meta-checked against JSON Schema's
-    own meta-schema, so a structurally broken schema fails here rather than
-    silently mis-validating real files.
+    """A cached validator for a schema file, checked against JSON Schema's own
+    meta-schema so a structurally broken schema fails here.
 
     The path is normalised before it becomes a cache key, which is the only
-    reason this wrapper exists: ``lru_cache`` keys on the argument as given, so
-    ``"s.json"`` and ``Path("s.json")`` would each build and hold a validator
-    for the same file. Harmless today — every caller passes the same module
-    constant — and the kind of thing that stays harmless only by accident.
+    reason this wrapper exists: ``@cache`` keys on the argument as given, so
+    ``"s.json"`` and ``Path("s.json")`` would each hold a validator for the
+    same file.
     """
     return _validator(Path(schema_path))
 

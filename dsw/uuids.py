@@ -1,19 +1,16 @@
 """The rules-field-path -> DSW-entity-UUID convention.
 
-Every DSW entity — chapter, question, answer, gate — takes its UUID from
-``uuid5`` over the path of the field it was generated for. Two generators
-therefore compute identical UUIDs for the same logical entity without sharing
-a lookup table, which is what lets a Document Template reference a Knowledge
-Model's questions.
+Every DSW entity, chapter, question, answer, gate, takes its UUID from
+``uuid5`` over the path of the field it was generated for, so two generators
+compute identical UUIDs for the same logical entity without sharing a lookup
+table.
 
-**Frozen.** The namespace and every part string below are the identity of every
-entity in every KM and template already published in DSW. Change one and every
-derived UUID changes, breaking every reference in every published package. The
-tests hold the derived values for exactly this reason.
+Frozen: the namespace below and every part string passed to ``u()`` are the
+identity of every entity in every published KM and template. Change one and
+every derived UUID changes. The tests hold the derived values.
 
 This module knows nothing but the standard library and the shape of a field
-path: no config, no model, no DSW payload. See ``doc.md`` ("La convention
-d'UUID déterministe") for what the convention buys and what it costs.
+path.
 """
 
 from __future__ import annotations
@@ -22,9 +19,8 @@ import uuid
 
 FieldPath = tuple[str, ...]
 
-# NEVER change this value, nor any of the part strings passed to u() below:
-# every derived UUID would change, breaking every reference in every KM and
-# template already published in DSW.
+# NEVER change this value, nor any part string passed to u() below, every
+# derived UUID would change.
 NAMESPACE = uuid.UUID("00000000-0000-0000-0000-000000000000")
 
 
@@ -46,15 +42,11 @@ def answer_uuid(path: FieldPath, value: str) -> str:
 def other_answer_uuid(path: FieldPath) -> str:
     """The synthetic "Other" answer of a suggested-values question.
 
-    By construction this is :func:`answer_uuid` of the value ``"other"``, so a
-    vocabulary listing that word gives its own answer the same identity. Six
-    fields of the RDA DCS and DataCite vocabularies do list it — this was once
-    written here as something no standard did, which was never true.
-
-    Nothing has to be done about it, because the two can no longer be asked at
-    once: :func:`dsw.common.needs_a_synthetic_escape` withholds the synthetic
-    answer from any vocabulary naming an escape of its own. One entity, one
-    meaning — which is what the shared identity was saying all along.
+    By construction this is ``answer_uuid()`` of the value ``"other"``, so a
+    vocabulary listing that word gives its own answer the same identity. The
+    two can no longer be asked at once, ``needs_a_synthetic_escape()``
+    withholds the synthetic answer from any vocabulary naming an escape of its
+    own.
     """
     return u(*path, "answer", "other")
 
@@ -76,12 +68,12 @@ def gate_uuid(path: FieldPath) -> str:
 
 
 def gate_yes_uuid(path: FieldPath) -> str:
-    """Its Yes answer — the one that opens the object's own questions."""
+    """Its Yes answer, the one that opens the object's own questions."""
     return u(*path, "has-answer", "yes")
 
 
 def gate_no_uuid(path: FieldPath) -> str:
-    """Its No answer, which leads nowhere and is the point of the gate."""
+    """Its No answer, which leads nowhere."""
     return u(*path, "has-answer", "no")
 
 

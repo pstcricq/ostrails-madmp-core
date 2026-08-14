@@ -1,4 +1,4 @@
-"""utils/errors.py: one error shape for the whole project — every problem of
+"""utils/errors.py: one error shape for the whole project, every problem of
 one attempt, rendered the same way whichever layer raised it."""
 
 import pytest
@@ -33,8 +33,8 @@ def test_a_path_subject_is_stringified():
 
 
 def test_problems_are_copied_not_aliased():
-    """The caller usually raises with the very list it accumulated into; the
-    error must keep what was raised, whatever the caller does with it after."""
+    """The caller usually raises with the very list it accumulated into, so
+    the error must keep what was raised whatever happens to that list after."""
     accumulated = ["first"]
     error = ProblemsError(accumulated)
     accumulated.append("added afterwards")

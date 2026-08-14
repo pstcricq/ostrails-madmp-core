@@ -3,8 +3,8 @@ is allowed to touch.
 
 The registry is a private repository reached over HTTP, so these tests stand a
 fake in its place: an in-memory tree of paths to bytes, which records every
-write. That is what makes "nothing is sent when nothing changed" a testable
-claim rather than a good intention — the assertion is on `fake.writes`.
+write, so "nothing is sent when nothing changed" is a claim the assertions can
+be made on, against `fake.writes`.
 """
 
 from pathlib import Path
@@ -90,7 +90,7 @@ def test_the_real_config_registers():
 
 def test_a_declared_field_no_one_here_reads_stays_out():
     """`name` is in every config and in none of these files. A registry that
-    carried it would have to be updated when prose changes — and would invite
+    carried it would have to be updated when prose changes, and would invite
     a reader to trust a copy instead of the config."""
     config = yaml.safe_load(GLIDER_CONFIG.read_text())
     assert "name" in config
@@ -101,9 +101,9 @@ def test_a_declared_field_no_one_here_reads_stays_out():
 
 
 def test_a_foreign_key_is_carried_across():
-    """A quality-control verdict is written by the registry's own CI. Nothing
-    here may erase it — the failure would be silent, and noticed only by
-    whoever went looking for a verdict that used to be there."""
+    """A key written by another writer. Nothing here may erase it, the
+    failure would be silent and noticed only by whoever went looking for what
+    used to be there."""
     previous = {"id": "glider", "rules": [], "qc": {"status": "pass"}}
     assert meta_document(CONFIG, previous)["qc"] == {"status": "pass"}
 
@@ -163,9 +163,9 @@ def test_a_missing_subdir_is_created_without_touching_meta():
     """The two writes are independent: a folder whose meta.yaml is right but
     whose directories were removed gets them back, and nothing else.
 
-    And it is reported as what it is. The verb answers for the folder, not for
-    `meta.yaml` alone — a run that says `unchanged` and leaves a commit behind
-    is the one claim the sync job is not allowed to get wrong."""
+    And it is reported as what it is. The verb answers for the folder, not
+    for `meta.yaml` alone, a run that says `unchanged` and leaves a commit
+    behind is the one claim that must not be wrong."""
     fake = registry_with(meta_document(CONFIG), keeps=False)
     assert converge(fake, REGISTRY, CONFIG) == "updated"
     assert fake.writes == KEEPS
@@ -182,8 +182,8 @@ def test_a_folder_missing_a_subdir_is_stale():
 
 
 def test_a_stale_folder_names_everything_that_is_stale_about_it():
-    """One read, the whole list — a folder both out of date and half laid out
-    says so in one go, the way every other check in this repository reports."""
+    """One read, the whole list, a folder both out of date and half laid out
+    says so in one go."""
     fake = registry_with({"id": "glider", "rules": [{"rda_dcs": "0.9.0"}]}, keeps=False)
     detail = folder_status(fake, REGISTRY, CONFIG).detail
     assert "meta.yaml" in detail
@@ -241,10 +241,10 @@ DAMAGED = {
 
 @pytest.mark.parametrize("content", DAMAGED.values(), ids=list(DAMAGED))
 def test_an_unreadable_meta_is_a_fault(content):
-    """Not `missing`: the file is there. Reporting it missing is what had this
-    job rebuild it from the config alone — dropping the rules pins the
-    submitted DMPs are checked against, and any key another writer owns — and
-    then report `created`."""
+    """Not `missing`, the file is there. Reported missing, it would be
+    rebuilt from the config alone, dropping the rules pins the submitted DMPs
+    are checked against and any key another writer owns, and the run would
+    report `created`."""
     status = folder_status(registry_saying(content), REGISTRY, CONFIG)
     assert (status.state, status.is_fault) == ("unreadable", True)
     assert META in status.detail
@@ -262,7 +262,7 @@ def test_converging_refuses_an_unreadable_meta(content):
 
 
 def test_an_unreadable_meta_is_told_apart_from_a_missing_one():
-    """The two states the read used to answer with the same `None`."""
+    """The two states a read must not answer with the same `None`."""
     assert folder_status(FakeGitHub(), REGISTRY, CONFIG).state == "missing"
     assert folder_status(registry_saying(b""), REGISTRY, CONFIG).state == "unreadable"
 
@@ -271,24 +271,23 @@ def test_an_unreadable_meta_is_told_apart_from_a_missing_one():
 
 
 def test_the_folder_is_named_after_the_id():
-    """One string names the config file, the registry folder and the DSW
-    packages. There is nothing here to keep in step with anything."""
+    """One string names the config file and the registry folder, so there is
+    nothing here to keep in step."""
     assert meta_path(CONFIG) == META
 
 
 def test_the_token_has_one_name():
-    """`REGISTRY_TOKEN` is what the whole deployment uses — the submission
-    webhook reads the same one."""
+    """`REGISTRY_TOKEN` is the one name this deployment uses."""
     with pytest.MonkeyPatch.context() as env:
         env.setenv("REGISTRY_TOKEN", "t")
         assert token_from_env() == "t"
 
 
 def test_a_workflows_own_token_is_not_a_fallback():
-    """A workflow's default token is scoped to the repository running it, not
-    to the registry, and a token without access reads as 404 — which the
+    """A workflow's default token is scoped to the repository running it,
+    not to the registry, and a token without access reads as 404, which the
     client turns into "no file yet". Falling back would report a project
-    missing when the truth is a wrong token: green, and wrong, exactly where
+    missing when the truth is a wrong token, green and wrong exactly where
     there is no write to catch it."""
     with pytest.MonkeyPatch.context() as env:
         env.delenv("REGISTRY_TOKEN", raising=False)
@@ -308,9 +307,9 @@ def test_where_to_write_is_read_from_the_environment():
 
 def test_an_unset_coordinate_is_never_guessed():
     """No default, and both names reported at once. A default owner and repo
-    would be one deployment's coordinates baked into every other: a fork or a
-    misconfigured job would write into this registry with nobody having said
-    so."""
+    would be one deployment's coordinates baked into every other, and a fork
+    or a misconfigured job would write into this registry with nobody having
+    said so."""
     with pytest.MonkeyPatch.context() as env:
         env.delenv("REGISTRY_OWNER", raising=False)
         env.delenv("REGISTRY_REPO", raising=False)
@@ -321,8 +320,8 @@ def test_an_unset_coordinate_is_never_guessed():
 
 
 def test_the_coordinates_reach_the_client():
-    """Threading the value through is only worth anything if it arrives: the
-    calls are made against the registry that was asked for, not a constant."""
+    """Threading the value through is only worth anything if it arrives, the
+    calls are made against the registry that was asked for."""
     fake = FakeGitHub()
     converge(fake, Registry(owner="somebody", repo="theirs"), CONFIG)
     assert {call[:2] for call in fake.calls} == {("somebody", "theirs")}

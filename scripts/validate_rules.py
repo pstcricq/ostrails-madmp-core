@@ -2,16 +2,12 @@
 
 Two things, over the whole of `rules/standards/`:
 
-1. each file loads through `load_rules_file` — the same entry point the rest
-   of the code uses, so a file that passes here is a file the loader accepts,
-   not merely one that parses as JSON;
-2. each file declares the standard and the version its path names. That is a
-   static property of the tree, so it is checked here, on every file, rather
-   than at load time on whichever subset a project happens to select.
-
-This lives in a script rather than inline in the workflow so it can be run
-before pushing: a check that only exists inside YAML gets debugged by
-push-and-wait.
+1. each file loads through `load_rules_file`, the same entry point the rest
+   of the code uses, so a file that passes here is a file the loader accepts
+   and not merely one that parses as JSON
+2. each file declares the standard and the version its path names, a static
+   property of the tree, checked here on every file rather than at load time
+   on whichever subset a project happens to select
 """
 
 from __future__ import annotations

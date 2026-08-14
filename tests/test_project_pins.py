@@ -1,7 +1,7 @@
 """Pins resolved against the real rules tree, and every way a project can name
 something that is not there.
 
-The point of these tests is the *message*: an unresolved pin is a typo in a
+The point of these tests is the message: an unresolved pin is a typo in a
 config, and the fix is only obvious if the error names what does exist.
 """
 
@@ -32,8 +32,8 @@ def test_the_real_config_resolves():
 
 
 def test_pin_order_is_kept():
-    """Extensions merge in the order they are received, so resolution must not
-    sort: the config decides which standard tightens after which."""
+    """Extensions merge in the order they are received, so resolution must
+    not sort, the config decides which standard tightens after which."""
     pins = [{"ostrails": "1.0.0"}, {"rda_dcs": "1.0.0"}]
     assert [p.parent.name for p in resolve_pins(pins, RULES_DIR)] == [
         "ostrails",
@@ -42,9 +42,8 @@ def test_pin_order_is_kept():
 
 
 def test_no_pins_resolves_to_no_paths():
-    """An empty list is not this module's business to refuse — the config
-    schema requires at least one pin, and refusing it twice would mean two
-    places to keep in step."""
+    """An empty list is not this module's business to refuse, the config
+    schema requires at least one pin."""
     assert resolve_pins([], RULES_DIR) == []
 
 
@@ -70,7 +69,7 @@ def test_unknown_version_lists_the_ones_that_exist():
 
 
 def test_only_directories_holding_a_versioned_file_are_offered(tmp_path):
-    """A directory with nothing of the right kind in it is not a standard —
+    """A directory with nothing of the right kind in it is not a standard,
     `rules/standards/` would otherwise offer `__pycache__` if one appeared."""
     (tmp_path / "ostrails" / "nested").mkdir(parents=True)
     (tmp_path / "ostrails" / "1.0.0.json").write_text("{}")
@@ -80,8 +79,7 @@ def test_only_directories_holding_a_versioned_file_are_offered(tmp_path):
 
 
 def test_every_unresolved_pin_reported_at_once():
-    """One resolution, one verdict: fixing a config should not mean rerunning
-    it once per bad pin."""
+    """One resolution, one verdict, whatever the number of bad pins."""
     problems = _problems(
         lambda: resolve_pins(
             [{"rda_dcs": "1.0.0"}, {"nope": "1.0.0"}, {"ostrails": "9.9.9"}], RULES_DIR
@@ -104,9 +102,9 @@ def test_every_unresolved_pin_reported_at_once():
 )
 def test_a_pin_part_may_not_be_a_path(pin):
     """A version is data that gets built into a path. Left unchecked, one
-    carrying a separator reaches outside the resource tree — and the error a
-    config author would see would be about a missing version, not about the
-    real mistake."""
+    carrying a separator reaches outside the resource tree, and the error a
+    config author would see would be about a missing version rather than
+    about the real mistake."""
     problems = _problems(lambda: resolve_pins([pin], RULES_DIR))
     assert "neither part may be a path" in problems
 

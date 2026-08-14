@@ -2,16 +2,12 @@
 
 Two things, over the whole of `configs/projects/`:
 
-1. each file loads through `load_config_file` — the same entry point the rest of
-   the code uses, so a file that passes here is a file the loader accepts,
-   not merely one that parses as YAML;
-2. each file's name agrees with the id it declares. That is a static property of
-   the tree, so it is checked here, on every file, rather than at load time on
-   whichever config a run happens to select.
-
-A script rather than inline workflow YAML, for the reason
-`scripts/validate_rules.py` gives: a check that only exists inside the
-workflow gets debugged by push-and-wait.
+1. each file loads through `load_config_file`, the same entry point the rest
+   of the code uses, so a file that passes here is a file the loader accepts
+   and not merely one that parses as YAML
+2. each file's name agrees with the id it declares, a static property of the
+   tree, checked here on every file rather than at load time on whichever
+   config a run happens to select
 """
 
 from __future__ import annotations

@@ -1,18 +1,15 @@
 """Check that every project's registry destination is free, or already its own.
 
-Reads, and only reads. The one fault it can find is a **collision**: a folder
-that carries another project's `id`, which no amount of syncing fixes and
-which would have one project's DMPs land in another's folder.
+Reads, and only reads. The one fault it can find is a collision, a folder that
+carries another project's `id`, which no amount of syncing fixes and which
+would have one project's DMPs land in another's folder.
 
-A folder that does not exist yet is *not* a fault. Adding a project is a
-config first and a registration second, and failing the check on the very push
-that adds it would teach everyone to ignore this job. Same for a `meta.yaml`
-that no longer says what its config says: the sync on the default branch is
-what fixes that, and it runs right after this.
+A folder that does not exist yet is not a fault. Adding a project is a config
+first and a registration second. Same for a `meta.yaml` that no longer says
+what its config says, a sync is what fixes that.
 
-Skips, loudly, when no token is set: the registry is private, so even reading
-it needs one, and a pull request from a fork will not have it. The authority
-is `sync_registry.py`, which refuses to skip.
+Skips, loudly, when no token is set, the registry being private so that even
+reading it needs one, and a pull request from a fork will not have it.
 """
 
 from __future__ import annotations
@@ -52,7 +49,7 @@ def main() -> int:
     token = token_from_env()
     if not token:
         print(
-            "REGISTRY_TOKEN not set — skipping. The registry is private, so "
+            "REGISTRY_TOKEN not set, skipping. The registry is private, so "
             "even reading it needs a token (locally: "
             "REGISTRY_TOKEN=$(gh auth token)).",
             file=sys.stderr,
@@ -72,7 +69,7 @@ def main() -> int:
             config = load_config_file(path)
         except ConfigFileError:
             print(
-                f"SKIP {path}\n     does not load; the configs job says why.",
+                f"SKIP {path}\n     does not load, run scripts/validate_configs.py to see why.",
                 file=sys.stderr,
             )
             faults += 1

@@ -3,7 +3,7 @@ error.
 
 These tests stand a fake `urlopen` in place of the network. What they are
 about is the asymmetry: a 404 means "no such file yet" on a read, and means a
-wrong repository or a wrong token on a write — where taking it for success
+wrong repository or a wrong token on a write, where taking it for success
 would report a project registered that is not there.
 """
 
@@ -65,8 +65,8 @@ def contents(text: bytes) -> dict:
 
 
 def test_a_file_comes_back_as_bytes_and_a_sha(monkeypatch):
-    """The transport ends here: base64 is its business, and what it hands out
-    is what the file says, plus the version an update has to name."""
+    """The transport ends here, base64 is its business, and what it hands
+    out is what the file says, plus the version an update has to name."""
     client = answering(monkeypatch, body=contents(b"id: glider\n"))
     file = client.get_file("o", "r", PATH)
     assert (file.sha, file.content) == ("abc", b"id: glider\n")
@@ -123,7 +123,7 @@ def test_a_creation_names_no_version(monkeypatch):
 def test_a_404_on_a_write_is_a_failure(monkeypatch):
     """The asymmetry that matters. GitHub answers 404 rather than 403 so as
     not to confirm a private repository exists, so a wrong token or a wrong
-    repository looks exactly like a missing file — and must not pass for
+    repository looks exactly like a missing file, and must not pass for
     success."""
     client = answering(monkeypatch, error=http_error(404))
     with pytest.raises(GitHubError) as caught:

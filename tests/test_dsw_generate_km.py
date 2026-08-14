@@ -2,10 +2,10 @@
 
 There is no expected bundle to compare to: a KM is whatever the rules of a
 project say, so freezing one project's output would record this generator
-rather than judge it. What can be judged is what has a specification — the
-DSW metamodel, the UUID convention, and the mapping stated in
-:func:`dsw.common.field_kind` — plus one invariant that holds for any project
-whatsoever: an event may not reference a parent nobody emitted.
+rather than judge it. What can be judged is what has a specification, the
+DSW metamodel, the UUID convention and the mapping stated in `field_kind`,
+plus one invariant that holds for any project whatsoever: an event may not
+reference a parent nobody emitted.
 """
 
 from pathlib import Path
@@ -80,8 +80,8 @@ def test_the_bundle_names_the_project_and_the_metamodel(project, events):
 
 
 def test_the_description_is_plain_text(project):
-    """The readme is Markdown, the description is not: DSW renders them
-    differently and both are written once in the config."""
+    """The readme is Markdown and the description is not, DSW rendering them
+    differently though both are written once in the config."""
     package = build_km_bundle(project)["packages"][0]
     assert "**" not in package["description"] and "](" not in package["description"]
     assert "**" in package["readme"]
@@ -101,17 +101,13 @@ def test_every_event_carries_the_fields_its_metamodel_defines_and_no_others(even
 
     Each ``Add*EventContent`` of `kmp_schema_v20.json` is
     ``additionalProperties: false``, so a field the metamodel does not define
-    is not a field this may send — an `OptionsQuestion` carried `answerUuids`
-    and a `ListQuestion` `itemTemplateQuestionUuids`, neither of which v20 has.
-    Both were inert: DSW infers the order of sibling entities from the order of
-    the events, which is why nothing rejected them and why nothing lost by
-    dropping them. A bundle that is out of schema publishes today and is a
-    bundle nobody else can validate.
+    is not a field this may send. A bundle that is out of schema publishes
+    today and is a bundle nobody else can validate.
 
-    Read off the schema and written out here rather than validating against the
-    file itself: pinning it would mean vendoring a hundred kilobytes of
-    somebody else's JSON, and the fields this generator emits are two dozen
-    names that say, in one place, what a KM event is.
+    Read off the schema and written out here rather than validated against the
+    file itself, which would mean vendoring a hundred kilobytes of somebody
+    else's JSON. The fields this generator emits are two dozen names that say,
+    in one place, what a KM event is.
     """
     metamodel = {
         "AddKnowledgeModelEvent": {"annotations", "eventType"},
@@ -165,7 +161,7 @@ def test_every_event_carries_the_fields_its_metamodel_defines_and_no_others(even
 
 
 def test_no_event_references_a_parent_nobody_emitted(events):
-    """DSW applies the events in order onto an empty model: a parent that
+    """DSW applies the events in order onto an empty model, so a parent that
     arrives later, or never, is an entity that silently vanishes."""
     emitted = {NIL}
     for event in events:
@@ -179,10 +175,10 @@ def test_every_entity_is_emitted_once(events):
 
 
 def test_every_type_asked_as_a_value_has_a_dsw_value_type(project):
-    """The one crossing between the rules vocabulary and this generator: a
+    """The one crossing between the rules vocabulary and this generator, a
     type added to a standard without a mapping here fails at generation. Only
-    the kinds that become a ValueQuestion need one — a boolean is asked as a
-    Yes/No OptionsQuestion, and a vocabulary as its answers."""
+    the kinds that become a ValueQuestion need one, a boolean is asked as a
+    Yes/No OptionsQuestion and a vocabulary as its answers."""
     computed = {"dmp_id", "created", "modified"}
     missing = {
         field.type
@@ -208,7 +204,7 @@ def test_the_general_chapter_comes_first_and_the_others_follow_in_order(events):
 def test_every_top_level_object_becomes_a_chapter_unless_it_is_computed(
     project, by_entity
 ):
-    """`dmp_id` is the case that matters: a top-level object, and computed, so
+    """`dmp_id` is the case that matters, a top-level object and computed, so
     it gets no chapter rather than an empty one."""
     computed = {"dmp_id", "created", "modified"}
     for field in project.model.fields:
@@ -223,9 +219,9 @@ def test_every_top_level_object_becomes_a_chapter_unless_it_is_computed(
 
 
 def test_a_computed_field_becomes_neither_chapter_nor_question(project, by_entity):
-    """`dmp_id` and, under auto_timestamps, `created`/`modified` are filled by
-    the template from the render context — asking them would be asking the
-    researcher for something already known."""
+    """`dmp_id` and, under auto_timestamps, `created`/`modified` are filled
+    by the template from the render context, so asking them would be asking
+    the researcher for something already known."""
     for name in ("dmp_id", "created", "modified"):
         assert question_uuid((name,)) not in by_entity
         assert chapter_uuid(name) not in by_entity
@@ -252,9 +248,9 @@ def test_an_optional_object_is_asked_behind_a_yes_no_gate(events, by_entity):
 
 
 def test_a_suggested_vocabulary_gets_an_other_answer_and_a_follow_up(events, by_entity):
-    """A suggested vocabulary admits values it does not list, so one that does
-    not name an escape of its own is given one: an "Other" answer opening a
-    free-text follow-up."""
+    """A suggested vocabulary admits values it does not list, so one that
+    does not name an escape of its own is given one, an "Other" answer
+    opening a free-text follow-up."""
     answers = _children_of(events, question_uuid(SUGGESTED))
     labels = [a["content"]["label"] for a in answers]
     assert labels == ["ror", "grid", "isni", "Other"]
@@ -266,13 +262,11 @@ def test_a_suggested_vocabulary_gets_an_other_answer_and_a_follow_up(events, by_
 def test_a_vocabulary_that_names_its_own_escape_keeps_it_and_gets_no_second(
     events, by_entity
 ):
-    """`other` is a *value* of the RDA DCS vocabulary, not a door: it says the
-    identifier scheme is outside the list, and the standard offers no field to
-    say which. So a field that names one is asked like a closed vocabulary —
-    its own value, offered in its own spelling, and nothing beside it.
-
-    Two escapes for one notion is what made this worth writing down: the
-    synthetic answer took the declared value's place, and its UUID with it."""
+    """`other` is a value of the RDA DCS vocabulary, it says the identifier
+    scheme is outside the list and the standard offers no field to say which.
+    So a field that names one is asked like a closed vocabulary, its own value
+    offered in its own spelling and nothing beside it. A second escape would
+    take the declared value's place, and its UUID with it."""
     labels = [
         a["content"]["label"] for a in _children_of(events, question_uuid(OWN_OTHER))
     ]
@@ -281,10 +275,10 @@ def test_a_vocabulary_that_names_its_own_escape_keeps_it_and_gets_no_second(
 
 
 def test_a_multi_choice_vocabulary_keeps_the_escape_it_names(events, by_entity):
-    """DataCite ends contributorType with `Other`, and a multi-choice question
-    has no answer to hang a follow-up off — so dropping it left a *required*
-    controlled vocabulary missing one of its own values, reachable only by
-    typing it into the free-text question next door."""
+    """DataCite ends contributorType with `Other`, and a multi-choice
+    question has no answer to hang a follow-up off. Dropping it would leave a
+    required controlled vocabulary missing one of its own values, reachable
+    only by typing it into the free-text question next door."""
     labels = [
         a["content"]["label"]
         for a in _children_of(events, question_uuid(OWN_OTHER_MULTI))
@@ -305,7 +299,7 @@ def test_a_repeated_scalar_becomes_a_list_of_one_value_question(events, by_entit
 
 def test_every_question_carries_the_path_it_fills(project, by_entity):
     """The annotation is how a later consumer maps an answer back to a rules
-    field — the QC needs it."""
+    field."""
     for field in project.model.walk():
         event = by_entity.get(question_uuid(field.path))
         if event is None:
@@ -317,14 +311,14 @@ def test_every_question_carries_the_path_it_fills(project, by_entity):
 
 
 def test_no_question_is_asked_without_saying_what_it_fills(events):
-    """The one above walks the *fields* and looks each one's question up, so a
-    question it has no field to look up is a question it never sees. Four were:
-    the item template of every repeated scalar, which is exactly the entity a
-    reply is stored against — annotated with nothing at all, and therefore an
+    """The one above walks the fields and looks each one's question up, so a
+    question it has no field to look up is a question it never sees. The item
+    template of a repeated scalar is one of those, and it is exactly the
+    entity a reply is stored against, so a question with no annotation is an
     answer no consumer could place.
 
     A chapter may have no path, the general one being ours rather than a
-    standard's. A question may not: it was asked because a rules field asked
+    standard's. A question may not, it was asked because a rules field asked
     for it."""
     for event in events:
         if event["content"]["eventType"] != "AddQuestionEvent":
@@ -337,7 +331,7 @@ def test_no_question_is_asked_without_saying_what_it_fills(events):
 
 
 def test_one_tag_per_standard_shown_the_way_a_standard_is_shown(project, events):
-    """Beside the three fixed tags, which are upper case too: a standard is
+    """Beside the three fixed tags, which are upper case too, a standard is
     written `rda_dcs` in code and shown `RDA_DCS`."""
     tags = [e for e in events if e["content"]["eventType"] == "AddTagEvent"]
     names = [t["content"]["name"] for t in tags]

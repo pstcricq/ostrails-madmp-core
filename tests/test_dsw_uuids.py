@@ -1,14 +1,13 @@
 """The frozen half of the UUID convention, held against what is published.
 
-These are not tests of an algorithm — ``uuid5`` needs none. They are the guard
+These are not tests of an algorithm, ``uuid5`` needs none. They are the guard
 on values that may never change: every UUID below appears verbatim in an
 artifact already built and published to DS Wizard, so a change to the
 namespace or to any part string turns this file red instead of breaking every
 reference in every published package.
 
-Where each value was verified, on 31/07/2026: the nine derivations against the
-glider KM bundle as it was then generated. That oracle is gone; these values
-are what survives it.
+Each value was verified on 31/07/2026 against the glider KM bundle as it was
+then generated.
 """
 
 import uuid
@@ -58,7 +57,7 @@ def test_every_kind_derives_what_is_already_published(derived, published):
 
 
 def test_the_namespace_is_the_nil_uuid():
-    """Named on its own: every value above hangs off it, so it is the single
+    """Named on its own, every value above hangs off it, so it is the single
     change that would move all nine at once."""
     assert NAMESPACE == uuid.UUID("00000000-0000-0000-0000-000000000000")
 
@@ -67,8 +66,8 @@ def test_the_namespace_is_the_nil_uuid():
 
 
 def test_one_path_gives_every_kind_a_distinct_identity():
-    """A field becomes several DSW entities at once — a gate question, its two
-    answers, the question itself. They share a path and must not share a
+    """A field becomes several DSW entities at once, a gate question, its
+    two answers, the question itself. They share a path and must not share a
     UUID."""
     derived = [
         question_uuid(GATED),
@@ -91,13 +90,15 @@ def test_the_path_is_what_distinguishes_two_questions():
 
 
 def test_the_other_answer_is_the_answer_named_other():
-    """A vocabulary listing the word literally would hand its answer the
-    identity of the synthetic "Other". No standard does; the convention is
-    frozen; this is the hazard written down rather than fixed."""
+    """A vocabulary listing the word literally hands its answer the identity
+    of the synthetic "Other". The two can no longer be asked at once, since
+    `needs_a_synthetic_escape` withholds the synthetic answer from a
+    vocabulary naming an escape of its own, but the shared identity is
+    frozen."""
     assert other_answer_uuid(SUGGESTED) == answer_uuid(SUGGESTED, "other")
 
 
 def test_the_parts_are_joined_and_not_escaped():
     """`u` joins on "::", so a name containing the separator would collide
-    with a deeper path. Field names are dmp keys, and none does."""
+    with a deeper path. Field names are dmp keys, and none carries it."""
     assert u("dataset::title") == u("dataset", "title")

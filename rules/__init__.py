@@ -1,23 +1,15 @@
-"""Public API of the rules data.
+"""Public API of the rules package.
 
-``rules/standards/`` holds the maDMP rules as data — one JSON file per
-standard per version; this package holds the code that reads it:
-``loader.py`` validates one file against ``rules.schema.json``, against the
-coherence rules kept in Python for legible errors, and against the path it
-sits at. The schema sits beside the data it describes, so whoever is handed a
-rules file is handed a valid one.
+``rules/standards/`` holds the maDMP rules as data, one JSON file per
+standard per version. This package reads them.
 
-Reading is all it does. Merging validated files into the typed model that DSW
-generation and QC consume is the *application* of the rules, and belongs to
-whoever applies them; which versions a given project pins is project data.
-Neither is a fact about a rules file, so neither is admitted here. A caller
-passes a path, and gets back a validated document.
+``load_rules_file()`` returns one rules file, parsed and validated against
+``rules.schema.json``, against the coherence constraints checked in
+``loader.py``, and against the path the file sits at.
 
-``field_children`` is exported with it because the document's shape is this
-package's fact: a field's children are its keys that do not start with ``_``.
-Whoever walks a rules tree must split metadata from children exactly the way
-the loader validated it, and one of them saying it differently is a drift
-that nothing would catch.
+``field_children()`` returns a field node's declared child fields, its keys
+that do not start with ``_``. It is exported so that anything walking a rules
+tree splits metadata from children the same way the loader does.
 """
 
 from rules.loader import RulesFileError, field_children, load_rules_file

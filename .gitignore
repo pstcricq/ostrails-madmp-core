@@ -7,18 +7,15 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 
-# Where the generators write: KM bundles and document template bundles. Built
-# from the configs and the rules, so never versioned — a committed artifact
-# drifts from the sources that should produce it, and nothing would say so.
-# CI uploads this directory as a workflow artifact instead.
+# Where the generators write, KM bundles and document template bundles, built
+# from the configs and the rules and so never versioned.
 # (setuptools also scratches here on `uv build`.)
 build/
 
-# Where to publish, and as whom, when a target is run by hand. None of these
-# names has a default in the code — on purpose — so the README tells you to set
-# them, and DSW_PASSWORD is one of them. A password written next to the code
-# that reads it is a password that gets pushed one day, so the file it would
-# live in is ignored before it exists.
+# Where to publish, and as whom, when a target is run by hand. The names are
+# in .env.example, and DSW_PASSWORD is one of them. A password written next to
+# the code that reads it is a password that gets pushed one day, so the file
+# it would live in is ignored before it exists.
 .env
 .env.*
 !.env.example

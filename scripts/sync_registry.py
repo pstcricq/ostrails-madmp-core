@@ -1,21 +1,19 @@
 """Make the registry say what every project config says.
 
-The step that makes a submission possible at all: the webhook refuses a folder
-with no `meta.yaml`, so until this has run, a researcher clicking Submit is
-turned away. It needs no DSW instance and nothing generated — a valid config
-is enough, which is why it comes before anything is published.
+A folder with no `meta.yaml` is a folder a submission cannot land in, so this
+is the step that makes a project submittable. It needs no DSW instance and
+nothing generated, a valid config is enough.
 
 Runs on the default branch only, and on every push to it rather than only when
 a config changed. `meta.yaml` freezes the rules versions a project was built
-from, and the failure worth preventing is drift: a pin bumped in the config
-while the registry still names the old version. Converging every time closes
-that by construction.
+from, and converging every time closes the drift a pin bumped in the config
+would otherwise leave.
 
-Idempotent, and visibly so: nothing is sent when nothing changed, so this
-leaves no commit behind on a push that touched no config.
+Idempotent, and visibly so, nothing is sent when nothing changed, so a push
+that touched no config leaves no commit behind.
 
 Never deletes, never overwrites another project's folder, and never touches a
-key it does not own — whatever else `meta.yaml` carries is carried across.
+key it does not own, whatever else `meta.yaml` carries is carried across.
 """
 
 from __future__ import annotations
@@ -45,8 +43,8 @@ def main() -> int:
     token = token_from_env()
     if not token:
         print(
-            "REGISTRY_TOKEN not set — need a token with Contents RW on the "
-            "registry (in CI: a repository secret; locally: "
+            "REGISTRY_TOKEN not set, a token with Contents RW on the registry "
+            "is needed (in CI a repository secret, locally "
             "REGISTRY_TOKEN=$(gh auth token)).",
             file=sys.stderr,
         )
@@ -66,7 +64,7 @@ def main() -> int:
             config = load_config_file(path)
         except ConfigFileError:
             print(
-                f"SKIP {path}\n     does not load; the configs job says why.",
+                f"SKIP {path}\n     does not load, run scripts/validate_configs.py to see why.",
                 file=sys.stderr,
             )
             failures += 1

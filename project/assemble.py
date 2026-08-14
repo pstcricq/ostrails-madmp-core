@@ -1,24 +1,12 @@
 """What a project is made of, assembled once for everyone who builds from it.
 
 A config names the resources its project is built from, and every consumer
-needs the same two answers out of them: what the project declares about
-itself, and what its rules merge into. :func:`assemble_project` gives both, or
+needs the same two answers out of them, what the project declares about
+itself and what its rules merge into. ``assemble_project()`` gives both, or
 raises.
 
-**Both, always**, even for a caller that reads only one. Letting each consumer
-assemble the subset it happens to need is exactly how two of them come to
-disagree about what "this project" means — the reason pin resolution lives in
-:mod:`project.pins` rather than in whichever consumer called for it first.
-This module owns no step of its own: it owns that the steps happen, once, in
-the same order for everyone.
-
-The order is forced rather than chosen. There is nothing to merge before the
-pins resolve, which is the same ordering :mod:`project.merge` imposes on its
-own two phases.
-
-Nothing here derives a DSW package identifier, names an output directory, or
-knows a registry exists. Those are answers about what gets *generated* from a
-project, and they belong with whoever generates.
+It owns no step of its own, only that they happen in one order, the same for
+every caller. There is nothing to merge before the pins resolve.
 """
 
 from __future__ import annotations
@@ -37,15 +25,11 @@ RULES_DIR = ROOT / "rules" / "standards"
 
 @dataclass(frozen=True)
 class Project:
-    """One project, with every resource it names loaded and valid.
+    """One project, with every resource it names loaded and valid."""
 
-    Holding the two together is the point: this is the value that travels into
-    every builder, and none of them can be handed a half-loaded project.
-    """
-
-    #: The project config as declared, validated against ``config.schema.json``.
+    # The project config as declared, validated against ``config.schema.json``.
     config: dict[str, Any]
-    #: Its pinned rules files, merged — base standard first.
+    # Its pinned rules files, merged, base standard first.
     model: Model
 
 
@@ -55,20 +39,14 @@ def assemble_project(
 ) -> Project:
     """Load one project config and everything it names.
 
-    Three steps, none of them owned here: ``configs/`` reads and validates the
-    config, :func:`project.pins.resolve_pins` turns its pins into paths that
-    exist, and :func:`project.merge.merge_rules` says what the files behind them
-    amount to.
+    Three steps: the config is read and validated, its pins are turned into
+    paths that exist, and the rules files behind them are merged.
 
-    The resource root is a parameter so a test can point at a tree of its own,
-    and defaults to this repository's — the only one a real run ever uses.
+    The resource root is a parameter, defaulting to this repository's tree.
 
-    Raises whatever its steps raise, unchanged, each already naming its own
-    kind of problem: :class:`configs.ConfigFileError` for the config,
-    :class:`project.pins.UnresolvedPinsError` for a pin naming a file that is
-    not there, :class:`rules.RulesFileError` for a malformed rules file, and
-    :class:`project.merge.RulesSetError` / :class:`project.merge.
-    RulesConflictError` for a set of them that does not hold together.
+    Raises whatever its steps raise, unchanged, each naming its own kind of
+    problem: ``ConfigFileError``, ``UnresolvedPinsError``, ``RulesFileError``,
+    ``RulesSetError`` or ``RulesConflictError``.
     """
     config = load_config_file(config_path)
     model = merge_rules(resolve_pins(config["rules"], rules_dir))

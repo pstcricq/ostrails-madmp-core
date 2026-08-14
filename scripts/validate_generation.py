@@ -2,30 +2,21 @@
 
 Two things at once, and both are the point.
 
-**A verdict.** The unit tests generate one project deeply — every kind of
-question, every refusal, the invariants that bind the two artifacts together.
-What they cannot do is generate *the others*: a second project's rules,
-vocabularies and pins are data no test has seen. This is the only place every
-config goes through the generators, and a repository that cannot generate one
-of its projects is broken whether or not anyone has asked for that project's
-KM yet.
+A verdict. This is the only place every config goes through the generators, so
+it is what says a repository can generate every one of its projects and not
+just the one the tests cover deeply. What it checks is what the data decides
+rather than what the code decides: that the KM emits no entity twice, and that
+the document template is Jinja at all. Both are questions only a project's own
+vocabularies can answer, and both would otherwise be answered by DSW, the
+first by dropping a question and the second at render time.
 
-So what it checks is what the data decides rather than what the code decides:
-that the KM emits no entity twice, and that the document template is Jinja at
-all. Both are questions only this project's vocabularies can answer, and both
-would otherwise be answered by DSW — the first by dropping a question, the
-second at render time in front of a researcher.
-
-**The artifacts.** What it writes is uploaded by CI as a workflow artifact,
-which is how a reviewer sees what a rules change did to the questionnaire, and
-how the publish step gets the bundles it ships. They are therefore stamped
-with the real time: a frozen timestamp would be a false creation date carried
+The artifacts. What it writes is what a reviewer reads to see what a rules
+change did to the questionnaire, and what a publish ships. They are stamped
+with the real time, a frozen timestamp being a false creation date carried
 into every published package.
 
-Depends on nothing outside this repository — generation reads the config and
-the rules, and touches neither DSW nor the registry. Which is why it runs in
-parallel with the other checks, and why `registry-sync` waits for it rather
-than the other way round: writing anywhere is what has to wait.
+Generation reads the config and the rules, and touches neither DSW nor the
+registry.
 """
 
 from __future__ import annotations
@@ -50,13 +41,13 @@ STAMP = utc_timestamp()
 
 
 def _duplicate_entities(km: dict) -> list[str]:
-    """Entities the KM emits twice — DSW would apply the second event on top of
+    """Entities the KM emits twice, DSW would apply the second event on top of
     the first and one of the two questions would simply not be there.
 
     Data-dependent, which is why it is checked per config rather than once in
     the tests: `uuids.other_answer_uuid(path)` is by construction
     `answer_uuid(path, "other")`, so a standard whose vocabulary lists the word
-    literally collides with the synthetic "Other". None does today.
+    literally collides with the synthetic "Other".
     """
     seen, twice = set(), []
     for event in km["packages"][0]["events"]:
@@ -70,15 +61,15 @@ def _jinja_error(template: dict) -> str | None:
     """Why the document template's body is not Jinja, if it is not.
 
     The generator writes Jinja and never runs it, so nothing between here and
-    DSW would notice a syntax error — DSW would, at render time, in front of a
-    researcher. The unit tests parse one project's body; what they cannot parse
-    is a body built from vocabularies they have never seen.
+    DSW would notice a syntax error, DSW finding out at render time. The unit
+    tests parse one project's body, what they cannot parse is a body built
+    from vocabularies they have never seen.
 
     Data-dependent for the same reason the duplicate check is, and for a
     sharper one: a vocabulary label is not only data the template reads, it is
-    *source* the generator writes — the answer-label table holds each one as a
-    Jinja literal. `Institut d'Optique` used to close its literal early and
-    leave a body that was not Jinja at all.
+    source the generator writes, the answer-label table holding each one as a
+    Jinja literal. `Institut d'Optique` closes that literal early and leaves a
+    body that is not Jinja at all.
     """
     try:
         jinja2.Environment().parse(template["files"][0]["content"])
@@ -105,8 +96,9 @@ def main() -> int:
             project = assemble_project(path)
         except ProblemsError:
             print(
-                f"SKIP {path}\n     does not load; the configs and projects "
-                f"jobs say why.",
+                f"SKIP {path}\n     does not load, run "
+                f"scripts/validate_configs.py and scripts/validate_projects.py "
+                f"to see why.",
                 file=sys.stderr,
             )
             failures += 1

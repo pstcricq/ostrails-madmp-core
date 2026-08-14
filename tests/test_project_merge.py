@@ -57,9 +57,9 @@ def test_real_files_walk_covers_every_field():
 
 
 def _doc(tmp_path, name, extends, dmp, version="1.0.0"):
-    # <standard>/<version>.json: load_rules_file checks that a file sits where
-    # it says, so even a synthetic model needs the versioned layout — and a
-    # standard is spelled the same in the directory and in the document.
+    # <standard>/<version>.json: load_rules_file checks that a file sits
+    # where it says, so even a synthetic model needs the versioned layout,
+    # spelled the same in the directory and in the document.
     path = tmp_path / name / f"{version}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -177,9 +177,9 @@ def test_extension_may_close_an_open_field(tmp_path):
 
 def test_a_suggested_vocabulary_may_be_closed_over_its_own_values(tmp_path):
     """The one move that changes a vocabulary's nature and is still a
-    tightening: a warning becomes a violation. The field must come out holding
-    one vocabulary and not two — `rules.loader` refuses both keys in one file,
-    and a merge is the only other way a field could come to carry them."""
+    tightening: a warning becomes a violation. The field must come out
+    holding one vocabulary and not two, a rules file cannot declare both and
+    a merge is the only other way a field could come to carry them."""
     model = _merge(
         tmp_path,
         {"mode": {**STRING_1, "_suggested_values": ["rt", "dt", "dm"]}},
@@ -209,7 +209,7 @@ def test_closing_a_suggested_vocabulary_outside_it_rejected(tmp_path):
 
 
 def test_a_closed_vocabulary_may_not_be_offered_back_as_suggested(tmp_path):
-    """The mirror move loosens — a violation would become a warning."""
+    """The mirror move loosens, a violation would become a warning."""
     conflicts = _merge_conflicts(
         tmp_path,
         {"mode": {**STRING_1, "_allowed_values": ["rt"]}},
@@ -265,13 +265,9 @@ def test_an_extension_fills_a_missing_description_and_may_repeat_one(tmp_path):
 
 
 def test_two_files_describing_one_field_differently_is_a_conflict(tmp_path):
-    """It used to be a silent drop — the base's wording kept, the extension's
-    discarded without a word. Which is the fault `_chapter_description` has a
-    coherence check for: prose the generators ignore in silence, where the
-    author has every reason to believe it was taken.
-
-    Whether an extension should be able to *replace* a description is a
-    question this merge does not answer. Refusing is what says so."""
+    """A conflict rather than a silent drop, where one wording is kept and
+    the other discarded without a word, though its author has every reason to
+    believe it was taken."""
     with pytest.raises(RulesConflictError) as raised:
         _merge(
             tmp_path,
@@ -304,10 +300,10 @@ def _merge_three_conflicts(tmp_path, base_dmp, first_dmp, second_dmp) -> str:
 
 
 def test_an_extension_may_restate_the_base_another_extension_tightened(tmp_path):
-    """ext_two repeats what the base says — the ordinary way of reaching one's
-    own leaves. That ext_one required the field in the meantime is none of its
-    author's business: they wrote against the base, and cannot know which
-    extensions a project pins beside theirs."""
+    """ext_two repeats what the base says, the ordinary way of reaching
+    one's own leaves. That ext_one required the field in the meantime is none
+    of its author's business, an extension is written against the base
+    alone."""
     model = _merge_three(
         tmp_path,
         {"title": dict(STRING_01)},
@@ -329,9 +325,9 @@ def test_extension_order_does_not_change_the_verdict(tmp_path):
 
 
 def test_restrictions_from_two_extensions_combine(tmp_path):
-    """Both restrict the base vocabulary, each legitimately. A DMP satisfying
-    both standards satisfies both restrictions, so the field holds their
-    intersection — and the base's order, not either extension's."""
+    """Both restrict the base vocabulary, each legitimately. A DMP
+    satisfying both standards satisfies both restrictions, so the field holds
+    their intersection, in the base's order and not either extension's."""
     model = _merge_three(
         tmp_path,
         {"mode": {**STRING_1, "_allowed_values": ["rt", "dt", "dm"]}},
@@ -415,9 +411,9 @@ def test_every_order_of_three_extensions_gives_the_same_model(tmp_path):
 
 
 def test_a_prose_conflict_names_who_wrote_the_prose(tmp_path):
-    """`origin` answers who introduced the *field*; the base introduced it and
-    described nothing, so naming it here would send the reader to a file with
-    no `_description` in it at all."""
+    """`origin` answers who introduced the field, and the base introduced
+    it while describing nothing, so naming it here would send the reader to a
+    file with no `_description` in it at all."""
     conflicts = _merge_three_conflicts(
         tmp_path,
         {"title": dict(STRING_1)},
@@ -539,10 +535,10 @@ def test_dotted_path_marks_every_list_ancestor(tmp_path):
                 },
             }
         },
-        # Nothing to add: a rules file may declare neither no field at all nor
-        # a childless object, so the extension redeclares a whole base branch
-        # identically, down to a leaf — the merge's no-op, and it leaves the
-        # walk untouched.
+        # Nothing to add: a rules file may declare neither no field at all
+        # nor a childless object, so the extension redeclares a whole base
+        # branch identically, down to a leaf. The merge's no-op, and it
+        # leaves the walk untouched.
         {
             "dataset": {
                 "_cardinality": "1..n",
@@ -578,8 +574,8 @@ def test_standards_is_the_base_then_its_extensions():
 
 
 def test_an_identical_vocabulary_records_no_tightening(tmp_path):
-    """Redeclaring a vocabulary unchanged is a no-op, not a restriction: it
-    must not leave a Tightening whose before equals its after."""
+    """Redeclaring a vocabulary unchanged is a no-op, not a restriction, so
+    it must not leave a Tightening whose before equals its after."""
     vocabulary = {**STRING_1, "_allowed_values": ["rt", "dt"]}
     model = _merge(tmp_path, {"mode": dict(vocabulary)}, {"mode": dict(vocabulary)})
     (mode,) = model.walk()
@@ -588,8 +584,8 @@ def test_an_identical_vocabulary_records_no_tightening(tmp_path):
 
 
 def test_a_vocabulary_tightening_is_recorded_under_its_aspect_name(tmp_path):
-    # The aspect is a declared name, not the metadata key with its underscore
-    # stripped: a consumer matching on it must survive a key being renamed.
+    # The aspect is a declared name, not the metadata key with its
+    # underscore stripped, a consumer matching on it must survive a rename.
     model = _merge(
         tmp_path,
         {"mode": {**STRING_1, "_suggested_values": ["rt", "dt"]}},
