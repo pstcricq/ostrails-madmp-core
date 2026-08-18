@@ -1,12 +1,9 @@
-"""Check that every project's registry destination is free, or already its own.
+"""Read every project's destination in the registry and say where it stands.
 
-Reads, and only reads. The one fault it can find is a collision, a folder that
-carries another project's `id`, which no amount of syncing fixes and which
-would have one project's DMPs land in another's folder.
-
-A folder that does not exist yet is not a fault. Adding a project is a config
-first and a registration second. Same for a `meta.yaml` that no longer says
-what its config says, a sync is what fixes that.
+Reads, and only reads. A folder that is not laid out yet is not a fault,
+adding a project is a config first and a registration second, and a sync is
+what fixes it. What fails here is a config that does not load, or a registry
+that cannot be reached with the token it was given.
 
 Skips, loudly, when no token is set, the registry being private so that even
 reading it needs one, and a pull request from a fork will not have it.
@@ -35,8 +32,6 @@ MARK = {
     "registered": "ok  ",
     "missing": "todo",
     "stale": "todo",
-    "collision": "FAIL",
-    "unreadable": "FAIL",
 }
 
 
@@ -81,21 +76,16 @@ def main() -> int:
             faults += 1
             continue
 
-        line = f"{MARK[status.state]} {status.folder} - {status.detail}"
-        if status.is_fault:
-            faults += 1
-            print(line, file=sys.stderr)
-        else:
-            print(line)
+        print(f"{MARK[status.state]} {status.folder} - {status.detail}")
 
     if faults:
         print(
-            f"\n{faults} of {len(paths)} projects cannot be registered.",
+            f"\n{faults} of {len(paths)} destinations could not be read.",
             file=sys.stderr,
         )
         return 1
 
-    print(f"\n{len(paths)} projects, no destination taken by anyone else.")
+    print(f"\n{len(paths)} projects, every destination read.")
     return 0
 
 

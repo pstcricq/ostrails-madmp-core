@@ -16,8 +16,8 @@ import pytest
 
 from registry.github import GitHubClient, GitHubError
 
-CALL = "https://api.github.com/repos/o/r/contents/projects/glider/meta.yaml"
-PATH = "projects/glider/meta.yaml"
+CALL = "https://api.github.com/repos/o/r/contents/projects/glider/template/.gitkeep"
+PATH = "projects/glider/template/.gitkeep"
 
 
 class FakeResponse:

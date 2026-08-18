@@ -11,12 +11,12 @@ section arrive avec le code qu'elle justifie. La numérotation est celle du plan
 d'ensemble, donc les numéros ne bougeront pas quand les sections manquantes
 arriveront, mais la table des matières ne liste que ce qui existe.*
 
-*Où on en est, au 14/08/2026. Une tranche apporte un paquet, les tests qui le
+*Où on en est, au 18/08/2026. Une tranche apporte un paquet, les tests qui le
 couvrent, les dépendances que son code importe réellement, et le job de CI qui
-le vérifie. Tout ce que ce document décrit est présent et vérifié en CI.
-Tranche en cours : `dsw/publish.py`, le Knowledge Model, le Document Template
-et le service de soumission poussés dans une instance DSW. Le contrôle qualité
-d'un DMP soumis est la tranche suivante.*
+le vérifie. Tout ce que ce document décrit est présent et vérifié en CI, sauf
+ce qui est explicitement marqué comme décidé et pas encore construit. Tranche
+en cours : le contrôle qualité d'un DMP soumis, dont la première étape a été
+d'ôter du registre les épingles de règles ([§10](#10-le-registre-et-la-publication)).*
 
 ---
 
@@ -567,9 +567,9 @@ Le paquet `project/` répond à « ce projet, résolu, c'est quoi ? », en trois
 
 `merge_rules` ne connaît ni épingle ni config : on lui donne des chemins.
 Ce n'est pas de la pureté gratuite, c'est ce qui permet au contrôle qualité de
-fusionner les épingles enregistrées dans le `meta.yaml` d'un DMP soumis **sans
-construire de projet du tout**. Si `merge_rules` appelait `resolve_pins`, ce
-chemin demanderait le paquet des configs pour un fichier qui n'en est pas une.
+fusionner les épingles commitées à côté d'un DMP soumis **sans construire de
+projet du tout**. Si `merge_rules` appelait `resolve_pins`, ce chemin
+demanderait le paquet des configs pour un fichier qui n'en est pas une.
 
 Symétriquement, `assemble_project` ne fait que fixer l'ordre. C'est peu, et
 c'est le point : si chaque générateur enchaînait les deux lui-même, deux
@@ -610,7 +610,7 @@ standard n'a qu'une orthographe ») vaille **partout où il s'écrit**.
 `resolve_pins` ne revérifie pas la forme d'une épingle, c'est écrit dans son
 module comme une **précondition**, pas comme un oubli. Le prix est nommé en
 [§14](#14-limites-connues) : des épingles venant d'ailleurs qu'une config
-validée, et le `meta.yaml` du registre est exactement ce cas.
+validée, et celles qu'un DMP soumis porte avec lui sont exactement ce cas.
 
 ---
 
@@ -1077,140 +1077,95 @@ exactement celui que le registre exige d'un nom de dossier, pas de point, pas
 de barre oblique, donc une soumission ne peut jamais écrire hors de son propre
 dossier.
 
-### `meta.yaml` : deux clés, et une qui n'a pas encore de lecteur
+### Ce que le dossier ne dit plus, et pourquoi
 
-```yaml
-id: glider
-rules:
-  - rda_dcs: "1.0.0"
-  - ostrails: "1.0.0"
-```
+Jusqu'au 18/08/2026, `converge` écrivait un `meta.yaml` de deux clés à la
+racine du dossier, l'`id` du projet et ses épingles de règles.
 
-C'est tout. Un champ n'entre ici que s'il a un lecteur **du côté registre**,
-et il y en a trois possibles : le webhook, la CI du registre, un humain qui
-ouvre le dossier. `name` n'en a aucun, le recopier obligerait à mettre le
-registre à jour quand une prose change, et inviterait un lecteur à faire
-confiance à une copie plutôt qu'à la config.
+L'intention était juste : un DMP doit être vérifiable contre les règles avec
+lesquelles il a été bâti, les épingles d'une config bougent, et personne ne
+saura plus tard ce qui était épinglé au moment où un DMP donné a été soumis.
+Ce fichier était censé geler ça.
 
-`rules` est l'exception assumée : **rien ne le lit encore**. Le contrôle
-qualité qui le lira n'est pas construit. On l'écrit quand même parce que c'est
-la seule information qu'on ne pourra **pas** ajouter après coup : un DMP doit
-être vérifiable contre les règles avec lesquelles il a été bâti, les épingles
-d'une config bougent, et personne ne saura plus tard ce qui était épinglé au
-moment où un DMP donné a été soumis. Geler coûte deux lignes aujourd'hui et
-est irrattrapable demain.
+Il ne le gelait pas. `registry-sync` tourne à **chaque** push sur la branche
+par défaut et récrit les clés possédées avec celles de la config du jour. Le
+fichier disait donc où en est le projet **aujourd'hui**, pas avec quoi ce
+DMP-là a été rempli. Un contrôle qualité qui l'aurait lu aurait comparé un
+document rempli sous `ostrails 1.0.0` à des règles `2.0.0`, et rendu des
+échecs que personne n'aurait pu corriger autrement qu'en refaisant le DMP. Le
+cas le plus vicieux ne demandait même pas de montée de version : changer les
+épingles sans toucher à `version` laisse DSW sur l'ancien KM, `publish` étant
+idempotent par version, pendant que le registre annonce déjà les nouvelles
+règles.
 
-Pas d'horodatage, pas de `sha` de commit, pas de « écrit par ». Ce serait
-tentant, et ça tuerait l'idempotence : `unchanged` deviendrait impossible et
-chaque push sur la branche par défaut laisserait un commit dans le registre.
-La provenance existe déjà, c'est l'historique git du registre.
+La correction n'est pas d'écrire ce fichier mieux, c'est de ne plus l'écrire.
+**Fait le 18/08/2026 :** `registry/` ne connaît plus les épingles du tout, et
+ce que ce dépôt écrit dans le registre se réduit à deux `.gitkeep`.
 
-### Ce fichier a deux écrivains, et chacun ses clés
+**Décidé le même jour, pas encore construit :** les épingles voyageront **avec
+le DMP**. Le template les inscrira dans le document qu'il rend, sous une clé
+`metadata` sœur de `dmp`, le webhook sortira ce bloc du document et le
+commitera à côté de lui, dans le même commit. Un seul écrivain par fait, et un
+document qui ne peut pas être en désaccord avec ce qui le décrit. Les deux
+moitiés sont des tranches à venir, l'estampille dans `dsw/generate_template.py`
+et l'enveloppe dans le webhook.
 
-`OWNED = ("id", "rules")`. Tout ce qu'on trouve d'autre dans `meta.yaml`
-appartient à quelqu'un d'autre, la CI du registre aujourd'hui ou demain,
-est recopié tel quel, et **n'entre pas dans la comparaison**.
+Ce qui disparaît avec le fichier : la règle des clés possédées
+(`OWNED = ("id", "rules")`, tout le reste recopié sans être comparé), la
+comparaison sur le document analysé plutôt que sur les octets, la garde contre
+un `meta.yaml` illisible, et la détection de collision. Cette dernière était de
+toute façon inatteignable depuis ce dépôt seul, le dossier étant l'`id` et
+l'`id` étant le nom du fichier de config. Elle n'avait pour source qu'un `id`
+renommé, ce qui est arrivé une fois, à la fusion des identifiants, et a été
+résolu par une migration à la main.
 
-Les deux moitiés de la règle comptent. Reconstruire le fichier depuis la seule
-config effacerait le travail de l'autre écrivain en silence, remarqué
-seulement par qui irait chercher un verdict qui n'y est plus. Et comparer sur
-*ses* clés à lui ferait lire son premier verdict comme une dérive : on
-récrirait le fichier pour le lui reprendre, à chaque push, indéfiniment.
-
-L'alternative essayée dans le prototype était un emplacement `qc` réservé,
-écrit vide à la création. Elle prévoit un consommateur qui n'existe pas, et ne
-couvre que celui-là. La règle de possession ne prévoit rien et les couvre tous.
-
-### Ce qui décide d'écrire, c'est le document, pas les octets
-
-Un fichier qui dit ce qu'il faut avec ses clés dans un autre ordre, ou écrit
-par un autre sérialiseur YAML, est **déjà juste**. Le comparer octet par octet
-le ferait récrire pour une différence que personne ne peut lire, et vaudrait
-un commit dans le registre. La comparaison porte donc sur le document analysé.
-
-### Cinq états, deux fautes
+### Trois états, aucune faute
 
 | état | ce que c'est | ce qui suit |
 |---|---|---|
-| `missing` | rien là-bas | création |
-| `registered` | présent, à nous, et d'accord avec la config | rien n'est envoyé |
-| `stale` | à nous, mais ne dit plus ce que dit la config | mise à jour |
-| `collision` | présent, et c'est le dossier d'un autre projet | refus |
-| `unreadable` | présent, et ce n'est pas un document | refus |
+| `missing` | aucun des deux sous-répertoires | création |
+| `stale` | un des deux manque | mise à jour |
+| `registered` | les deux sont là | rien n'est envoyé |
 
-Deux états sont des **fautes**. Un dossier qui n'existe pas encore n'en
-est pas une : ajouter un projet, c'est une config d'abord et un enregistrement
+Aucun des trois n'est une faute. Un dossier qui n'existe pas encore n'en est
+pas une : ajouter un projet, c'est une config d'abord et un enregistrement
 ensuite, et faire échouer le contrôle sur le push qui ajoute la config
-apprendrait à tout le monde à ignorer ce job. Un `meta.yaml` qui a pris du
-retard n'en est pas une non plus : la synchronisation qui le rattrape tourne
-juste après. La collision, elle, ne se répare par aucune synchronisation, deux
-projets ne pouvant pas avoir raison sur une même destination, et elle ferait
-atterrir les DMP d'un projet dans le dossier d'un autre.
+apprendrait à tout le monde à ignorer ce job. Un sous-répertoire à remettre
+n'en est pas une non plus, la synchronisation qui le rattrape tourne juste
+après.
 
-### Un `meta.yaml` illisible est l'autre faute
-
-La lecture ne rendait que deux réponses, un document ou rien, et rangeait
-sous « rien » deux situations qui n'ont aucun rapport : **il n'y a pas de
-fichier**, et **il y en a un qu'on n'arrive pas à lire**. Un `meta.yaml` vide,
-réduit à un commentaire, ou remplacé par une liste passait donc pour `missing`,
-et la synchronisation le **reconstruisait depuis la seule config**, exactement
-ce que la règle des clés possédées existe pour interdire. Ce qu'un autre
-écrivain y avait mis disparaissait, et le run annonçait `created`. Un YAML
-franchement invalide, lui, remontait en `ParserError` nue, que le script
-n'attrape pas.
-
-C'est une faute au même titre qu'une collision, et pour la même raison : rien
-ne la répare tout seul. Ce fichier porte **l'unique trace** des règles contre
-lesquelles les DMP déjà soumis du projet doivent être vérifiés, le document
-rendu n'en disant rien, et il peut porter les clés d'un autre écrivain. Écraser
-sur la foi d'un `safe_load` qui a échoué détruirait les deux. On refuse, on
-nomme le dossier, et un humain regarde.
-
-Ne pas confondre avec valider le *contenu*. Un `meta.yaml` bien formé dont les
-épingles sont fantaisistes est déjà traité correctement : il ne dit pas ce que
-dit la config, donc `stale`, donc réécrit. La garde ne couvre que ce qui
-empêche de lire.
-
-**Une collision est inatteignable depuis ce dépôt seul.** Le dossier étant
-l'`id`, et l'`id` étant le nom du fichier, deux configs ne peuvent pas viser le
-même dossier, un mauvais nom levant une `ConfigFileError` bien avant. Elle ne
-peut venir que d'un `id` renommé, ou d'un autre déploiement écrivant dans le
-même registre. Les deux sont arrivés : le prototype a dû semer un dossier pour
-exercer le contrôle, et la fusion des identifiants a rendu la collision réelle
-sur `glider`, dont le registre disait encore `socib-glider`. Elle a été
-résolue par une migration à la main, une fois, plutôt que par du code qui
-aurait dû connaître à jamais l'ancien format.
+Ce qui fait échouer la lecture est ailleurs : une config qui ne charge pas, ou
+un registre qu'on n'atteint pas avec le jeton qu'on lui a donné. C'est ce qui
+reste au job `registry` de la CI, et c'est la raison de le garder : il est le
+seul contrôle qui vérifie **avant** le job qui agit que le registre répond.
 
 ### Le layout du dossier est à nous, pas au webhook
 
-`converge` crée `meta.yaml`, puis `template/` et `productions/`, chacun avec
-un `.gitkeep`, git ne stockant pas de répertoire vide. Le webhook, lui, écrit
-**un document dans un dossier déjà disposé** : il ne crée ni dépôt ni
-échafaudage, et refuse un dossier sans `meta.yaml`, parce qu'un dossier non
-initialisé n'a pas d'épingles et qu'un DMP déposé là serait orphelin.
+`converge` dispose `template/` et `productions/`, chacun avec un `.gitkeep`,
+git ne stockant pas de répertoire vide. Le webhook, lui, écrit **dans un
+dossier déjà disposé** : il ne crée ni dépôt ni échafaudage, et refuse un
+dossier non disposé, parce qu'un DMP déposé là serait orphelin.
 
 Le partage des rôles est celui-là et pas un autre : ce qui *dispose* connaît la
 config, ce qui *dépose* ne connaît que le nom du dossier reçu en paramètre.
 
-**Ce qui garantit ce partage, c'est le portail `meta.yaml`, pas les
-`.gitkeep`.** Git ne stockant pas de répertoire, `template/` apparaîtrait de
-toute façon au moment où le webhook y écrit le DMP. Ce que les `.gitkeep`
-achètent est autre chose, et c'est délibéré : la forme du dossier **préexiste
-et se voit**, avant qu'aucun DMP n'arrive. Un dossier enregistré ressemble à ce
-qu'il sera.
+Les `.gitkeep` sont donc devenus le portail, alors qu'ils n'étaient qu'un
+supplément du temps de `meta.yaml`. Ce qu'ils achetaient déjà reste vrai et
+reste voulu : la forme du dossier **préexiste et se voit**, avant qu'aucun DMP
+n'arrive. Un dossier enregistré ressemble à ce qu'il sera.
 
-### Un dossier, c'est les trois morceaux, pour les deux verbes
+### Un dossier, c'est les deux morceaux, pour les deux verbes
 
 `converge` disposait trois choses et `folder_status` n'en lisait qu'une. Un
 `.gitkeep` disparu donnait donc : `folder_status` → `registered`, puis
 `converge` → **`unchanged` en envoyant un commit**. Le verbe répondait pour
 `meta.yaml`, pas pour le dossier.
 
-Les deux verbes lisent désormais les trois morceaux, et `converge` rend son
-verbe **d'après ce qu'il a envoyé**. Un sous-répertoire manquant rend `stale`
-côté lecture et `updated` côté écriture. Ce n'est pas de la minutie : c'est ce
-qui fait que les deux parlent du même objet, sans quoi le contrôle annonce
-« rien à faire » sur un dossier que la synchro va modifier.
+Les deux verbes lisent les mêmes morceaux, et `converge` rend son verbe
+**d'après ce qu'il a envoyé**. Un sous-répertoire manquant rend `stale` côté
+lecture et `updated` côté écriture. Ce n'est pas de la minutie : c'est ce qui
+fait que les deux parlent du même objet, sans quoi le contrôle annonce « rien
+à faire » sur un dossier que la synchro va modifier.
 
 C'est aussi ce qui rend **vraie** la phrase sur laquelle repose le job de
 synchro, « rien n'est envoyé quand rien n'a changé », écrite ici, dans
@@ -1284,11 +1239,10 @@ Sur une pull request il apparaît **`skipped`** : présent dans la liste des
 contrôles, donc son abstention se lit au lieu de passer inaperçue.
 
 Il tourne à **chaque** push sur la branche par défaut, pas seulement quand une
-config a changé. `meta.yaml` gèle des épingles, et la panne à empêcher est la
-dérive : une épingle relevée dans la config pendant que le registre nomme
-encore l'ancienne version. Converger à chaque fois la rend impossible au lieu
-de la rendre improbable. Le prix serait un commit à chaque push, il n'est pas
-payé, puisque rien n'est envoyé quand rien n'a changé.
+config a changé. Ce qu'il rattrape est un dossier qui n'est plus disposé, une
+config ajoutée dans un push qui touchait autre chose, ou un `.gitkeep` retiré à
+la main. Le prix serait un commit à chaque push, il n'est pas payé, puisque
+rien n'est envoyé quand rien n'a changé.
 
 ### Le webhook n'est pas dans ce dépôt
 
@@ -1353,8 +1307,9 @@ Une liste tronquée répondrait « pas publié » à propos de quelque chose qui
 
 ### Registre avant soumission, et c'est le code qui le tient
 
-Le webhook refuse un dossier sans `meta.yaml`. Un service de soumission qui
-pointe vers un dossier non enregistré transforme donc **chaque Submit en échec**,
+Le webhook refuse un dossier qui n'est pas disposé. Un service de soumission
+qui pointe vers un dossier non enregistré transforme donc **chaque Submit en
+échec**,
 et c'est le chercheur qui en porte la faute. `publish submission` appelle
 `folder_status` et refuse.
 
@@ -1362,8 +1317,8 @@ Tenir ça par l'ordre des cibles serait le tenir par une convention, et une
 convention, c'est ce qu'on saute quand on lance une cible à la main. L'ordre
 dans la CI reste, mais il n'est plus ce qui garantit.
 
-`stale` passe : un `meta.yaml` qui ne dit plus ce que dit la config est à un
-sync près, et le dossier est là, c'est tout ce dont le webhook a besoin.
+`stale` passe : un sous-répertoire à remettre est à un sync près, et le
+dossier est là, c'est tout ce dont le webhook a besoin.
 
 ### Le service de soumission n'est pas générable
 
@@ -1508,13 +1463,12 @@ Mesuré : `resolve_pins([{"ostrails": 1.0}], ...)` lève un `TypeError` nu
 config d'abord.
 
 **Déclencheur pour rejuger :** le premier appelant qui passe des épingles ne
-venant *pas* d'une config validée. L'enregistrement au registre n'en est pas
-un, il écrit les épingles dans `meta.yaml` et ne les relit jamais. Le candidat
-reste le contrôle qualité, qui lira celles du `meta.yaml` d'un dossier de
-registre, un fichier sans **aucun** schéma que personne ne valide en entrant,
-mais il est repoussé sans date, et le correctif se décide avec son appelant
-sous les yeux : une passe de forme dans `resolve_pins`, ou un schéma pour le
-sidecar.
+venant *pas* d'une config validée. L'enregistrement au registre n'en est plus
+un, il n'écrit aucune épingle depuis le 18/08/2026. Le candidat reste le
+contrôle qualité, qui lira celles qu'un DMP soumis porte avec lui, un fichier
+sans **aucun** schéma que personne ne valide en entrant, mais il est repoussé
+sans date, et le correctif se décide avec son appelant sous les yeux : une
+passe de forme dans `resolve_pins`, ou un schéma pour ce fichier.
 
 ### La roue n'embarque aucun fichier de données
 

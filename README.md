@@ -114,7 +114,7 @@ the **instance's own configuration**, upserting this project's Document
 Submission entry: the webhook's URL carrying `?project=<id>`, scoped to this
 project's template so the Submit menu offers it for this project's documents
 and nothing else. It refuses outright if the project's registry folder is not
-there, the webhook rejecting a folder with no `meta.yaml`, and advertising
+there, the webhook rejecting a folder that is not laid out, and advertising
 that route would turn every Submit into a failure.
 
 That third target writes the tenant's whole configuration, there being no
@@ -134,30 +134,26 @@ package. The names are in [`.env.example`](.env.example).
 ### `registry/` : where a project's DMPs will land
 
 `projects/<id>/` in the `dmp-registry` mono-repo is a project's destination: a
-`meta.yaml` saying who the project is and which rules versions it was built
-from, next to a `template/` where the submission webhook drops the rendered
-DMP and a `productions/` for the deployment DMPs derived from it. Laying that
-out is this package's job, the webhook writes one document into a folder and
-creates nothing, and refuses a folder with no `meta.yaml`.
+`template/` where the submission webhook drops the rendered DMP, and a
+`productions/` for the deployment DMPs derived from it. Laying that out is
+this package's job, the webhook writes into a folder and creates nothing, and
+refuses a folder that is not laid out. Git stores no empty directory, so each
+subdirectory is a `.gitkeep`, and those two files are the whole folder.
 
-Two verbs, and only one of them writes, but both about the same folder, all
-three of `meta.yaml`, `template/` and `productions/`, so that what reads
-cannot call a folder settled and then watch the other change it.
+Two verbs, and only one of them writes, but both about the same two
+subdirectories, so that what reads cannot call a folder settled and then watch
+the other change it.
 
-`folder_status` reads and says where a project stands: `missing`,
-`registered`, `stale`, `collision` or `unreadable`, naming everything out of
-date in one go. Two of those are faults, a collision, meaning a folder
-carrying another project's `id`, and a `meta.yaml` that is there and does not
-parse, which is refused rather than rebuilt since that file holds the only
-record of the rules a project's submitted DMPs are checked against. The rest
-is a step not taken yet.
+`folder_status` reads and says where a project stands: `missing` when neither
+subdirectory is there, `stale` when one of the two is, `registered` when both
+are. None of the three is a fault, they are steps not taken yet, and what
+fails this read is a registry that cannot be reached with the token it was
+given.
 
-`converge` makes the registry say what the config says and reports what that
-took, from what it actually sent: `created`, `updated` or `unchanged`, so a
-run that reports `unchanged` left no commit. It never deletes, never
-overwrites another project's folder, and touches no key it does not own,
-`id` and `rules` being this repository's while anything else the file carries
-is carried across untouched and never compared.
+`converge` lays the folder out and reports what that took, from what it
+actually sent: `created`, `updated` or `unchanged`, so a run that reports
+`unchanged` left no commit. It writes the `.gitkeep` files that are absent and
+nothing else, never deletes, and never writes outside a project's own folder.
 
 Nothing here needs DSW: registering a project takes a valid config and nothing
 generated, which is why it comes straight after validation.
@@ -221,8 +217,8 @@ generated, which is why it comes straight after validation.
   between the two, the registry's token is read from the environment while
   DSW's is obtained by a call, hence `DswClient.login(instance)` as its
   constructor.
-- `registry/folder.py` : what one project's folder must say, the five states a
-  read of it can find, and the one write that makes it say it.
+- `registry/folder.py` : what one project's folder is made of, the three
+  states a read of it can find, and the write that lays it out.
 - `registry/github.py` : the two calls of the GitHub Contents API this needs,
   standard library only. It hands out bytes, base64, shas and status codes end
   here. A 404 means "no file yet" on a read and a failure on a write, which is
@@ -344,7 +340,7 @@ madmp-core/
 │   ├── generate_template.py      a project into a Document Template bundle
 │   └── publish.py                the three targets, and the wizard-api client
 ├── registry/                     where a project's DMPs will land
-│   ├── folder.py                 one project's folder, read and converged
+│   ├── folder.py                 one project's folder, read and laid out
 │   └── github.py                 the two GitHub Contents API calls this needs
 ├── utils/                        what several packages build on
 │   ├── schema.py                 the shared JSON-Schema plumbing
@@ -387,8 +383,9 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
   be found out by DSW at render time. It uploads what it built, on `main` and
   on a pull request alike, the artifact saying what this commit produces
   whether or not anything was ever published from it.
-- **registry** : every project's destination in the registry, read: free, or
-  already its own. Skips, loudly, without `REGISTRY_TOKEN`.
+- **registry** : every project's destination in the registry, read, which is
+  also what says the registry is reachable with the token it was given. Skips,
+  loudly, without `REGISTRY_TOKEN`.
 - **registry-sync** : writes into the registry repository. It waits on all six
   above and runs on `main` alone, on a pull request it shows as `skipped`, so
   its abstention is readable.

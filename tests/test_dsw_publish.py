@@ -336,23 +336,17 @@ def registered_env(monkeypatch):
 
 
 def test_an_unregistered_folder_stops_the_submission_service(config, registered_env):
-    """The webhook refuses a folder with no meta.yaml, so advertising a
+    """The webhook refuses a folder that is not laid out, so advertising a
     route to one turns every Submit into a failure."""
     registered_env.setattr("dsw.publish.folder_status", _Registry("missing"))
     with pytest.raises(PublishError, match="not registered yet"):
         _require_registered(config)
 
 
-def test_a_collision_stops_it_too(config, registered_env):
-    registered_env.setattr("dsw.publish.folder_status", _Registry("collision"))
-    with pytest.raises(PublishError, match="detail for collision"):
-        _require_registered(config)
-
-
 @pytest.mark.parametrize("state", ["registered", "stale"])
 def test_a_registered_folder_lets_it_through(config, registered_env, state):
-    """`stale` too, meta.yaml no longer matching the config is a sync away
-    and the folder is there, which is what the webhook needs."""
+    """`stale` too, a subdirectory to put back is a sync away and the folder
+    is there, which is what the webhook needs."""
     registered_env.setattr("dsw.publish.folder_status", _Registry(state))
     _require_registered(config)
 

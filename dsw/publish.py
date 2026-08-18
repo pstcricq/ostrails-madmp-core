@@ -446,7 +446,7 @@ def installed_service(service: dict[str, Any]) -> dict[str, Any]:
 def _require_registered(config: dict[str, Any]) -> None:
     """Refuse to advertise a route to a folder that is not there.
 
-    The webhook rejects a folder with no ``meta.yaml``, so a submission service
+    The webhook rejects a folder that is not laid out, so a submission service
     pointing at an unregistered folder turns every Submit into a failure.
     Which registry to look in comes from the environment like everywhere else.
     """
@@ -469,13 +469,11 @@ def _require_registered(config: dict[str, Any]) -> None:
             [
                 (
                     f"{config['id']!r} is not registered yet: the webhook "
-                    f"refuses a folder with no meta.yaml. Push to the default "
-                    f"branch, or run scripts/sync_registry.py"
+                    f"refuses a folder that is not laid out. Push to the "
+                    f"default branch, or run scripts/sync_registry.py"
                 )
             ]
         )
-    if status.state == "collision":
-        raise PublishError([status.detail])
 
 
 def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> None:

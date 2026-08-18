@@ -1,19 +1,16 @@
-"""Make the registry say what every project config says.
+"""Lay out a registry folder for every project config.
 
-A folder with no `meta.yaml` is a folder a submission cannot land in, so this
+A folder that is not laid out is a folder a submission cannot land in, so this
 is the step that makes a project submittable. It needs no DSW instance and
 nothing generated, a valid config is enough.
 
 Runs on the default branch only, and on every push to it rather than only when
-a config changed. `meta.yaml` freezes the rules versions a project was built
-from, and converging every time closes the drift a pin bumped in the config
-would otherwise leave.
+a config changed.
 
 Idempotent, and visibly so, nothing is sent when nothing changed, so a push
 that touched no config leaves no commit behind.
 
-Never deletes, never overwrites another project's folder, and never touches a
-key it does not own, whatever else `meta.yaml` carries is carried across.
+Never deletes, and never writes outside a project's own folder.
 """
 
 from __future__ import annotations
@@ -71,7 +68,7 @@ def main() -> int:
             continue
         try:
             verb = converge(gh, registry, config)
-        except (RegistryError, GitHubError) as err:
+        except GitHubError as err:
             print(f"FAIL {path}\n     {err}", file=sys.stderr)
             failures += 1
             continue

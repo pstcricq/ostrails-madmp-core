@@ -1,5 +1,5 @@
-"""What a project's folder in the registry must say, and what converging on it
-is allowed to touch.
+"""What a project's folder in the registry is, and what converging on it is
+allowed to touch.
 
 The registry is a private repository reached over HTTP, so these tests stand a
 fake in its place: an in-memory tree of paths to bytes, which records every
@@ -17,19 +17,18 @@ from registry import (
     RegistryError,
     converge,
     folder_status,
-    meta_document,
     registry_from_env,
     token_from_env,
 )
-from registry.folder import SUBDIRS, meta_bytes, meta_path
+from registry.folder import SUBDIRS, keep_path
 from registry.github import File
 
 ROOT = Path(__file__).parent.parent
 GLIDER_CONFIG = ROOT / "configs" / "projects" / "glider.yaml"
 
 REGISTRY = Registry(owner="o", repo="r")
-CONFIG = {"id": "glider", "rules": [{"rda_dcs": "1.0.0"}, {"ostrails": "1.0.0"}]}
-META = "projects/glider/meta.yaml"
+# `id` is the one key this package reads, a real config carries many more.
+CONFIG = {"id": "glider"}
 KEEPS = [f"projects/glider/{sub}/.gitkeep" for sub in SUBDIRS]
 
 
@@ -57,214 +56,73 @@ class FakeGitHub:
         self.writes.append(path)
 
 
-def registry_with(document: dict, keeps: bool = True) -> FakeGitHub:
-    """A registry where glider is already registered, saying `document`."""
-    files = {META: meta_bytes(document)}
-    if keeps:
-        files.update(dict.fromkeys(KEEPS, b""))
-    return FakeGitHub(files)
-
-
-def document_in(fake: FakeGitHub) -> dict:
-    return yaml.safe_load(fake.files[META])
-
-
-# What meta.yaml says
-
-
-def test_meta_holds_the_identity_and_the_pins():
-    """The whole file, and the reason it exists: who the project is, and the
-    rules versions it was built from, frozen at registration."""
-    assert meta_document(CONFIG) == {
-        "id": "glider",
-        "rules": [{"rda_dcs": "1.0.0"}, {"ostrails": "1.0.0"}],
-    }
-
-
-def test_the_real_config_registers():
-    """The tie to the real data: what would be written for the one project
-    that exists, read from its config file rather than a fixture."""
-    config = yaml.safe_load(GLIDER_CONFIG.read_text())
-    assert meta_document(config) == {"id": "glider", "rules": config["rules"]}
-
-
-def test_a_declared_field_no_one_here_reads_stays_out():
-    """`name` is in every config and in none of these files. A registry that
-    carried it would have to be updated when prose changes, and would invite
-    a reader to trust a copy instead of the config."""
-    config = yaml.safe_load(GLIDER_CONFIG.read_text())
-    assert "name" in config
-    assert "name" not in meta_document(config)
-
-
-# The keys that are not ours
-
-
-def test_a_foreign_key_is_carried_across():
-    """A key written by another writer. Nothing here may erase it, the
-    failure would be silent and noticed only by whoever went looking for what
-    used to be there."""
-    previous = {"id": "glider", "rules": [], "qc": {"status": "pass"}}
-    assert meta_document(CONFIG, previous)["qc"] == {"status": "pass"}
-
-
-def test_a_foreign_key_does_not_make_a_folder_stale():
-    """Ours are the only keys compared. Otherwise the first verdict written
-    would read as drift, and every sync would fight the registry's CI for the
-    file."""
-    fake = registry_with({"id": "glider", "rules": CONFIG["rules"], "qc": {}})
-    assert folder_status(fake, REGISTRY, CONFIG).state == "registered"
-    assert converge(fake, REGISTRY, CONFIG) == "unchanged"
-    assert fake.writes == []
+def registry_with(*subdirs: str) -> FakeGitHub:
+    """A registry where these of glider's subdirectories are laid out, and no
+    other."""
+    return FakeGitHub(dict.fromkeys((keep_path(CONFIG, sub) for sub in subdirs), b""))
 
 
 # Missing
 
 
-def test_a_missing_folder_is_not_a_fault():
+def test_a_folder_that_is_not_there_yet_is_missing():
     """Adding a project is a config first and a registration second, so the
-    push that adds one must not fail the check that has not run yet."""
-    status = folder_status(FakeGitHub(), REGISTRY, CONFIG)
-    assert (status.state, status.is_fault) == ("missing", False)
+    push that adds one finds nothing and says so rather than failing."""
+    assert folder_status(FakeGitHub(), REGISTRY, CONFIG).state == "missing"
 
 
-def test_creating_lays_out_the_whole_folder():
-    """`meta.yaml` and both directories, because laying out the folder is
-    ours: the webhook writes a document into it and creates nothing."""
+def test_creating_lays_out_both_subdirectories():
+    """Laying out the folder is ours: the webhook writes a document into it
+    and creates nothing, so a folder half laid out is a Submit that fails."""
     fake = FakeGitHub()
     assert converge(fake, REGISTRY, CONFIG) == "created"
-    assert fake.writes == [META, *KEEPS]
-    assert document_in(fake) == meta_document(CONFIG)
-
-
-# Registered, and stale
-
-
-def test_an_up_to_date_folder_is_left_alone():
-    """The claim the sync job rests on: it runs on every push to the default
-    branch, so a push that changed no config must send nothing at all."""
-    fake = registry_with(meta_document(CONFIG))
-    assert folder_status(fake, REGISTRY, CONFIG).state == "registered"
-    assert converge(fake, REGISTRY, CONFIG) == "unchanged"
-    assert fake.writes == []
-
-
-def test_a_bumped_pin_makes_the_folder_stale():
-    """The drift the whole package exists to prevent: the config pins one
-    version, the registry still names another."""
-    fake = registry_with({"id": "glider", "rules": [{"rda_dcs": "0.9.0"}]})
-    assert folder_status(fake, REGISTRY, CONFIG).state == "stale"
-    assert converge(fake, REGISTRY, CONFIG) == "updated"
-    assert fake.writes == [META]
-    assert document_in(fake)["rules"] == CONFIG["rules"]
-
-
-def test_a_missing_subdir_is_created_without_touching_meta():
-    """The two writes are independent: a folder whose meta.yaml is right but
-    whose directories were removed gets them back, and nothing else.
-
-    And it is reported as what it is. The verb answers for the folder, not
-    for `meta.yaml` alone, a run that says `unchanged` and leaves a commit
-    behind is the one claim that must not be wrong."""
-    fake = registry_with(meta_document(CONFIG), keeps=False)
-    assert converge(fake, REGISTRY, CONFIG) == "updated"
     assert fake.writes == KEEPS
 
 
-def test_a_folder_missing_a_subdir_is_stale():
-    """Reading and writing must agree on what a folder is. `converge` lays out
-    three things, so a read that looked at one would call a folder registered
-    and then quietly change it."""
-    fake = registry_with(meta_document(CONFIG), keeps=False)
-    status = folder_status(fake, REGISTRY, CONFIG)
-    assert (status.state, status.is_fault) == ("stale", False)
-    assert "template" in status.detail and "productions" in status.detail
+def test_the_real_config_lays_out_the_real_folder():
+    """The tie to the real data: where the one project that exists is
+    registered, read from its config file rather than a fixture."""
+    config = yaml.safe_load(GLIDER_CONFIG.read_text())
+    fake = FakeGitHub()
+    converge(fake, REGISTRY, config)
+    assert fake.writes == KEEPS
 
 
-def test_a_stale_folder_names_everything_that_is_stale_about_it():
-    """One read, the whole list, a folder both out of date and half laid out
-    says so in one go."""
-    fake = registry_with({"id": "glider", "rules": [{"rda_dcs": "0.9.0"}]}, keeps=False)
-    detail = folder_status(fake, REGISTRY, CONFIG).detail
-    assert "meta.yaml" in detail
-    assert "template" in detail and "productions" in detail
+# Registered
 
 
-def test_key_order_alone_is_not_a_change():
-    """What decides is the document, not the bytes. A file that says the right
-    thing in another order is already right, and rewriting it would be a commit
-    nobody can read a difference in."""
-    fake = registry_with({"rules": CONFIG["rules"], "id": "glider"})
+def test_a_folder_already_laid_out_is_left_alone():
+    """The claim the sync job rests on: it runs on every push to the default
+    branch, so a push that changed no config must send nothing at all."""
+    fake = registry_with(*SUBDIRS)
     assert folder_status(fake, REGISTRY, CONFIG).state == "registered"
     assert converge(fake, REGISTRY, CONFIG) == "unchanged"
     assert fake.writes == []
 
 
-# Collision
+# Stale
 
 
-def test_another_projects_folder_is_a_fault():
-    """The one state syncing cannot fix, and the only one this reports as a
-    fault: two projects cannot both be right about one destination."""
-    fake = registry_with({"id": "canales", "rules": []})
-    status = folder_status(fake, REGISTRY, CONFIG)
-    assert (status.state, status.is_fault) == ("collision", True)
-    assert "canales" in status.detail and "glider" in status.detail
+def test_a_missing_subdirectory_is_put_back_alone():
+    """Only what is absent is written, and the verb answers for the folder. A
+    run that says `unchanged` and leaves a commit behind is the one claim that
+    must not be wrong."""
+    fake = registry_with("template")
+    assert converge(fake, REGISTRY, CONFIG) == "updated"
+    assert fake.writes == ["projects/glider/productions/.gitkeep"]
 
 
-def test_converging_refuses_to_clobber_another_project():
-    """Refusing is the point: that folder is where somebody else's DMPs land."""
-    fake = registry_with({"id": "canales", "rules": []})
-    with pytest.raises(RegistryError) as caught:
-        converge(fake, REGISTRY, CONFIG)
-    assert fake.writes == []
-    assert "projects/glider" in str(caught.value)
-    assert "'canales'" in str(caught.value)
-
-
-# A meta.yaml that is there and cannot be read
-
-
-def registry_saying(content: bytes) -> FakeGitHub:
-    """A registry whose meta.yaml holds these bytes, whatever they are."""
-    return FakeGitHub({META: content, **dict.fromkeys(KEEPS, b"")})
-
-
-DAMAGED = {
-    "empty": b"",
-    "comment only": b"# nothing here\n",
-    "a list": b"- glider\n",
-    "a scalar": b"glider\n",
-    "invalid YAML": b"id: [glider\n",
-}
-
-
-@pytest.mark.parametrize("content", DAMAGED.values(), ids=list(DAMAGED))
-def test_an_unreadable_meta_is_a_fault(content):
-    """Not `missing`, the file is there. Reported missing, it would be
-    rebuilt from the config alone, dropping the rules pins the submitted DMPs
-    are checked against and any key another writer owns, and the run would
-    report `created`."""
-    status = folder_status(registry_saying(content), REGISTRY, CONFIG)
-    assert (status.state, status.is_fault) == ("unreadable", True)
-    assert META in status.detail
-
-
-@pytest.mark.parametrize("content", DAMAGED.values(), ids=list(DAMAGED))
-def test_converging_refuses_an_unreadable_meta(content):
-    """Refusing is the point, as for a collision: this file carries the only
-    record of what a project's DMPs were built from."""
-    fake = registry_saying(content)
-    with pytest.raises(RegistryError) as caught:
-        converge(fake, REGISTRY, CONFIG)
-    assert fake.writes == []
-    assert "projects/glider" in str(caught.value)
-
-
-def test_an_unreadable_meta_is_told_apart_from_a_missing_one():
-    """The two states a read must not answer with the same `None`."""
-    assert folder_status(FakeGitHub(), REGISTRY, CONFIG).state == "missing"
-    assert folder_status(registry_saying(b""), REGISTRY, CONFIG).state == "unreadable"
+@pytest.mark.parametrize(
+    ("laid_out", "absent"), [("template", "productions"), ("productions", "template")]
+)
+def test_a_folder_missing_a_subdirectory_is_stale(laid_out, absent):
+    """Reading and writing must agree on what a folder is. `converge` lays out
+    two things, so a read that looked at one would call a folder registered
+    and then quietly change it. Either half missing is the same verdict, and
+    the detail names the half to look for."""
+    status = folder_status(registry_with(laid_out), REGISTRY, CONFIG)
+    assert status.state == "stale"
+    assert absent in status.detail
 
 
 # Where a project's folder is, and what opens it
@@ -273,7 +131,7 @@ def test_an_unreadable_meta_is_told_apart_from_a_missing_one():
 def test_the_folder_is_named_after_the_id():
     """One string names the config file and the registry folder, so there is
     nothing here to keep in step."""
-    assert meta_path(CONFIG) == META
+    assert keep_path(CONFIG, "template") == "projects/glider/template/.gitkeep"
 
 
 def test_the_token_has_one_name():

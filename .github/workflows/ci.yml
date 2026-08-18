@@ -49,11 +49,11 @@ on:
   workflow_dispatch:
 
 # One run at a time per branch, and queued rather than cancelled. Two pushes in
-# quick succession would otherwise have two `registry-sync` jobs converging the
-# same `meta.yaml`, the second holding a sha the first has just replaced,
-# GitHub answering 409, and the job going red having done nothing wrong. The
-# jobs that act are the last ones, so cancelling would kill the run that is
-# about to register.
+# quick succession would otherwise have two `registry-sync` jobs laying out the
+# same folder, the second creating a file the first has just created, GitHub
+# answering 422, and the job going red having done nothing wrong. The jobs that
+# act are the last ones, so cancelling would kill the run that is about to
+# register.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false

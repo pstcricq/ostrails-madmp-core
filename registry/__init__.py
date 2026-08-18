@@ -1,10 +1,10 @@
 """Public API of a project's destination in the dmp-registry mono-repo.
 
 What this package owns is making sure the folder a submitted DMP lands in
-exists, is laid out, and is this project's.
+exists and is laid out.
 
-``projects/<id>/`` holds ``meta.yaml``, ``template/`` where the DMP is
-dropped, and ``productions/``.
+``projects/<id>/`` holds ``template/`` where the DMP is dropped, and
+``productions/``.
 
 - ``github.py`` is the transport, two calls of the GitHub Contents API
 - ``folder.py`` reads a project's folder and converges it
@@ -20,7 +20,6 @@ from registry.folder import (
     RegistryError,
     converge,
     folder_status,
-    meta_document,
     registry_from_env,
     token_from_env,
 )
@@ -34,7 +33,6 @@ __all__ = [
     "RegistryError",
     "converge",
     "folder_status",
-    "meta_document",
     "registry_from_env",
     "token_from_env",
 ]
