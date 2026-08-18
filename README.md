@@ -399,7 +399,9 @@ madmp-core/
 │   └── sync_registry.py          the one thing here that writes outside
 ├── tests/                        one test file per module
 ├── build/                        where the generators write, never committed
-├── .github/workflows/ci.yml      nine jobs, seven that report and two that act
+├── .github/workflows/
+│   ├── ci.yml                    nine jobs, seven that report and two that act
+│   └── qc-dmp.yml                the check the registry calls on a DMP
 ├── .env.example                  every name the environment has to carry
 ├── pyproject.toml                one environment for the whole repository
 ├── uv.lock                       the versions, committed and installed from
@@ -447,6 +449,33 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
   which is the point of gating on a variable rather than commenting it out.
   It has to be a variable and not a secret: the `secrets` context is not
   available in a job-level `if:`.
+
+### The check the registry calls
+
+`qc-dmp.yml` is not part of the run above, it is a reusable workflow the
+repository holding a DMP calls on one document:
+
+```yaml
+jobs:
+  qc:
+    uses: pstcricq/ostrails-madmp-core/.github/workflows/qc-dmp.yml@v0.1.0
+    with:
+      dmp_path: projects/glider/template/dmp_glider_template.json
+      pins_path: projects/glider/template/dmp_glider_template.meta.json
+    secrets:
+      madmp_core_token: ${{ secrets.MADMP_CORE_TOKEN }}
+```
+
+It checks out the caller, checks out this repository beside it, and runs
+`quality_control.run` from the caller's root. The engine comes from the commit
+the workflow file itself was called at, `github.job_workflow_sha`, not from
+the default branch: a DMP that passed must go on passing, and pulling the
+latest engine under a document nobody touched would turn old submissions red
+for a change made here. Which is why a caller pins a tag rather than `@main`.
+
+The token is needed only while this repository is private: a called workflow
+runs with the caller's own `GITHUB_TOKEN`, which cannot read another private
+repository.
 
 The registry's coordinates are repository variables too, so no deployment's
 address is written into the workflow. `REGISTRY_OWNER` and `REGISTRY_REPO`
