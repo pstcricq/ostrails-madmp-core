@@ -158,6 +158,42 @@ nothing else, never deletes, and never writes outside a project's own folder.
 Nothing here needs DSW: registering a project takes a valid config and nothing
 generated, which is why it comes straight after validation.
 
+### `quality_control/` : whether a submitted DMP holds up
+
+A DMP is checked against the rules it was built from, which travel with it:
+the document template stamps the pinned versions into the document it
+renders, and the submission webhook commits them beside the DMP. So the
+question this answers is not "does this document match the rules today", it
+is "does it match the rules it was written against".
+
+`run_qc` walks the merged model and the document together, once, and returns
+one `CheckResult` per check on one concrete value: the rule checked, the spot
+in the document, the standard that introduced the field, and what to say
+about it. Plain data, with nothing of a runner or a report in it.
+
+Four statuses, and one PASS/FAIL rule: a document fails when at least one
+check does. `missing` is an optional field absent, which follows from
+cardinality alone and never fails. `warning` is a value outside a
+*recommended* vocabulary, the only source of warnings, since a suggestion
+that failed would make every free-text answer a violation.
+
+Everything else is a `fail`: a required field absent, a JSON shape the
+cardinality does not allow, a wrong type or format, a value outside a
+*strict* vocabulary, and a key no rule declares. That last one asks the
+question the other way round, reading the document rather than the model, and
+it is the only check that can catch a key nothing else will ever look at.
+
+Two conventions the generators and this must hold together. An empty string
+is an absence, because the document template emits every required scalar
+unconditionally, so `""` is what an unanswered question renders as, and
+reading it as a value would let a required field nobody answered pass both
+its presence and its type. And an absent container reports once, not once per
+field it would have held.
+
+`python -m quality_control.run` is the command, and it writes an envelope
+carrying the verdict, the counts and the results, so no reader recounts. Exit
+code 0 when the document has no real violation, 1 otherwise.
+
 ### The code beside the data
 
 - `rules/loader.py` : `load_rules_file` reads one rules file and validates it
@@ -223,6 +259,11 @@ generated, which is why it comes straight after validation.
   standard library only. It hands out bytes, base64, shas and status codes end
   here. A 404 means "no file yet" on a read and a failure on a write, which is
   the one asymmetry worth knowing about it.
+- `quality_control/engine.py` : the seven categories, the four statuses, and
+  the one PASS/FAIL rule over them. It knows nothing of files, a Model and a
+  document in, a list of results out.
+- `quality_control/run.py` : the command, and the envelope every other step
+  reads. The only place that decides where the pins come from.
 - `utils/schema.py` : the JSON-Schema plumbing both loaders sit on. Compile a
   schema once, report every violation of a document at once.
 - `utils/errors.py` : `ProblemsError`, the one error shape for the whole
@@ -342,6 +383,9 @@ madmp-core/
 ├── registry/                     where a project's DMPs will land
 │   ├── folder.py                 one project's folder, read and laid out
 │   └── github.py                 the two GitHub Contents API calls this needs
+├── quality_control/              whether a submitted DMP holds up
+│   ├── engine.py                 a model and a document, walked together
+│   └── run.py                    the command, and the envelope it writes
 ├── utils/                        what several packages build on
 │   ├── schema.py                 the shared JSON-Schema plumbing
 │   └── errors.py                 the one error shape
@@ -350,11 +394,12 @@ madmp-core/
 │   ├── validate_configs.py
 │   ├── validate_projects.py
 │   ├── validate_generation.py    also writes build/
+│   ├── validate_quality_control.py
 │   ├── validate_registry.py
 │   └── sync_registry.py          the one thing here that writes outside
 ├── tests/                        one test file per module
 ├── build/                        where the generators write, never committed
-├── .github/workflows/ci.yml      eight jobs, six that report and two that act
+├── .github/workflows/ci.yml      nine jobs, seven that report and two that act
 ├── .env.example                  every name the environment has to carry
 ├── pyproject.toml                one environment for the whole repository
 ├── uv.lock                       the versions, committed and installed from
@@ -383,6 +428,12 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
   be found out by DSW at render time. It uploads what it built, on `main` and
   on a pull request alike, the artifact saying what this commit produces
   whether or not anything was ever published from it.
+- **quality-control** : every project's merged rules walked by the engine.
+  The tests exercise it on synthetic models, this is the only place the real
+  set a project pins is walked, so what it checks is what the data decides:
+  that every scalar type declared is one the engine implements, and that the
+  whole model can be walked. No DMP is checked here, there is none in this
+  repository.
 - **registry** : every project's destination in the registry, read, which is
   also what says the registry is reachable with the token it was given. Skips,
   loudly, without `REGISTRY_TOKEN`.

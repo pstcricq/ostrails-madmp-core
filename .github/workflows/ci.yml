@@ -9,14 +9,16 @@
 #            those rules merged, the set being a property no per-file job can
 #            see
 #   generate every project through both generators, and the artifacts below
+#   quality- every project's merged rules walked by the quality control
+#   control  engine, the set being what decides whether it can walk them
 #   registry every project's destination in the registry, read: free, or
 #            already its own
 #
 # Separate jobs rather than steps of one, so the check list on a pull request
 # names the culprit. Each pays its own setup, and they run concurrently, so
-# wall-clock is the slowest of the six.
+# wall-clock is the slowest of the seven.
 #
-# The line is not "before or after validation", it is report or act. The six
+# The line is not "before or after validation", it is report or act. The seven
 # jobs above only ever report, `generate` included since an uploaded artifact
 # is scoped to its own run and reaches nothing. Two jobs act, and they are the
 # only two with `needs:`, `registry-sync` writes into the registry repository
@@ -24,9 +26,10 @@
 # alone, and on a pull request both appear as `skipped`, which is what makes
 # their abstention readable rather than silent.
 #
-# `projects` has no `needs:` on purpose, and neither has `registry`. A project
-# whose pins do not resolve is broken whether or not something else is, and a
-# folder taken by another project is taken whatever else is wrong.
+# `projects` has no `needs:` on purpose, and neither has `quality-control` or
+# `registry`. A project whose pins do not resolve is broken whether or not
+# something else is, and a folder taken by another project is taken whatever
+# else is wrong.
 #
 # `generate` uploads what it built, on a pull request too, where nothing is
 # ever published. That is what the artifact means: what this commit produces,
@@ -139,6 +142,19 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  quality-control:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install the locked environment
+        run: uv sync --frozen
+      - name: Walk every project's merged rules with the quality control engine
+        run: uv run python scripts/validate_quality_control.py
+
   registry:
     runs-on: ubuntu-latest
     steps:
@@ -161,8 +177,9 @@ jobs:
   registry-sync:
     # The only job that writes outside this repository, so the only one that
     # waits for every verdict, a project is registered from a config that
-    # loads, pins that resolve and rules that merge, or it is not registered.
-    needs: [checks, rules, configs, projects, generate, registry]
+    # loads, pins that resolve, rules that merge and a model the quality
+    # control can walk, or it is not registered.
+    needs: [checks, rules, configs, projects, generate, quality-control, registry]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
