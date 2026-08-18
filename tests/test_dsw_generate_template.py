@@ -347,7 +347,7 @@ def test_an_unanswered_project_still_renders_valid_json(body):
     """Nothing answered: every conditional block stays shut, and what is left
     is what the document says about a project a researcher has not opened."""
     document = _render(body, {})
-    assert set(document) == {"dmp"}
+    assert set(document) == {"dmp", "metadata"}
     assert document["dmp"]["dmp_id"] == {
         "identifier": "https://dsw.example/projects/1111",
         "type": "url",
@@ -495,6 +495,38 @@ def test_only_an_available_format_becomes_a_dsw_format(bundle):
 
 
 # What is computed rather than asked
+
+
+def test_the_metadata_block_says_what_the_model_merged(project, body):
+    """The whole point of the block: it names the rules versions this document
+    was built from, so quality control judges it against those and not against
+    whatever the config pins later. Read off the merged model, in pin shape,
+    base standard first."""
+    metadata = _render(body, {})["metadata"]
+    assert metadata == {
+        "project": project.config["id"],
+        "template_version": project.config["version"],
+        "rules": [{name: version} for name, version in project.model.standard_versions],
+    }
+
+
+def test_the_metadata_block_carries_no_jinja(body):
+    """Constants, resolved when the template was generated. An expression in
+    here would make the provenance depend on the DSW project rendering it,
+    which is the one thing it must not do: a researcher left on an older
+    template has to go on rendering that template's versions."""
+    # From the last `"metadata":`, the root one. RDA DCS declares a
+    # `dmp.dataset[].metadata` too, emitted higher up in the same body.
+    start = body.rindex('\n  "metadata": ')
+    block = body[start : body.rindex("}\n{% endautoescape %}")]
+    assert "{{" not in block
+    assert "{%" not in block
+
+
+def test_the_metadata_block_does_not_depend_on_the_replies(body):
+    """Answered or not, the same block. It describes the template, not the
+    document, so nothing a researcher types can move it."""
+    assert _render(body, {})["metadata"] == _render(body, _Answered())["metadata"]
 
 
 def test_a_computed_field_is_rendered_from_the_project_and_not_from_a_reply(body):

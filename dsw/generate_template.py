@@ -58,7 +58,7 @@ from dsw.uuids import (
     question_uuid,
     u,
 )
-from project import Field, Project, assemble_project
+from project import Field, Model, Project, assemble_project
 
 # The DSW document-template metamodel version, a separate concept from the
 # KM's own metamodelVersion (20). Tied to the DSW instance, not the project.
@@ -518,6 +518,34 @@ def _dsw_dmp_id_field(depth: int) -> OutputField:
     return OutputField("dmp_id", value, required=True, is_object=True)
 
 
+def _metadata_object(config: dict[str, Any], model: Model) -> str:
+    """The provenance block the rendered document carries beside ``dmp``, as
+    the JSON literal it is emitted as.
+
+    Constants, resolved here and never at render time, so a project left on an
+    older template goes on rendering the versions that template was built
+    from. The pins are read off the merged model rather than recopied from the
+    config, so they are the versions the rules files themselves declare, in
+    the shape a pin is written in.
+
+    Every value goes through ``json.dumps()``, which is what makes the block
+    valid JSON whatever the config carries.
+    """
+    pins = ",\n".join(
+        f"      {json.dumps({name: version})}"
+        for name, version in model.standard_versions
+    )
+    return (
+        "{\n"
+        f'    "project": {json.dumps(config["id"])},\n'
+        f'    "template_version": {json.dumps(config["version"])},\n'
+        '    "rules": [\n'
+        f"{pins}\n"
+        "    ]\n"
+        "  }"
+    )
+
+
 def build_template_bundle(
     project: Project, created_at: str | None = None
 ) -> dict[str, Any]:
@@ -583,7 +611,8 @@ def build_template_bundle(
         "    same functions generate_km.py uses, so they always match the\n"
         "    published KM by construction, never a hand-copied table. -#}\n\n"
         "{\n"
-        '  "dmp": ' + dmp_object + "\n"
+        '  "dmp": ' + dmp_object + ",\n"
+        '  "metadata": ' + _metadata_object(config, model) + "\n"
         "}\n"
         "{% endautoescape %}\n"
     )
@@ -599,7 +628,14 @@ def build_template_bundle(
         lines = readme_head(config, "Document Template") + [
             "## Output",
             "",
-            f"Structured around the `dmp` root object, covering {coverage}.",
+            (
+                f"Structured around the `dmp` root object, covering {coverage}. "
+                "A `metadata` object sits beside it, naming the project, the "
+                "template version and the exact rules versions this document "
+                "was built from. The submission webhook takes it out and "
+                "commits it next to the DMP, so what lands in the registry is "
+                "the `dmp` object alone."
+            ),
             "",
             "| Format | Status | Notes |",
             "|---|---|---|",
