@@ -75,7 +75,7 @@ jobs:
       - name: Resolve which madmp-core to run
         id: core
         env:
-          RELEASE: v0.1.2
+          RELEASE: v0.2.0
           REF: ${{ inputs.madmp_core_ref }}
         run: |
           ref="${REF:-$RELEASE}"
