@@ -43,7 +43,7 @@ on:
         description: >-
           Override which commit, tag or branch of madmp-core to run. Leave it
           unset, the default is the commit this workflow file itself was
-          called at.
+          called at, or the release below when the runner does not say.
         required: false
         type: string
         default: ""
@@ -64,19 +64,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # `github.job_workflow_sha` is the commit of this file, the one thing a
-      # called workflow knows about itself. `github.workflow_ref` would name
-      # the CALLER's workflow instead, so it cannot serve here.
+      # Three answers, best first. `github.job_workflow_sha` is the commit of
+      # this file, the one thing a called workflow can know about itself, but
+      # the runner does not always fill it in, and `github.workflow_ref` is no
+      # help since it names the CALLER's workflow. RELEASE is then the answer:
+      # this file is fetched at the tag a caller pins, so the tag written here
+      # is the one that fetched it. Forgetting to bump it at release time runs
+      # an older engine, never a newer one, which is the harmless direction, a
+      # DMP that passed goes on passing.
       - name: Resolve which madmp-core to run
         id: core
         env:
+          RELEASE: v0.1.1
           REF: ${{ inputs.madmp_core_ref || github.job_workflow_sha }}
         run: |
-          if [ -z "$REF" ]; then
+          ref="${REF:-$RELEASE}"
+          if [ -z "$ref" ]; then
             echo "::error::cannot tell which madmp-core to run, pass madmp_core_ref explicitly"
             exit 1
           fi
-          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "running madmp-core at $ref"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
 
       # The calling repository, which holds the document and its pins.
       - uses: actions/checkout@v4
