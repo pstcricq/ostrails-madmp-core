@@ -10,7 +10,7 @@
 #   on: [push, pull_request]
 #   jobs:
 #     qc:
-#       uses: pstcricq/ostrails-madmp-core/.github/workflows/qc-dmp.yml@v0.1.0
+#       uses: pstcricq/ostrails-madmp-core/.github/workflows/quality-control.yml@v0.2.0
 #       with:
 #         dmp_path:  projects/glider/template/dmp_glider_template.json
 #         pins_path: projects/glider/template/dmp_glider_template.meta.json

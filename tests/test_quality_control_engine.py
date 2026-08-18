@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from project import Model, merge_rules
+from project import Model, assemble_project, merge_rules
 from quality_control import (
     SCALAR_TYPES,
     CheckResult,
@@ -23,11 +23,9 @@ from quality_control import (
     run_qc,
 )
 
-RULES_DIR = Path(__file__).parent.parent / "rules" / "standards"
-REAL_FILES = [
-    RULES_DIR / "rda_dcs" / "1.0.0.json",
-    RULES_DIR / "ostrails" / "1.0.0.json",
-]
+ROOT = Path(__file__).parent.parent
+RULES_DIR = ROOT / "rules" / "standards"
+PROJECT_CONFIGS = sorted((ROOT / "configs" / "projects").glob("*.yaml"))
 
 STRING_1 = {"_cardinality": "1", "_type": "string"}
 STRING_01 = {"_cardinality": "0..1", "_type": "string"}
@@ -53,6 +51,38 @@ def _check(tmp_path, dmp_rules, dmp_document, category=None) -> list[CheckResult
 
 def _statuses(results) -> dict[str, int]:
     return dict(Counter(r.status for r in results))
+
+
+# A value each scalar type accepts, so a probe document is valid everywhere.
+PROBE = {
+    "string": "text",
+    "number": 1,
+    "boolean": True,
+    "date": "2026-08-18",
+    "datetime": "2026-08-18T09:00:00Z",
+    "email": "albert@example.com",
+    "url": "https://example.org/a",
+    "currency": "EUR",
+    "country_code": "ES",
+    "language": "eng",
+}
+
+
+def _probe(model) -> dict:
+    """A document answering every field the model declares, so that walking it
+    reaches all of them. A vocabulary is answered with one of its own values,
+    anything else with a value of its declared type."""
+
+    def value(field):
+        if field.type == "object":
+            answer = {child.name: value(child) for child in field.children}
+        elif field.allowed_values or field.suggested_values:
+            answer = (field.allowed_values or field.suggested_values)[0]
+        else:
+            answer = PROBE[field.type]
+        return [answer] if field.is_list else answer
+
+    return {"dmp": {field.name: value(field) for field in model.fields}}
 
 
 # The document's own shape
@@ -348,21 +378,42 @@ def test_the_results_are_json(tmp_path):
 # Against the real rules
 
 
-def test_the_real_model_checks_a_real_document():
-    """The tie to the real data: the merged rules of the one project that
-    exists, walked over a document, with every field it declares reported
-    exactly once."""
-    model = merge_rules(REAL_FILES)
+@pytest.mark.parametrize("config", PROJECT_CONFIGS, ids=lambda p: p.stem)
+def test_every_project_pins_rules_the_engine_can_check(config):
+    """The set a project actually pins, which no other test here sees: a rules
+    file may declare a `_type` nothing in this repository implements, and a
+    field the engine cannot check is only found the day a submitted DMP
+    carries a value for it."""
+    model = assemble_project(config).model
+    declared = {field.type for field in model.walk() if field.type != "object"}
+    assert declared <= set(SCALAR_TYPES)
+
+
+@pytest.mark.parametrize("config", PROJECT_CONFIGS, ids=lambda p: p.stem)
+def test_every_project_is_walked_whole(config):
+    """The tie to the real data, one project at a time. Every field the merged
+    rules declare is reported, and reported once, so a model this engine
+    cannot walk fails here rather than on somebody's submission."""
+    model = assemble_project(config).model
+    results = run_qc(model, _probe(model))
+    reported = {r.rule_path for r in results if r.category == "presence"}
+    assert reported == {field.dotted_path for field in model.walk()}
+    assert not [r for r in results if r.category == "unexpected"]
+
+
+def test_an_empty_document_reports_the_top_level_and_stops_there():
+    """The other end of the same walk: nothing is answered, so each top-level
+    field says so once and nothing below it is reported at all."""
+    model = assemble_project(PROJECT_CONFIGS[0]).model
     results = run_qc(model, {"dmp": {}})
-    presence = [r for r in results if r.category == "presence"]
-    assert len(presence) == len(model.fields)
+    assert len(results) == len(model.fields) + 1
     assert has_failures(results)
 
 
 def test_a_field_reports_the_standard_that_introduced_it():
     """Which standard to go and read is part of the report, and an extension
     is not the base."""
-    model = merge_rules(REAL_FILES)
+    model = assemble_project(PROJECT_CONFIGS[0]).model
     document = {"dmp": {"dataset": [{"methodology": "towed"}]}}
     by_path = {
         r.rule_path: r for r in run_qc(model, document) if r.category == "presence"
@@ -379,7 +430,7 @@ def test_the_engine_knows_every_type_the_meta_schema_allows():
     engine enumerates the ones it can check. A type added to one and not the
     other passes every per-file check there is, and only shows the day a
     document carries a value for that field."""
-    schema = json.loads((RULES_DIR.parent / "rules.schema.json").read_text())
+    schema = json.loads((ROOT / "rules" / "rules.schema.json").read_text())
     declared = set(schema["$defs"]["field"]["properties"]["_type"]["enum"])
     assert declared - {"object"} == set(SCALAR_TYPES)
 

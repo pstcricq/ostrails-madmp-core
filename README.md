@@ -394,14 +394,13 @@ madmp-core/
 │   ├── validate_configs.py
 │   ├── validate_projects.py
 │   ├── validate_generation.py    also writes build/
-│   ├── validate_quality_control.py
 │   ├── validate_registry.py
 │   └── sync_registry.py          the one thing here that writes outside
 ├── tests/                        one test file per module
 ├── build/                        where the generators write, never committed
 ├── .github/workflows/
-│   ├── ci.yml                    nine jobs, seven that report and two that act
-│   └── qc-dmp.yml                the check the registry calls on a DMP
+│   ├── ci.yml                    eight jobs, six that report and two that act
+│   └── quality-control.yml       the check the registry calls on a DMP
 ├── .env.example                  every name the environment has to carry
 ├── pyproject.toml                one environment for the whole repository
 ├── uv.lock                       the versions, committed and installed from
@@ -430,12 +429,6 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
   be found out by DSW at render time. It uploads what it built, on `main` and
   on a pull request alike, the artifact saying what this commit produces
   whether or not anything was ever published from it.
-- **quality-control** : every project's merged rules walked by the engine.
-  The tests exercise it on synthetic models, this is the only place the real
-  set a project pins is walked, so what it checks is what the data decides:
-  that every scalar type declared is one the engine implements, and that the
-  whole model can be walked. No DMP is checked here, there is none in this
-  repository.
 - **registry** : every project's destination in the registry, read, which is
   also what says the registry is reachable with the token it was given. Skips,
   loudly, without `REGISTRY_TOKEN`.
@@ -452,13 +445,13 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
 
 ### The check the registry calls
 
-`qc-dmp.yml` is not part of the run above, it is a reusable workflow the
+`quality-control.yml` is not part of the run above, it is a reusable workflow the
 repository holding a DMP calls on one document:
 
 ```yaml
 jobs:
   qc:
-    uses: pstcricq/ostrails-madmp-core/.github/workflows/qc-dmp.yml@v0.1.2
+    uses: pstcricq/ostrails-madmp-core/.github/workflows/quality-control.yml@v0.2.0
     with:
       dmp_path: projects/glider/template/dmp_glider_template.json
       pins_path: projects/glider/template/dmp_glider_template.meta.json
