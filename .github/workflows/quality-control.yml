@@ -6,10 +6,10 @@
 #
 # Caller side, the whole file:
 #
-#   name: QC
+#   name: Quality control
 #   on: [push, pull_request]
 #   jobs:
-#     qc:
+#     quality-control:
 #       uses: pstcricq/ostrails-madmp-core/.github/workflows/quality-control.yml@v0.2.0
 #       with:
 #         dmp_path:  projects/glider/template/dmp_glider_template.json
@@ -21,7 +21,7 @@
 # default branch. A DMP that passed must go on passing, and pulling the latest
 # engine under a document nobody touched would turn old submissions red for a
 # change made here.
-name: QC DMP
+name: Quality control
 
 on:
   workflow_call:
@@ -120,7 +120,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: qc-report
+          name: quality-control-report
           path: qc_results.json
           retention-days: 14
           if-no-files-found: warn
