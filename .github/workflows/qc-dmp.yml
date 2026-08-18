@@ -42,8 +42,8 @@ on:
       madmp_core_ref:
         description: >-
           Override which commit, tag or branch of madmp-core to run. Leave it
-          unset, the default is the commit this workflow file itself was
-          called at, or the release below when the runner does not say.
+          unset, the default is the release this workflow file belongs to,
+          which is the tag a caller fetched it at.
         required: false
         type: string
         default: ""
@@ -64,25 +64,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Three answers, best first. `github.job_workflow_sha` is the commit of
-      # this file, the one thing a called workflow can know about itself, but
-      # the runner does not always fill it in, and `github.workflow_ref` is no
-      # help since it names the CALLER's workflow. RELEASE is then the answer:
-      # this file is fetched at the tag a caller pins, so the tag written here
-      # is the one that fetched it. Forgetting to bump it at release time runs
-      # an older engine, never a newer one, which is the harmless direction, a
-      # DMP that passed goes on passing.
+      # A called workflow cannot read its own ref: `github.workflow_ref` and
+      # `github.workflow_sha` both name the CALLER's workflow, and there is no
+      # context field for this one. RELEASE is the answer, and it is a sound
+      # one: this file is fetched at the tag a caller pins, so the tag written
+      # here is the tag that fetched it, and cutting a release means bumping
+      # it in the same commit. Forgetting runs an older engine, never a newer
+      # one, which is the harmless direction, a DMP that passed goes on
+      # passing.
       - name: Resolve which madmp-core to run
         id: core
         env:
-          RELEASE: v0.1.1
-          REF: ${{ inputs.madmp_core_ref || github.job_workflow_sha }}
+          RELEASE: v0.1.2
+          REF: ${{ inputs.madmp_core_ref }}
         run: |
           ref="${REF:-$RELEASE}"
-          if [ -z "$ref" ]; then
-            echo "::error::cannot tell which madmp-core to run, pass madmp_core_ref explicitly"
-            exit 1
-          fi
           echo "running madmp-core at $ref"
           echo "ref=$ref" >> "$GITHUB_OUTPUT"
 

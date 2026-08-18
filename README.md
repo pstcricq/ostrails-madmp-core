@@ -458,7 +458,7 @@ repository holding a DMP calls on one document:
 ```yaml
 jobs:
   qc:
-    uses: pstcricq/ostrails-madmp-core/.github/workflows/qc-dmp.yml@v0.1.1
+    uses: pstcricq/ostrails-madmp-core/.github/workflows/qc-dmp.yml@v0.1.2
     with:
       dmp_path: projects/glider/template/dmp_glider_template.json
       pins_path: projects/glider/template/dmp_glider_template.meta.json
@@ -467,13 +467,12 @@ jobs:
 ```
 
 It checks out the caller, checks out this repository beside it, and runs
-`quality_control.run` from the caller's root. The engine comes from the commit
-the workflow file itself was called at, `github.job_workflow_sha`, and from
-the release named in that file when the runner does not fill it in. Never from
-the default branch: a DMP that passed must go on passing, and pulling the
-latest engine under a document nobody touched would turn old submissions red
-for a change made here. Which is why a caller pins a tag rather than `@main`,
-and why cutting a tag means bumping `RELEASE` in that file first.
+`quality_control.run` from the caller's root. The engine comes from the
+release that workflow file belongs to, never from the default branch: a DMP
+that passed must go on passing, and pulling the latest engine under a document
+nobody touched would turn old submissions red for a change made here. A called
+workflow cannot read its own ref, so the tag is written in the file itself,
+and cutting a release means bumping it in the same commit.
 
 The token is needed only while this repository is private: a called workflow
 runs with the caller's own `GITHUB_TOKEN`, which cannot read another private
