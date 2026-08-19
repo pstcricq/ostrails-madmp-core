@@ -30,6 +30,7 @@ d'ôter du registre les épingles de règles ([§10](#10-le-registre-et-la-publi
 6. [Le questionnaire (Knowledge Model)](#6-le-questionnaire-knowledge-model)
 7. [Le template de document](#7-le-template-de-document)
 10. [Le registre, et la publication](#10-le-registre-et-la-publication)
+11. [Le déploiement DSW](#11-le-déploiement-dsw)
 14. [Limites connues](#14-limites-connues)
 
 ---
@@ -1472,6 +1473,242 @@ inexistant.
 
 ---
 
+## 11. Le déploiement DSW
+
+Le dépôt `ostrails-madmp-dsw` fait tourner une instance Data Stewardship Wizard
+4.31 et le webhook de soumission à côté d'elle. Il part de l'[exemple de
+déploiement officiel](https://github.com/ds-wizard/dsw-deployment-example) à sa
+version 4.31, gardé en remote `upstream` pour comparer les versions suivantes,
+jamais pour les fusionner.
+
+Ce qui suit était dans un `TECHNICAL_GUIDE.md` de ce dépôt jusqu'au 19/08/2026.
+Il a été rapatrié ici : les décisions du projet vivent dans un seul document, et
+chaque dépôt ne garde qu'un `README.md` qui dit son fonctionnement.
+
+Tout ce qui est donné comme une mesure a été observé sur ce déploiement.
+
+### Le périmètre : un déploiement, et rien d'autre
+
+Pas de règles maDMP, pas de contrôle qualité, pas de code applicatif, et depuis
+le 19/08/2026 pas même un `Dockerfile`. Le webhook qui reçoit un document rendu,
+le contrôle et le commite vit ici, dans `madmp-core`, qui construit et publie
+aussi son image, et le déploiement nomme un tag de celle-ci. Il a porté ce code
+du 10/08 au 19/08/2026, et le lui avoir rendu, image comprise, est ce qui rend
+cette frontière vraie plutôt qu'à peu près vraie.
+
+Le test de la frontière est simple : **rien là-bas n'a à changer quand le
+webhook change.** Un moteur plus récent ou des règles plus récentes, c'est une
+valeur dans `.env`.
+
+### La configuration passe par l'environnement
+
+DSW résout un réglage depuis l'environnement d'abord, puis son fichier de
+configuration, puis un défaut compilé dans l'image. Cet ordre est ce qui rend
+un `application.yml` inutile, et s'en passer est la décision la plus lourde de
+conséquences de ce dépôt.
+
+**Pourquoi elle compte :** l'exemple livré par DSW met des **secrets de
+signature fonctionnels dans un dépôt public**. Une instance qui les garde peut
+se voir forger un jeton valide par quiconque a lu cet exemple. Passer par
+l'environnement donne aux secrets exactement un domicile, `.env`, qui est
+gitignoré.
+
+L'image porte quand même son propre `application.yml` en dessous, et ses défauts
+ne sont pas neutres : il nomme la base `wizard` là où ce déploiement utilise
+`engine-wizard`. Toute valeur qui compte est donc posée explicitement plutôt que
+laissée à un repli.
+
+Il n'y a **aucun `:-default` dans `docker-compose.yml`**. Un défaut écrit là
+serait un second domicile pour une valeur dont le domicile est `.env.example`,
+libre d'en diverger.
+
+### `.env` se remplit à la main
+
+Aucun script n'écrit un secret. `.env.example` porte, à côté de chaque valeur
+vide, ce qu'elle est et la commande qui la produit.
+
+L'exemple ne livre **jamais un secret fonctionnel, ni un mot de passe
+bouche-trou**. « Vide » est ce qui force un choix : une valeur dans l'exemple
+est une valeur que chaque déploiement hérite en silence, et l'un d'eux ferait
+tourner son stockage objet sur un mot de passe publié dans un dépôt git.
+
+Trois contraintes de ce fichier sont mesurées et non supposées :
+
+- MinIO refuse de démarrer sur un mot de passe de moins de 8 caractères, et
+  nomme la variable quand il en manque une.
+- `GENERAL_SECRET` doit faire exactement 32 caractères ASCII, ce que produit
+  `openssl rand -hex 16`.
+- La clé RSA est la seule valeur multi-lignes, et elle doit être collée entre
+  guillemets doubles. Sans eux, compose lit chaque ligne suivante comme une
+  nouvelle variable et refuse le fichier entier, donc **aucune** des vingt
+  valeurs n'est lue. C'est le seul contrôle qui attrape ça, aucune clé prise
+  isolément n'a l'air fausse.
+
+### Le fichier compose
+
+**Nom de projet épinglé.** Les noms de conteneurs, de volumes et de réseau
+survivent au renommage du dossier.
+
+**Volumes nommés.** Sans eux, `docker compose down` détruit la base et le
+bucket.
+
+**Le healthcheck du serveur est redéfini.** L'image DSW en livre un avec un
+intervalle de 300 secondes et sans période de démarrage. Docker ne lance le
+premier contrôle qu'après un intervalle complet, donc le conteneur ne peut pas
+se déclarer sain en moins de cinq minutes quelle que soit sa vitesse de réponse,
+et une panne met jusqu'à cinq minutes à se voir. Mesuré, depuis une base vide :
+
+| | |
+|---|---|
+| avec le healthcheck de l'image | 307 s |
+| avec le nôtre, intervalle 10 s et période de démarrage 300 s | **12 s** |
+| les 67 migrations elles-mêmes | 7 s |
+
+Les migrations ne sont pas le coût.
+
+**Postgres a aussi un healthcheck**, pour que `server` et `docworker` attendent
+une base qui répond plutôt qu'un conteneur qui existe. Il utilise
+`pg_isready -h 127.0.0.1` : par la socket unix, le serveur temporaire que lance
+`initdb` répond déjà, et le contrôle passerait au vert avant que la base
+n'accepte une seule connexion TCP.
+
+**`platform: linux/amd64` sur le serveur seul.** Vérifié contre les manifestes
+publiés : `wizard-server:4.31` est amd64 uniquement, alors que `wizard-client`,
+`document-worker` et `mailer` sont multi-architecture avec une variante arm64.
+Ajouter la ligne aux trois autres les met en émulation pour rien, la retirer du
+serveur le casse sur une machine ARM.
+
+**`createbucket` est un service compose sous un profil.** DSW ne crée pas son
+bucket : dans l'API S3, `CreateBucket` et `PutObject` sont deux opérations
+distinctes, et écrire dans un bucket absent rend `NoSuchBucket`. Un service
+compose connaît son propre réseau, lit `.env` et résout `${MC_VERSION}`, là où
+un script shell devrait deviner les trois. Le profil le garde hors de `up`, qui
+traiterait sinon une tâche unique comme un service qui n'arrête pas de s'arrêter.
+
+**Le mailer est présent mais commenté.** Le mail étant désactivé, il n'a rien à
+traiter. Ce que ça coûte : ni réinitialisation de mot de passe ni invitation par
+courriel, deux choses déjà impossibles sans mail. À décommenter **en même temps**
+qu'on active le mail, faute de quoi le serveur empile des commandes que personne
+ne traite pendant que l'interface annonce les messages comme envoyés.
+
+**`engine-wizard` est à la fois le nom de la base et celui du bucket, et c'est
+une coïncidence.** Ce sont deux espaces de noms sans rapport, et l'image le
+prouve : son propre défaut pour la base est `wizard`. L'un se renomme sans
+l'autre.
+
+**Tout est lié à `127.0.0.1`.** Publier sur `0.0.0.0` expose le service à tout
+le réseau où la machine se trouve, et sous Linux contourne `ufw` entièrement.
+
+**Il n'y a pas de surcharge nginx pour le client.** L'image cliente redirige `/`
+vers une adresse absolue en `http://`, construite depuis le protocole que nginx
+écoute lui-même, ce qui casse derrière un terminateur TLS. Masquer le fichier de
+configuration de l'image pour réparer une seule adresse coûte plus que ça ne
+répare : derrière un proxy, la redirection appartient au proxy, avec
+`proxy_redirect http:// https://`.
+
+### Le script de mise en route
+
+Il rapporte la configuration, puis lance deux commandes. Il n'écrit rien, ce qui
+est ce qui le rend rejouable sans un seul contrôle d'idempotence.
+
+Il rapporte la valeur **que compose utilisera**, pas celle de `.env` :
+l'environnement l'emporte sur ce fichier, donc lire le fichier seul annoncerait
+une valeur que les conteneurs ne voient jamais. Les secrets sont rapportés comme
+`set`, jamais imprimés, et les valeurs qui n'en sont pas sont imprimées en
+entier, parce que c'est là qu'une URL de portable oubliée dans le `.env` d'un
+serveur devient visible.
+
+Il s'arrête avant de démarrer quoi que ce soit quand une valeur manque, et les
+nomme toutes d'un coup.
+
+Rien n'y attend l'API : `up --wait` rend la main quand les healthchecks passent,
+soit la même information obtenue de ce qui la connaît déjà.
+
+Le `.gitignore` couvre `.env.*` et pas seulement `.env`, parce qu'un second
+fichier d'environnement est la chose naturelle à créer quand on déploie vers
+deux cibles, et qu'il porte les mêmes secrets.
+
+### Le webhook, vu du déploiement
+
+Ce qui reste là-bas, c'est le déploiement : le service compose, les quatre
+variables qu'il passe, et le healthcheck. C'est la même ligne que pour tous les
+autres services de ce fichier.
+
+**Les quatre variables ne peuvent pas venir d'ici.** Ce sont l'environnement
+d'un conteneur qui tourne, et seul ce qui lance le conteneur peut le fournir.
+Deux d'entre elles sont des secrets, qui n'ont leur place dans aucun dépôt. Les
+deux autres sont des coordonnées, qui pourraient avoir un défaut dans l'image,
+mais ça collerait une image publiée à un registre unique alors qu'elle est faite
+pour être tirée par n'importe quel déploiement.
+
+**`REGISTRY_` plutôt que `GITHUB_`.** Compose laisse le shell l'emporter sur
+`.env`, et `GITHUB_TOKEN` est un nom que le shell d'un développeur porte très
+souvent déjà. La collision ferait commiter le webhook avec les identifiants de
+quelqu'un d'autre, en silence.
+
+**Le HTTPS sortant vers `api.github.com`** est la seule chose que ce déploiement
+fait à l'exécution qui sorte de l'hôte. Tout le reste parle sur le réseau
+compose, `ghcr.io` n'étant joint que lorsqu'une image est tirée.
+
+### L'image n'est pas construite là-bas
+
+Le compose nomme `ghcr.io/pstcricq/ostrails-madmp-core/submission:${MADMP_CORE_VERSION}`
+et la tire, exactement comme il tire les trois images DSW, Postgres et MinIO. Le
+service de soumission était le seul `build:` de ce fichier, il ne l'est plus.
+
+Le raisonnement du déplacement est au §10, [Le webhook est ici, et son image
+aussi](#le-webhook-est-ici-et-son-image-aussi). Ce qu'il change **pour le
+déploiement** :
+
+**Ce qu'il gagne.** Aucune construction, donc pas de `git`, pas de secret
+BuildKit, et pas de jeton qui lit un dépôt de *code source* privé, ce qui est
+strictement plus qu'un déploiement n'a jamais eu besoin de détenir.
+`MADMP_CORE_VERSION` passe d'un `ARG` dans un `Dockerfile` à `.env`, à côté des
+cinq autres versions d'images, là où une épingle de version a sa place et là où
+le script de mise en route la rapporte déjà.
+
+**Ce qu'il coûte.** Publier une correction demande maintenant un tag ici et un
+run de CI, là où un `docker compose build submission` suffisait.
+
+**Le paquet est privé**, parce que le dépôt l'est, donc un hôte doit faire
+`docker login ghcr.io` une fois avec un jeton portant `read:packages`. Un hôte
+qui ne l'a pas fait échoue le pull sur un 401 qui se lit comme si l'image
+n'existait pas. La visibilité d'un paquet est un réglage à part, distinct de
+celle du dépôt, donc la rendre publique retirerait le dernier identifiant dont
+un déploiement a besoin pour se lever. Non fait, non tranché.
+
+### Ce que la CI de ce dépôt peut dire
+
+Trois contrôles, tous sur les fichiers de déploiement : `docker compose config`
+contre `.env.example`, `shellcheck` sur le script, et `actionlint` sur les
+workflows.
+
+La distinction est délibérée. Une CI peut dire si les fichiers de déploiement
+**parsent et se résolvent**. Elle ne peut pas dire si un déploiement est
+**correct**, ce qui ne se voit que sur un vrai hôte. Prétendre le contraire
+serait pire que ne rien vérifier.
+
+Ce que ces contrôles n'attrapent pas, mesuré le 19/08/2026 : `docker compose
+config` sort 0 sur une variable que `.env.example` ne porte pas, il se contente
+d'avertir et substitue une chaîne vide. Ce qui refuse là-dessus, c'est le script
+de mise en route, sur la machine qui déploie.
+
+### Ce qui reste ouvert
+
+- **`S3_URL` derrière un proxy.** Le navigateur récupère les documents
+  directement depuis MinIO par une URL présignée, donc MinIO a besoin d'une
+  adresse publique. Un sous-domaine évite de réécrire des chemins, MinIO mettant
+  le nom du bucket dans le chemin. C'est la seule des trois URL qui ne découle
+  pas des autres.
+- **Postgres ou S3 managés.** Si l'infrastructure fournit l'un des deux, le
+  changement n'est pas une valeur dans `.env` mais le retrait de services du
+  fichier compose.
+- **Un reverse proxy sur une autre machine.** Tout est lié à `127.0.0.1`, ce qui
+  convient à un proxy sur le même hôte. Autre chose veut élargir la liaison et
+  laisser un pare-feu prendre le relais.
+
+---
+
 ## 14. Limites connues
 
 ### Une épingle non validée casse `resolve_pins` en `TypeError`
@@ -1566,3 +1803,36 @@ de règles, ou un diff de règle devient pénible à relire à cause du bruit de
 format. À ce moment-là, un `.prettierrc` versionné (trois lignes, zéro seconde
 de CI) répond au premier cas, le check CI ne se justifiant que si le format
 dérive vraiment malgré ça.
+
+### L'idempotence de la soumission s'arrête au-dessus de 1 Mo
+
+L'API Contents de GitHub inline le contenu d'un fichier jusqu'à 1 Mo et répond
+un `content` vide au-delà, et c'est cette lecture qui compare une soumission à
+ce que le registre détient. Un DMP de cette taille ne compare donc jamais égal,
+et chaque soumission recommite au lieu de rapporter `unchanged`. Rien ne casse,
+la garantie cesse discrètement de tenir. Seule la lecture est concernée, un
+commit porte ses fichiers en entrées d'arbre et n'a pas cette limite.
+
+### Le webhook n'a ni reprise ni gestion du quota
+
+GitHub répondant 403 ou 429 ressort en 502 vers DSW. Acceptable pour une
+instance qui soumet occasionnellement.
+
+### `api_url` du client GitHub est paramétrable et inutilisé
+
+Il permettrait GitHub Enterprise. Rien ne le passe, les tests compris.
+
+### Les dépendances de l'image sont résolues à la construction, pas verrouillées
+
+Le webhook installait autrefois depuis un `requirements.txt` épinglé par
+empreintes, généré depuis un lockfile. L'image l'installe maintenant depuis les
+sources de ce dépôt, ce qui épingle le dépôt exactement et laisse ses
+dépendances transitives à pip, donc deux constructions du même tag peuvent
+différer. Le déploiement en est épargné, il ne construit plus et une image tirée
+est un seul jeu d'octets pour qui la tire. Ce qui refermerait ça : installer
+depuis le `uv.lock` versionné dans l'image, et rien n'en a besoin pour l'instant.
+
+### Les comptes de démonstration sont une étape manuelle
+
+DSW en sème trois dont les identifiants sont publiés. Le script de mise en route
+avertit tant qu'ils répondent, et c'est tout ce qu'il fait.
