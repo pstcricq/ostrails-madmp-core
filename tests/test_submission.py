@@ -29,6 +29,7 @@ CONFIG = SubmissionConfig(github_owner="Pierrott64", registry_repo="dmp-registry
 DSW_URL = "http://localhost:8080/wizard/projects/7c42caa4-a0e0-4112-9623-4334641c457a"
 DMP_PATH = "projects/glider/template/dmp_glider_template.json"
 META_PATH = "projects/glider/template/dmp_glider_template.meta.json"
+CHECK_PATH = "projects/glider/template/dmp_glider_template.check.json"
 RAW_URL = f"https://raw.githubusercontent.com/Pierrott64/dmp-registry/main/{DMP_PATH}"
 ENVELOPE = {
     "project": "glider",
@@ -76,71 +77,38 @@ def _document(title="Glider mission DMP", identifier=DSW_URL, envelope=None, dmp
     return document
 
 
-BRANCH = "submission/glider"
-
-
 class FakeGitHub:
-    """In-memory stand-in for GitHubClient: a registry as commits, branches
-    and the pull requests open over them.
+    """In-memory stand-in for GitHubClient: the registry as path -> bytes,
+    plus the commit its default branch points at.
 
-    A commit is a tree of path -> bytes keyed by its sha, a branch is a name
-    pointing at one, so reading a path on a branch and building a commit over
-    a parent both mean here what they mean at GitHub. Every commit is recorded
-    with the branch it landed on and the paths it carried, so a test can
-    assert that several files travelled together, and on which branch.
+    A commit is recorded as the paths it carried and its message, so a test
+    can assert that several files travelled together. Its parent is checked
+    against the head that was handed out, which is what makes "the write did
+    not happen when the branch moved" a claim these tests can rest on.
     """
 
     def __init__(self, files: dict[str, bytes] | None = None):
-        self.trees: dict[str, dict[str, bytes]] = {"sha0": dict(files or {})}
-        self.heads: dict[str, str] = {"main": "sha0"}
-        self.pulls: dict[str, dict] = {}
-        self.commits: list[tuple[str, list[str], str]] = []
+        self.files = dict(files or {})
+        self.commits: list[tuple[list[str], str]] = []
+        self.head = "sha0"
 
-    def files_on(self, branch: str = "main") -> dict[str, bytes]:
-        return self.trees[self.heads[branch]]
-
-    def get_file(self, owner, repo, path, ref=None):
-        head = self.heads.get(ref or "main")
-        files = self.trees.get(head, {})
-        if path not in files:
+    def get_file(self, owner, repo, path):
+        if path not in self.files:
             return None
         return {
-            "sha": f"sha-{len(files[path])}",
-            "content": base64.b64encode(files[path]).decode(),
+            "sha": f"sha-{len(self.files[path])}",
+            "content": base64.b64encode(self.files[path]).decode(),
         }
 
     def branch_head(self, owner, repo, branch):
-        return self.heads.get(branch)
+        return self.head
 
     def commit_files(self, owner, repo, branch, files, message, parent):
-        sha = f"sha{len(self.trees)}"
-        self.trees[sha] = {**self.trees[parent], **files}
-        self.heads[branch] = sha
-        self.commits.append((branch, sorted(files), message))
-        return sha
-
-    def open_pull_request_for(self, owner, repo, branch):
-        return self.pulls.get(branch)
-
-    def open_pull_request(self, owner, repo, branch, base, title, body):
-        pull = self.pulls.get(branch)
-        if pull is None:
-            number = len(self.pulls) + 1
-            pull = {
-                "html_url": f"https://github.com/{owner}/{repo}/pull/{number}",
-                "title": title,
-                "body": body,
-                "head": branch,
-                "base": base,
-            }
-            self.pulls[branch] = pull
-        return pull
-
-    def merge(self, branch: str) -> None:
-        """What the registry looks like once a pull request is merged: the
-        default branch holds the submission and no review is open."""
-        self.heads["main"] = self.heads[branch]
-        del self.pulls[branch]
+        assert parent == self.head, "committed over a parent that is not the head"
+        self.files.update(files)
+        self.head = f"sha{len(self.commits) + 1}"
+        self.commits.append((sorted(files), message))
+        return self.head
 
 
 def _initialized(folder="glider") -> FakeGitHub:
@@ -151,39 +119,21 @@ def _initialized(folder="glider") -> FakeGitHub:
 # Routing + dmp_id rewrite
 
 
-def test_first_submit_offers_the_dmp_and_rewrites_dmp_id():
+def test_first_submit_writes_the_dmp_and_rewrites_dmp_id():
     github = _initialized("glider")
     result = handle_submission(_document(), "glider", github, CONFIG)
     assert result["action"] == "created"
     assert result["file"] == DMP_PATH
-    stored = json.loads(github.files_on(BRANCH)[DMP_PATH])
-    # dmp_id was the DSW placeholder, the webhook rewrote it to the registry
-    # URL, which is on the default branch: a promise, kept at the merge.
+    stored = json.loads(github.files[DMP_PATH])
+    # dmp_id was the DSW placeholder, the webhook rewrote it to the registry URL.
     assert stored["dmp"]["dmp_id"] == {"identifier": RAW_URL, "type": "url"}
     assert stored["dmp"]["title"] == "Glider mission DMP"
-
-
-def test_nothing_lands_on_the_default_branch():
-    """The whole point of offering rather than committing: what a researcher
-    submits is not in the registry until a check has passed on it."""
-    github = _initialized("glider")
-    handle_submission(_document(), "glider", github, CONFIG)
-    assert DMP_PATH not in github.files_on("main")
-    assert [branch for branch, _, _ in github.commits] == [BRANCH]
-
-
-def test_the_submission_is_carried_by_a_pull_request():
-    github = _initialized("glider")
-    result = handle_submission(_document(), "glider", github, CONFIG)
-    assert result["pull_request"] == github.pulls[BRANCH]["html_url"]
-    assert github.pulls[BRANCH]["base"] == "main"
-    assert "glider" in github.pulls[BRANCH]["title"]
 
 
 def test_folder_only_touches_its_own_path():
     github = _initialized("glider")
     handle_submission(_document(), "glider", github, CONFIG)
-    assert [paths for _, paths, _ in github.commits] == [[DMP_PATH, META_PATH]]
+    assert [paths for paths, _ in github.commits] == [[CHECK_PATH, DMP_PATH, META_PATH]]
 
 
 def test_commit_message_names_the_project():
@@ -192,7 +142,7 @@ def test_commit_message_names_the_project():
     github = _initialized("glider")
     handle_submission(_document(), "glider", github, CONFIG)
     handle_submission(_document(title="Renamed"), "glider", github, CONFIG)
-    assert [message for _, _, message in github.commits] == [
+    assert [message for _, message in github.commits] == [
         "Add DMP for glider (DSW submission)",
         "Update DMP for glider (DSW submission)",
     ]
@@ -208,8 +158,8 @@ def test_the_envelope_leaves_the_dmp_and_lands_beside_it():
     github = _initialized()
     result = handle_submission(_document(), "glider", github, CONFIG)
     assert result["metadata"] == META_PATH
-    assert "metadata" not in json.loads(github.files_on(BRANCH)[DMP_PATH])
-    assert json.loads(github.files_on(BRANCH)[META_PATH]) == ENVELOPE
+    assert "metadata" not in json.loads(github.files[DMP_PATH])
+    assert json.loads(github.files[META_PATH]) == ENVELOPE
 
 
 def test_the_envelope_travels_in_the_commit_that_carries_the_dmp():
@@ -218,7 +168,7 @@ def test_the_envelope_travels_in_the_commit_that_carries_the_dmp():
     github = _initialized()
     handle_submission(_document(), "glider", github, CONFIG)
     assert len(github.commits) == 1
-    assert github.commits[0][1] == [DMP_PATH, META_PATH]
+    assert github.commits[0][0] == [CHECK_PATH, DMP_PATH, META_PATH]
 
 
 def test_a_document_without_an_envelope_is_refused():
@@ -292,7 +242,9 @@ def test_resubmit_changed_content_updates():
         _document(title="Renamed project"), "glider", github, CONFIG
     )
     assert result["action"] == "updated"
-    assert [paths for _, paths, _ in github.commits[before:]] == [[DMP_PATH, META_PATH]]
+    assert [paths for paths, _ in github.commits[before:]] == [
+        [CHECK_PATH, DMP_PATH, META_PATH]
+    ]
 
 
 def test_a_new_template_version_alone_is_an_update():
@@ -304,75 +256,51 @@ def test_a_new_template_version_alone_is_an_update():
     envelope = {**ENVELOPE, "template_version": "2.0.0"}
     result = handle_submission(_document(envelope=envelope), "glider", github, CONFIG)
     assert result["action"] == "updated"
-    assert json.loads(github.files_on(BRANCH)[META_PATH])["template_version"] == "2.0.0"
-
-
-# One review at a time, per project
-
-
-def test_the_branch_is_named_after_the_project():
-    github = _initialized()
-    result = handle_submission(_document(), "glider", github, CONFIG)
-    assert result["branch"] == BRANCH
-    assert set(github.heads) == {"main", BRANCH}
-
-
-def test_a_second_submission_continues_the_open_review():
-    """It builds on the branch, not on the default branch, so the pull request
-    carries one submission and not two unrelated ones. And the same pull
-    request is reused: a researcher submitting five times has one place to
-    look."""
-    github = _initialized()
-    first = handle_submission(_document(), "glider", github, CONFIG)
-    head_after_first = github.heads[BRANCH]
-
-    second = handle_submission(_document(title="Renamed"), "glider", github, CONFIG)
-    assert second["action"] == "updated"
-    assert second["pull_request"] == first["pull_request"]
-    assert len(github.pulls) == 1
-    # The second commit's parent is the first, so nothing the first said was
-    # dropped on the way.
-    assert (
-        github.trees[head_after_first][META_PATH] == github.files_on(BRANCH)[META_PATH]
-    )
-
-
-def test_resubmitting_what_was_already_merged_offers_nothing():
-    """The review is closed and the default branch holds the document, so
-    there is nothing to offer. Opening a pull request with no commits in it
-    would be refused by GitHub, and rightly."""
-    github = _initialized()
-    handle_submission(_document(), "glider", github, CONFIG)
-    github.merge(BRANCH)
-    before = len(github.commits)
-
-    result = handle_submission(_document(), "glider", github, CONFIG)
-    assert result["action"] == "unchanged"
-    assert result["pull_request"] is None
-    assert len(github.commits) == before
-    assert github.pulls == {}
-
-
-def test_a_new_submission_after_a_merge_starts_again_from_the_default_branch():
-    """The branch is left over from the merged review, so it is moved onto the
-    default branch rather than continued. What is offered is the difference
-    with what the registry holds, not with an old review."""
-    github = _initialized()
-    handle_submission(_document(), "glider", github, CONFIG)
-    github.merge(BRANCH)
-
-    result = handle_submission(
-        _document(title="Second season"), "glider", github, CONFIG
-    )
-    assert result["action"] == "updated"
-    assert result["pull_request"] is not None
-    offered = json.loads(github.files_on(BRANCH)[DMP_PATH])
-    assert offered["dmp"]["title"] == "Second season"
-    # Built on the merged state, so the file it replaces is the merged one.
-    assert DMP_PATH in github.files_on("main")
+    assert json.loads(github.files[META_PATH])["template_version"] == "2.0.0"
 
 
 # The check the document has to pass
+
+
+def test_the_verdict_lands_beside_the_dmp():
+    """The registry holds what passed, and says so: what judged it, against
+    which versions, and what it still had to remark. Without this a document
+    in the registry is a document nobody can tell was checked."""
+    github = _initialized()
+    result = handle_submission(_document(), "glider", github, CONFIG)
+    assert result["check"] == CHECK_PATH
+    written = json.loads(github.files[CHECK_PATH])
+    assert written["verdict"] == "pass"
+    assert written["rules"] == ENVELOPE["rules"]
+    assert written["engine"]
+    assert written["summary"]["fail"] == 0
+    assert written["summary"]["total"] == sum(
+        written["summary"][s] for s in ("pass", "fail", "warning", "missing")
+    )
+
+
+def test_the_verdict_keeps_the_warnings_and_not_the_rest():
+    """A passing result says only that a field is a field. A warning is the
+    whole of what a document that passed still has to say."""
+    loose = json.loads(json.dumps(COMPLETE))
+    loose["contact"]["contact_id"][0]["type"] = "something else"
+    github = _initialized()
+    handle_submission(_document(dmp=loose), "glider", github, CONFIG)
+    written = json.loads(github.files[CHECK_PATH])
+    assert written["summary"]["warning"] == len(written["warnings"])
+    assert written["warnings"]
+    assert "contact_id" in written["warnings"][0]["instance_path"]
+
+
+def test_the_verdict_carries_no_timestamp():
+    """One would change the bytes at every submission, so an unchanged DMP
+    would commit again for ever."""
+    github = _initialized()
+    handle_submission(_document(), "glider", github, CONFIG)
+    first = github.files[CHECK_PATH]
+    result = handle_submission(_document(), "glider", github, CONFIG)
+    assert result["action"] == "unchanged"
+    assert github.files[CHECK_PATH] == first
 
 
 def test_a_document_that_does_not_hold_up_is_refused():
@@ -383,7 +311,6 @@ def test_a_document_that_does_not_hold_up_is_refused():
     with pytest.raises(QualityControlError, match="quality control failed"):
         handle_submission(_document(dmp=incomplete), "glider", github, CONFIG)
     assert github.commits == []
-    assert github.pulls == {}
 
 
 def test_a_refusal_names_what_to_fix_and_what_judged_it():
@@ -519,8 +446,8 @@ def test_http_raw_json_body(client):
     assert response.status_code == 200
     assert response.json()["action"] == "created"
     assert response.json()["folder"] == "glider"
-    # The one thing the researcher is handed: the pull request carrying it.
-    assert response.headers["location"] == response.json()["pull_request"]
+    # The one thing the researcher is handed: where their DMP now sits.
+    assert response.headers["location"] == response.json()["repository"]
 
 
 def test_http_multipart_body(client):
@@ -695,87 +622,11 @@ def test_a_commit_treats_a_404_as_a_failure(monkeypatch):
     assert raised.value.status == 404
 
 
-def test_a_file_is_read_on_the_branch_it_is_asked_for(monkeypatch):
-    """A submission is compared with what its own review already offers, so
-    the read has to name that branch. Without the ref it would read the
-    default branch and every submission would look like a change."""
-    seen = _stub_urlopen(monkeypatch, payload=b"{}")
-    GitHubClient("token").get_file("o", "r", "a/b.json", ref="submission/glider")
-    assert seen["request"].full_url.endswith(
-        "/contents/a/b.json?ref=submission%2Fglider"
-    )
-
-
 def test_an_absent_branch_is_absent_and_not_an_error(monkeypatch):
-    """The first submission of a project has no branch yet, and that is the
-    normal case, not a failure."""
+    """A registry whose default branch cannot be read is one nothing can be
+    committed to, and the caller has to be able to tell that from a refusal."""
     _stub_urlopen(monkeypatch, status=404)
-    assert GitHubClient("token").branch_head("o", "r", "submission/glider") is None
-
-
-def test_a_refused_pull_request_falls_back_to_the_one_already_open(monkeypatch):
-    """GitHub answers 422 both for a branch already under review and for a
-    branch with nothing to offer, so the listing is what tells them apart."""
-    calls: list[urllib.request.Request] = []
-
-    def stub(request, timeout=None):
-        calls.append(request)
-        if request.get_method() == "POST":
-            raise urllib.error.HTTPError(
-                request.full_url, 422, "", {}, io.BytesIO(b'{"message": "exists"}')
-            )
-        return _Reply(json.dumps([{"html_url": "https://example/pull/7"}]).encode())
-
-    monkeypatch.setattr(urllib.request, "urlopen", stub)
-    pull = GitHubClient("token").open_pull_request(
-        "o", "r", "submission/glider", "main", "title", "body"
-    )
-    assert pull["html_url"] == "https://example/pull/7"
-    assert [c.get_method() for c in calls] == ["POST", "GET"]
-
-
-def test_a_branch_with_nothing_to_offer_still_raises(monkeypatch):
-    """The other half of that 422. No pull request is open and none can be
-    created, so the caller has to hear about it rather than get None."""
-
-    def stub(request, timeout=None):
-        if request.get_method() == "POST":
-            raise urllib.error.HTTPError(
-                request.full_url, 422, "", {}, io.BytesIO(b'{"message": "no commits"}')
-            )
-        return _Reply(b"[]")
-
-    monkeypatch.setattr(urllib.request, "urlopen", stub)
-    with pytest.raises(GitHubError) as raised:
-        GitHubClient("token").open_pull_request(
-            "o", "r", "submission/glider", "main", "title", "body"
-        )
-    assert raised.value.status == 422
-
-
-@pytest.mark.parametrize("status", [404, 422])
-def test_a_branch_that_is_not_there_is_created(monkeypatch, status):
-    """The usual case after a merged review, which deletes the branch. The
-    move fails and the create follows, so a submission after a merge does not
-    need a branch somebody kept."""
-    calls: list[urllib.request.Request] = []
-
-    def stub(request, timeout=None):
-        calls.append(request)
-        if request.get_method() == "PATCH":
-            raise urllib.error.HTTPError(
-                request.full_url, status, "", {}, io.BytesIO(b'{"message": "no ref"}')
-            )
-        if request.full_url.endswith("/git/commits/parent"):
-            return _Reply(b'{"tree": {"sha": "base"}}')
-        return _Reply(b'{"sha": "new-commit"}')
-
-    monkeypatch.setattr(urllib.request, "urlopen", stub)
-    GitHubClient("token").commit_files(
-        "o", "r", "submission/glider", {"a.json": b"1"}, "msg", "parent"
-    )
-    assert [c.get_method() for c in calls][-2:] == ["PATCH", "POST"]
-    assert json.loads(calls[-1].data)["ref"] == "refs/heads/submission/glider"
+    assert GitHubClient("token").branch_head("o", "r", "main") is None
 
 
 def test_unreachable_github_is_the_same_error_without_a_status(monkeypatch):
@@ -801,7 +652,7 @@ def _stub_git_data(monkeypatch):
         "/git/commits/parent": {"tree": {"sha": "base"}},
         "/git/trees": {"sha": "new-tree"},
         "/git/commits": {"sha": "new-commit"},
-        "/git/refs/heads/submission/glider": {},
+        "/git/refs/heads/main": {},
     }
 
     def stub(request, timeout=None):
@@ -821,12 +672,7 @@ def test_a_commit_builds_a_tree_then_moves_the_branch(monkeypatch):
     publishes them all at once."""
     seen = _stub_git_data(monkeypatch)
     sha = GitHubClient("token").commit_files(
-        "o",
-        "r",
-        "submission/glider",
-        {"a/one.json": b"1", "a/two.json": b"2"},
-        "msg",
-        "parent",
+        "o", "r", "main", {"a/one.json": b"1", "a/two.json": b"2"}, "msg", "parent"
     )
     assert sha == "new-commit"
     assert [r.get_method() for r in seen] == ["GET", "POST", "POST", "PATCH"]
@@ -834,7 +680,7 @@ def test_a_commit_builds_a_tree_then_moves_the_branch(monkeypatch):
         "/git/commits/parent",
         "/git/trees",
         "/git/commits",
-        "/git/refs/heads/submission/glider",
+        "/git/refs/heads/main",
     ]
     tree = json.loads(seen[1].data)
     assert tree["base_tree"] == "base"
@@ -850,7 +696,7 @@ def test_a_commit_builds_a_tree_then_moves_the_branch(monkeypatch):
         "msg",
     )
     moved = json.loads(seen[3].data)
-    # Forced: a submission that starts again from the default branch while the
-    # branch still holds a merged one is not a fast-forward.
-    assert (moved["sha"], moved["force"]) == ("new-commit", True)
+    # Not forced: two submissions racing, the second one's parent is stale and
+    # the write does not happen, rather than replacing what the first wrote.
+    assert moved == {"sha": "new-commit"}
     assert seen[0].headers["Authorization"] == "Bearer token"

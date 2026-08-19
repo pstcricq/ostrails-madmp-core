@@ -1,12 +1,9 @@
 """The webhook's logic, free of HTTP plumbing.
 
-A document is checked before it is offered, against the rules its own envelope
-names, so a DMP that does not hold up never reaches the registry at all and
-the researcher hears why while they are still in DSW.
-
-A submission is offered, not merged. It lands on a branch of its own and a
-pull request carries it, so the registry's default branch only ever holds
-documents a check has passed.
+A document is checked against the rules its own envelope names before anything
+is written, so a DMP that does not hold up never reaches the registry at all
+and the researcher hears why while they are still in DSW. What the registry
+holds is therefore what has passed, and it holds the verdict beside it.
 
 Stateless: everything derives from the document, the folder and a small static
 config. Nothing here creates a repository or any scaffolding, the folder and
@@ -18,11 +15,13 @@ from __future__ import annotations
 import base64
 import json
 import re
+from collections import Counter
 from dataclasses import dataclass
+from importlib.metadata import version
 from typing import Any
 
 from project import RULES_DIR, merge_rules, resolve_pins
-from quality_control import has_failures, run_qc
+from quality_control import CheckResult, has_failures, run_qc
 from submission.github_client import GitHubClient
 from utils.errors import ProblemsError
 
@@ -33,15 +32,7 @@ _FOLDER_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 # (!!) The registry's default branch, and part of every dmp_id this webhook
 # writes. A dmp_id is the DMP's stable identifier, so moving the registry to
 # another branch would leave every identifier ever issued pointing nowhere.
-#
-# A submitted DMP is not there yet, it waits on the branch below for its pull
-# request. The identifier is a promise, kept when that is merged.
 _BRANCH = "main"
-
-# One branch per project, not per submission. A researcher who submits five
-# times has one place to look, and the fifth replaces the fourth instead of
-# opening a fifth pull request nobody closes.
-_BRANCH_PREFIX = "submission/"
 
 # The key the document template renders beside `dmp`, carrying the versions
 # the document was built from.
@@ -52,6 +43,9 @@ _ENVELOPE = "metadata"
 # shows this message on the submission, not a report, and a document missing
 # forty fields would push the beginning of it out of sight.
 _SPELLED_OUT = 5
+
+# The order the verdict counts them in, so two files always read the same way.
+_STATUSES = ("pass", "fail", "warning", "missing")
 
 
 class SubmissionError(ValueError):
@@ -129,9 +123,10 @@ def take_envelope(document: dict, folder: str) -> dict[str, Any]:
     return envelope
 
 
-def check(document: Any, envelope: dict[str, Any]) -> None:
-    """Check the document against the rules its envelope names, and raise
-    with what to fix when it does not hold up.
+def check(document: Any, envelope: dict[str, Any]) -> list[CheckResult]:
+    """Check the document against the rules its envelope names. Raises with
+    what to fix when it does not hold up, and otherwise hands back every
+    result, which is what the verdict beside the DMP is written from.
 
     The versions come from the document, so what judges it is what it was
     built from, and a project whose pins moved since does not change the
@@ -146,7 +141,7 @@ def check(document: Any, envelope: dict[str, Any]) -> None:
 
     results = run_qc(model, document)
     if not has_failures(results):
-        return
+        return results
 
     violations = [r for r in results if r.status == "fail"]
     spelled = "\n".join(f"  {r.message}" for r in violations[:_SPELLED_OUT])
@@ -158,6 +153,32 @@ def check(document: Any, envelope: dict[str, Any]) -> None:
         f"quality control failed, {len(violations)} violation(s) against "
         f"{versions}:\n{spelled}" + (f"\n  and {rest} more" if rest > 0 else "")
     )
+
+
+def verdict(results: list[CheckResult], envelope: dict[str, Any]) -> dict[str, Any]:
+    """What is written beside a DMP to say it was checked, against what, and
+    by what.
+
+    The passing results are not kept, they say only that a field is a field.
+    The warnings are, being the whole of what a document that passed still has
+    to say. No timestamp: git dates the commit, and one here would change the
+    bytes at every submission and kill the unchanged verdict.
+    """
+    counted = Counter(r.status for r in results)
+    return {
+        "verdict": "pass",
+        "summary": {
+            "total": len(results),
+            **{status: counted.get(status, 0) for status in _STATUSES},
+        },
+        "rules": envelope["rules"],
+        "engine": version("madmp-core"),
+        "warnings": [
+            {"instance_path": r.instance_path, "message": r.message}
+            for r in results
+            if r.status == "warning"
+        ],
+    }
 
 
 def _bytes(document: Any) -> bytes:
@@ -181,34 +202,20 @@ def _stored(entry: dict | None) -> bytes | None:
     return base64.b64decode(entry.get("content") or "")
 
 
-def _pull_request_body(dmp_path: str, meta_path: str) -> str:
-    """What the pull request says to whoever opens it."""
-    return (
-        "Submitted from DSW by the maDMP submission webhook.\n"
-        "\n"
-        f"- `{dmp_path}`, the DMP, RDA DCS and nothing else\n"
-        f"- `{meta_path}`, the rules versions it was built from\n"
-        "\n"
-        "Quality control checks the DMP against those versions. A red check "
-        "means the document is to be fixed in DSW and submitted again, which "
-        "updates this pull request rather than opening another.\n"
-    )
-
-
 def handle_submission(
     document: Any, folder: str, github: GitHubClient, config: SubmissionConfig
 ) -> dict[str, Any]:
-    """Offer the DMP and its provenance for ``projects/<folder>/template/`` of
-    the registry, on a branch of their own and under one pull request per
-    project, and rewrite ``dmp_id``, in the document it is given, to the DMP's
-    raw URL on the default branch.
+    """Commit the DMP, its provenance and its verdict into
+    ``projects/<folder>/template/`` of the registry, and rewrite ``dmp_id``,
+    in the document it is given, to the DMP's raw URL.
 
     A document that does not hold up against the rules its envelope names is
-    refused before any of that, so nothing half checked is ever offered.
+    refused before any of that, so what the registry holds is what passed.
 
-    The two files go in one commit, so nothing ever holds a DMP whose versions
-    are missing. Idempotent: a submission that says what is already offered
-    commits nothing. Returns a small summary DSW shows as the result."""
+    The three files go in one commit, so nothing ever holds a DMP without the
+    versions it was checked against or the verdict it got. Idempotent: a
+    submission that says what is already there commits nothing. Returns a
+    small summary DSW shows as the result."""
     if not _FOLDER_RE.match(folder or ""):
         raise SubmissionError(f"invalid project folder {folder!r}")
     if not isinstance(document, dict) or not isinstance(document.get("dmp"), dict):
@@ -216,7 +223,7 @@ def handle_submission(
     envelope = take_envelope(document, folder)
     # Before anything is read or written: it needs no network, and it is the
     # answer the researcher is most likely waiting for.
-    check(document, envelope)
+    results = check(document, envelope)
 
     owner, repo = config.github_owner, config.registry_repo
     base = f"projects/{folder}"
@@ -231,61 +238,43 @@ def handle_submission(
 
     dmp_path = f"{base}/template/dmp_{folder}_template.json"
     meta_path = f"{base}/template/dmp_{folder}_template.meta.json"
+    check_path = f"{base}/template/dmp_{folder}_template.check.json"
     raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{_BRANCH}/{dmp_path}"
     # The template set dmp_id to the DSW project URL as a placeholder, the
     # registry location is the DMP's real identifier.
     document["dmp"]["dmp_id"] = {"identifier": raw_url, "type": "url"}
 
-    wanted = {dmp_path: _bytes(document), meta_path: _bytes(envelope)}
-
-    # What this submission builds on, and what it is compared with. An open
-    # pull request means the branch holds a submission under review, so the
-    # next one continues it. Without one, the branch is either absent or left
-    # over from a review already merged, and the submission starts again from
-    # the default branch.
-    branch = f"{_BRANCH_PREFIX}{folder}"
-    pull = github.open_pull_request_for(owner, repo, branch)
-    head = github.branch_head(owner, repo, branch) if pull else None
-    parent = head or github.branch_head(owner, repo, _BRANCH)
-    if parent is None:
-        raise SubmissionError(f"{repo} has no {_BRANCH} branch to offer against")
-
-    read_ref = branch if head else _BRANCH
-    current = {
-        path: _stored(github.get_file(owner, repo, path, ref=read_ref))
-        for path in wanted
+    wanted = {
+        dmp_path: _bytes(document),
+        meta_path: _bytes(envelope),
+        check_path: _bytes(verdict(results, envelope)),
     }
+    current = {path: _stored(github.get_file(owner, repo, path)) for path in wanted}
 
     if current == wanted:
         action = "unchanged"
     else:
         action = "created" if current[dmp_path] is None else "updated"
         verb = "Add" if action == "created" else "Update"
-        # Named after the folder: every project is offered through the same
+        parent = github.branch_head(owner, repo, _BRANCH)
+        if parent is None:
+            raise SubmissionError(f"{repo} has no {_BRANCH} branch to commit to")
+        # Named after the folder: every project commits into the same
         # repository, and `git log` shows the message before the path.
         github.commit_files(
             owner,
             repo,
-            branch,
+            _BRANCH,
             wanted,
             f"{verb} DMP for {folder} (DSW submission)",
             parent,
         )
-        pull = github.open_pull_request(
-            owner,
-            repo,
-            branch,
-            _BRANCH,
-            f"Submit DMP for {folder}",
-            _pull_request_body(dmp_path, meta_path),
-        )
 
     return {
         "repository": f"https://github.com/{owner}/{repo}/tree/{_BRANCH}/{base}",
-        "pull_request": pull["html_url"] if pull else None,
-        "branch": branch,
         "file": dmp_path,
         "metadata": meta_path,
+        "check": check_path,
         "action": action,
         "folder": folder,
     }

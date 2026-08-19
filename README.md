@@ -205,15 +205,19 @@ installing the rules and the generators drags no web server in.
 a submission can be driven without a server. It takes the `metadata` object out
 of the rendered document, refuses one that carries none or names another
 project, **checks the document against the rules that object names**, and
-offers the DMP and that object on a branch of their own, under one pull request
-per project.
+commits three files in one commit: the DMP, that object, and the verdict.
 
 The check runs before anything is read or written: it needs no network, and it
 is the answer the researcher is most likely waiting for. A document that does
 not hold up is refused with a `422` naming the first few violations and the
-versions they were judged against, so nothing half checked ever reaches the
-registry. Warnings do not refuse, or every free-text answer would stop a
-submission.
+versions they were judged against, so what the registry holds is what passed.
+Warnings do not refuse, or every free-text answer would stop a submission.
+
+The verdict is committed beside the DMP because a document nobody can tell was
+checked is a document nobody can trust. It records the counts, the rules
+versions, the engine that ran, and the warnings, which are the whole of what a
+passing document still has to say. No timestamp: git dates the commit, and one
+here would change the bytes at every submission.
 
 It creates nothing. A folder that is not laid out is refused rather than half
 built, `registry/` being what lays one out.
@@ -288,9 +292,9 @@ built, `registry/` being what lays one out.
   document in, a list of results out.
 - `quality_control/run.py` : the command, and the envelope every other step
   reads. The only place that decides where the pins come from.
-- `submission/service.py` : the envelope taken out of the document, the two
-  files offered in one commit, and the one pull request a project has. It is
-  the only module here that runs in a long-lived process rather than a job.
+- `submission/service.py` : the envelope taken out of the document, the check
+  it has to pass, and the three files committed together. It is the only module
+  here that runs in a long-lived process rather than a job.
 - `submission/github_client.py` : the calls the webhook needs, standard library
   only. Not the same client as `registry/github.py`, which lays folders out
   through the Contents API where this one commits through the Git Data API.

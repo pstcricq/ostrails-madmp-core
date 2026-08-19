@@ -158,7 +158,6 @@ async def submissions(request: Request) -> JSONResponse:
     except GitHubError as e:
         raise HTTPException(502, str(e)) from e
     # DSW displays the Location header as a clickable link on the submission,
-    # and it is the one thing the researcher is handed. Point it at the pull
-    # request carrying their DMP, at the folder when there is none to carry.
-    location = result["pull_request"] or result["repository"]
-    return JSONResponse(result, headers={"Location": location})
+    # and it is the one thing the researcher is handed. Point it at the folder
+    # their DMP now sits in, verdict and versions beside it.
+    return JSONResponse(result, headers={"Location": result["repository"]})
