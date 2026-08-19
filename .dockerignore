@@ -1,0 +1,20 @@
+# The build context is this whole repository, where the image needs only what
+# `pip install .` reads. What is listed here is regenerated, private, or has no
+# business in a wheel.
+#
+# (!!) An entry here that setuptools needs is a package installed without its
+# data, and it shows up as a rule file missing at runtime rather than as a
+# build failure. `pyproject.toml`, the packages it names and their package-data
+# have to stay.
+.git
+.github
+.venv
+.vscode
+build
+madmp_core.egg-info
+**/__pycache__
+.env
+.env.*
+.DS_Store
+tests
+doc.md

@@ -11,18 +11,21 @@
 #   generate every project through both generators, and the artifacts below
 #   registry every project's destination in the registry, read: free, or
 #            already its own
+#   image    the webhook's image builds, from the Dockerfile in this repository
 #
 # Separate jobs rather than steps of one, so the check list on a pull request
 # names the culprit. Each pays its own setup, and they run concurrently, so
-# wall-clock is the slowest of the six.
+# wall-clock is the slowest of the seven.
 #
-# The line is not "before or after validation", it is report or act. The six
-# jobs above only ever report, `generate` included since an uploaded artifact
-# is scoped to its own run and reaches nothing. Two jobs act, and they are the
-# only two with `needs:`, `registry-sync` writes into the registry repository
-# and `publish` writes into a DSW instance. Both run on the default branch
-# alone, and on a pull request both appear as `skipped`, which is what makes
-# their abstention readable rather than silent.
+# The line is not "before or after validation", it is report or act. The seven
+# jobs above only ever report, `generate` and `image` included since neither an
+# uploaded artifact nor an unpushed image reaches anything. Three jobs act, and
+# they are the only three with `needs:`: `registry-sync` writes into the
+# registry repository, `publish` writes into a DSW instance, and `release`
+# pushes the webhook's image to the container registry. The first two run on
+# the default branch alone and `release` on a version tag alone, so on a pull
+# request all three appear as `skipped`, which is what makes their abstention
+# readable rather than silent.
 #
 # `projects` has no `needs:` on purpose, and neither has `registry`. A project
 # whose pins do not resolve is broken whether or not something else is, and a
@@ -42,9 +45,13 @@
 # versions and a transitive release cannot turn CI red on its own.
 name: CI
 
+# Tags are here for `release` alone. Every reporting job runs again on a tag,
+# which is the point: what gets published is a commit that passed on the day it
+# is published, not on the day it was merged.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -161,11 +168,37 @@ jobs:
           REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
           REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}
 
+  # Builds the image and pushes nothing, so a Dockerfile that no longer builds
+  # is a red check on the pull request that broke it rather than a failed
+  # release weeks later. The layers land in the Actions cache, which is what
+  # makes `release` cheap: it builds the same context again and reuses them.
+  #
+  # No `needs:`. An image that does not build is broken whether or not a rules
+  # file is, and saying so early is the whole reason this job is separate.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          # The context is the repository, not `submission/`: the image
+          # installs this package, and the rules it has to carry sit one
+          # directory away from the Dockerfile.
+          context: .
+          file: submission/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   registry-sync:
-    # The only job that writes outside this repository, so the only one that
-    # waits for every verdict, a project is registered from a config that
-    # loads, pins that resolve and rules that merge, or it is not
+    # The first of the three jobs that write outside this repository, and like
+    # the other two it waits for every verdict, a project is registered from a
+    # config that loads, pins that resolve and rules that merge, or it is not
     # registered.
+    #
+    # Not `needs: image`. A folder is laid out from a config, and a Dockerfile
+    # that fails to build says nothing about whether that config is sound.
     needs: [checks, rules, configs, projects, generate, registry]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -241,3 +274,47 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
           REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}
+
+  # The third job that acts, and the only one keyed on a tag rather than on the
+  # default branch. It publishes the webhook's image, which a DSW deployment
+  # pulls and runs: `MADMP_CORE_VERSION` in that deployment's `.env` names one
+  # of the tags pushed here, and naming it is the whole of how an operator
+  # chooses which engine and which rules judge a submission.
+  #
+  # A tag alone, never `latest` and never a branch. An image tag that moved
+  # would leave two deployments running different code while reporting the same
+  # version, and the verdict committed beside every DMP says which version
+  # judged it.
+  #
+  # It builds a second time rather than loading what `image` built. The layers
+  # are in the cache by then, so this costs seconds, and passing an image
+  # between jobs would be the same bytes with one more step to forget.
+  release:
+    needs: [checks, rules, configs, projects, generate, registry, image]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # The only job here that writes to GitHub itself, and it writes packages,
+    # not contents.
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # Issued for this run and expiring with it, so no long-lived
+          # credential has to exist anywhere for a release to happen.
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # `github.repository` rather than a literal, so renaming this repository
+      # moves the package with it instead of publishing under a name that no
+      # longer exists.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: submission/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/submission:${{ github.ref_name }}
+          cache-from: type=gha

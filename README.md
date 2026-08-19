@@ -222,6 +222,20 @@ here would change the bytes at every submission.
 It creates nothing. A folder that is not laid out is refused rather than half
 built, `registry/` being what lays one out.
 
+**`submission/Dockerfile` is its image, and it is here rather than in the
+deployment that runs it.** Everything the image packages is here: the webhook,
+the rules a document is checked against, and the engine that runs them. The
+entrypoint and the `[submission]` extra it installs are declared in
+`pyproject.toml`, so a Dockerfile living anywhere else would have to be edited
+whenever either of them moved, with nothing to say so until the next build. It
+builds from this checkout and reads no credential, where installing from a tag
+of a private repository needed a token and git inside the build.
+
+CI builds it on every run and pushes it on a version tag alone, to
+`ghcr.io/pstcricq/ostrails-madmp-core/submission:<tag>`. That tag is what a DSW
+deployment names in its `.env`, and naming it is the whole of how an operator
+chooses which engine and which rules judge a submission.
+
 ### The code beside the data
 
 - `rules/loader.py` : `load_rules_file` reads one rules file and validates it
@@ -420,7 +434,8 @@ madmp-core/
 ├── submission/                   what DSW posts, and what the registry receives
 │   ├── app.py                    the HTTP surface and what it reads at startup
 │   ├── service.py                what a submission means, free of HTTP
-│   └── github_client.py          reading a file, and committing onto a branch
+│   ├── github_client.py          reading a file, and committing onto a branch
+│   └── Dockerfile                its image, built from this repository
 ├── quality_control/              whether a submitted DMP holds up
 │   ├── engine.py                 a model and a document, walked together
 │   └── run.py                    the command, and the envelope it writes
@@ -437,8 +452,9 @@ madmp-core/
 ├── tests/                        one test file per module
 ├── build/                        where the generators write, never committed
 ├── .github/workflows/
-│   ├── ci.yml                    eight jobs, six that report and two that act
+│   ├── ci.yml                    ten jobs, seven that report and three that act
 │   └── release.yml               a tag says the same thing as pyproject.toml
+├── .dockerignore                 what the image's build context leaves out
 ├── .env.example                  every name the environment has to carry
 ├── pyproject.toml                one environment for the whole repository
 ├── uv.lock                       the versions, committed and installed from
@@ -447,8 +463,8 @@ madmp-core/
 
 ## CI
 
-Six jobs in parallel, then two that act, all installing from the lockfile with
-`uv sync --frozen`:
+Seven jobs in parallel, then three that act. All but `image` and `release`
+install from the lockfile with `uv sync --frozen`:
 
 - **checks** : `ruff check` (ruff's default rule set, which includes import
   order), `ruff format --check`, then `pytest`. Anything about the shape of
@@ -470,9 +486,14 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
 - **registry** : every project's destination in the registry, read, which is
   also what says the registry is reachable with the token it was given. Skips,
   loudly, without `REGISTRY_TOKEN`.
-- **registry-sync** : writes into the registry repository. It waits on all six
-  above and runs on `main` alone, on a pull request it shows as `skipped`, so
-  its abstention is readable.
+- **image** : the webhook's image is built and pushed nowhere, so a Dockerfile
+  that no longer builds is a red check on the pull request that broke it rather
+  than a failed release weeks later. Its layers land in the Actions cache,
+  which is what makes `release` cost seconds.
+- **registry-sync** : writes into the registry repository. It waits on the six
+  verdicts above and runs on `main` alone, on a pull request it shows as
+  `skipped`, so its abstention is readable. Not on `image`, a Dockerfile that
+  fails to build says nothing about whether a config is sound.
 - **publish** : writes into a DSW instance, after `registry-sync` because a
   submission service pointing at an unregistered folder would break every
   Submit. It downloads what `generate` built rather than building again, and
@@ -480,6 +501,12 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
   which is the point of gating on a variable rather than commenting it out.
   It has to be a variable and not a secret: the `secrets` context is not
   available in a job-level `if:`.
+- **release** : pushes the webhook's image to GHCR, and the only job keyed on a
+  version tag rather than on `main`. It waits on every reporting job, `image`
+  included, so what is published is a commit that passed on the day it was
+  published. It tags the image with the git tag and nothing else, never
+  `latest`: a tag that moved would leave two deployments running different code
+  while reporting the same version.
 
 ### Cutting a release
 
@@ -489,9 +516,15 @@ verdict it commits, so a tag disagreeing with it would put a version in the
 registry naming a release nobody can check out. Bumping it is part of cutting
 the tag, and `release.yml` refuses a tag that forgot.
 
-What a release is for: the deployment beside DSW installs the webhook from
-here, `pip install madmp-core[submission]==<version>`, and that pins the engine
-and the rules files a submitted document is checked against.
+What a release is for: a tag is what `release` publishes the webhook's image
+under, and a DSW deployment pulls
+`ghcr.io/pstcricq/ostrails-madmp-core/submission:<tag>` and runs it. That one
+tag pins the engine and the rules files a submitted document is checked
+against, and it is the only thing in that deployment which decides them.
+
+The image is published under a private repository, so it is private too and
+pulling it needs `docker login ghcr.io`. Making the package public, which is a
+setting of its own and not the repository's, is what would remove even that.
 
 The registry's coordinates are repository variables too, so no deployment's
 address is written into the workflow. `REGISTRY_OWNER` and `REGISTRY_REPO`
@@ -504,5 +537,5 @@ Neither has `needs:`, because a project whose pins do not resolve, or whose
 folder is taken, is broken whether or not something else is.
 
 The line is not "before or after validation", it is **report or act**. Every
-job that reports runs concurrently and names its own culprit, the two that act
-wait, for every verdict and for each other.
+job that reports runs concurrently and names its own culprit, the three that
+act wait, for every verdict and, where it matters, for each other.

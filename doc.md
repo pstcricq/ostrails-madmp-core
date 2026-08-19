@@ -1244,13 +1244,36 @@ config ajoutée dans un push qui touchait autre chose, ou un `.gitkeep` retiré 
 la main. Le prix serait un commit à chaque push, il n'est pas payé, puisque
 rien n'est envoyé quand rien n'a changé.
 
-### Le webhook n'est pas dans ce dépôt
+### Le webhook est ici, et son image aussi
 
-Il est déployé à côté de DSW et embarque **sa propre copie** du client GitHub.
-Les deux côtés partagent le *layout* du registre, pas ce code : un changement
-ici n'atteint le webhook que si quelqu'un l'y reporte. Le `README.md` du
-registre est le contrat qu'ils honorent tous les deux, et ni l'un ni l'autre ne
-peut en dériver.
+**Depuis le 19/08/2026 le code du webhook est dans ce dépôt**, paquet
+`submission/`, à côté des règles contre lesquelles il contrôle un document. Il
+a vécu dans `madmp-dsw` du 10/08 au 19/08, où il embarquait sa propre copie du
+client GitHub, et les deux côtés ne partageaient alors que le *layout* du
+registre. Le `README.md` du registre reste le contrat qu'ils honorent tous les
+deux.
+
+**Son `Dockerfile` l'a suivi le même jour**, et pour la même raison. Tout ce
+que l'image empaquette est ici : le webhook, les règles, le moteur qui les
+applique. L'entrypoint `submission.app:app` et l'extra `[submission]` qu'elle
+installe sont écrits dans `pyproject.toml`, donc un `Dockerfile` posé ailleurs
+est un fichier d'un autre dépôt qui casse quand l'un des deux bouge, sans que
+rien ne le dise avant la construction suivante.
+
+Ce que ça change concrètement : l'image se construit depuis le checkout et ne
+lit **aucun identifiant**, là où une installation depuis un tag d'un dépôt
+privé demandait un jeton et `git` dans la construction. Le déploiement, lui, ne
+construit plus rien, il tire une image épinglée comme il tire déjà celles de
+DSW, de Postgres et de MinIO.
+
+**Le prix, et il est réel :** publier une correction demande maintenant un tag
+ici et une CI qui pousse l'image, là où un `docker compose build` suffisait.
+C'est le même arbitrage qu'au 19/08, les règles bougent rarement.
+
+**Porte de sortie :** le paquet GHCR est privé parce que le dépôt l'est, donc
+le tirer demande un `docker login ghcr.io`. La visibilité d'un paquet se règle
+indépendamment de celle du dépôt, la rendre publique retirerait ce dernier
+identifiant du déploiement. Non fait, pas tranché.
 
 **État au 14/08/2026 :** l'instance visée ne fait pas encore tourner le
 webhook. `publish submission` y écrit donc un service avant que quoi que ce
