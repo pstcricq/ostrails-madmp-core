@@ -33,6 +33,7 @@ from dsw.publish import (
     webhook_from_env,
 )
 from project import assemble_project
+from registry import Registry
 
 GLIDER_CONFIG = Path(__file__).parent.parent / "configs" / "projects" / "glider.yaml"
 
@@ -122,6 +123,7 @@ def test_a_listing_is_read_as_the_three_names_of_one_package():
 
 
 WEBHOOK = Webhook("http://w", "s3cret")
+REGISTRY = Registry("an-owner", "a-registry")
 
 # What the instance stamps on a service of its own accord, and hands back on
 # the next read. A `PUT` takes none of it, it is assigned and not declared.
@@ -153,14 +155,14 @@ def test_the_service_routes_by_folder_and_only_by_folder(config):
     """The folder in the URL is the only routing input the webhook has,
     which project a submission belongs to is decided there and never by
     reading the document."""
-    service = submission_service(config, "template-uuid", WEBHOOK)
+    service = submission_service(config, "template-uuid", WEBHOOK, REGISTRY)
     assert service["id"] == "glider"
     assert service["request"]["url"] == "http://w?project=glider"
 
 
 def test_the_service_carries_the_shared_secret(config):
     """What DSW sends is what the webhook compares against its own copy."""
-    service = submission_service(config, "template-uuid", WEBHOOK)
+    service = submission_service(config, "template-uuid", WEBHOOK, REGISTRY)
     assert service["request"]["headers"] == {"Authorization": "Bearer s3cret"}
 
 
@@ -168,7 +170,7 @@ def test_the_service_is_scoped_to_this_project_s_own_template(config):
     """So the Submit menu offers it for this project's documents and for
     nothing else. Two fields and no more: a supported format is stored with a
     tenant uuid and its service id too, and neither is this run's to send."""
-    service = submission_service(config, "template-uuid", WEBHOOK)
+    service = submission_service(config, "template-uuid", WEBHOOK, REGISTRY)
     assert service["supportedFormats"] == [
         {"templateUuid": "template-uuid", "formatUuid": SUBMISSION_FORMAT_UUID}
     ]
@@ -185,7 +187,7 @@ def test_the_service_names_a_format_the_template_bundle_actually_carries(config)
     the uuid in it."""
     project = assemble_project(GLIDER_CONFIG)
     bundle = build_template_bundle(project, created_at="2026-01-01T00:00:00.000Z")
-    service = submission_service(config, "tpl-uuid", WEBHOOK)
+    service = submission_service(config, "tpl-uuid", WEBHOOK, REGISTRY)
 
     emitted = {fmt["uuid"] for fmt in bundle["formats"]}
     assert service["supportedFormats"][0]["formatUuid"] in emitted
@@ -196,7 +198,7 @@ def test_a_service_this_module_builds_is_already_what_a_write_carries(config):
     `submission_service` declares is exactly what `installed_service` keeps,
     so a field added to one and forgotten in the other cannot quietly drop out
     of the comparison."""
-    service = submission_service(config, "tpl-uuid", WEBHOOK)
+    service = submission_service(config, "tpl-uuid", WEBHOOK, REGISTRY)
     assert installed_service(service) == service
 
 
@@ -204,7 +206,7 @@ def test_what_the_instance_stamped_on_a_service_is_not_a_difference(config):
     """A read gives back more than a write takes. Those extra fields are the
     instance's own answer, not something this run has an opinion about, so they
     cannot be read as a disagreement."""
-    service = submission_service(config, "tpl-uuid", WEBHOOK)
+    service = submission_service(config, "tpl-uuid", WEBHOOK, REGISTRY)
     assert installed_service(as_dsw_returns_it(service)) == service
 
 
@@ -252,8 +254,8 @@ def submission_env(monkeypatch):
     monkeypatch.setenv("SUBMISSION_URL", "http://w")
     monkeypatch.setenv("SUBMISSION_TOKEN", "s3cret")
     monkeypatch.setenv("REGISTRY_TOKEN", "a-token")
-    monkeypatch.setenv("REGISTRY_OWNER", "owner")
-    monkeypatch.setenv("REGISTRY_REPO", "dmp-registry")
+    monkeypatch.setenv("REGISTRY_OWNER", REGISTRY.owner)
+    monkeypatch.setenv("REGISTRY_REPO", REGISTRY.repo)
     monkeypatch.setattr("dsw.publish.folder_status", _Registry("registered"))
     return monkeypatch
 
@@ -262,7 +264,7 @@ def _current(config):
     """The service the instance would already hold, published from this very
     config against this very template, and handed back the way DSW hands one
     back."""
-    return as_dsw_returns_it(submission_service(config, "tpl-uuid", WEBHOOK))
+    return as_dsw_returns_it(submission_service(config, "tpl-uuid", WEBHOOK, REGISTRY))
 
 
 def test_a_service_that_already_says_this_is_not_written_again(config, submission_env):

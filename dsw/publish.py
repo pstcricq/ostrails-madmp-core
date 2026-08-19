@@ -65,6 +65,7 @@ from dsw.common import (
 from registry import (
     GitHubClient,
     GitHubError,
+    Registry,
     RegistryError,
     folder_status,
     registry_from_env,
@@ -385,6 +386,7 @@ def submission_service(
     config: dict[str, Any],
     template_uuid: str,
     webhook: Webhook,
+    registry: Registry,
 ) -> dict[str, Any]:
     """One project's Document Submission entry, in the shape a write takes.
 
@@ -396,6 +398,10 @@ def submission_service(
     naming this project's own template, so the Submit menu offers this service
     for this project's documents and for nothing else.
 
+    The registry is here for the name alone, which is what a researcher reads
+    in the Submit menu, so it says where the DMP goes rather than naming one
+    repository for every deployment.
+
     Nothing here is the instance's to assign. A service is stored with a tenant
     uuid on itself and on each supported format, a service id repeated inside
     the format, and two timestamps, none of which a change payload carries.
@@ -404,7 +410,7 @@ def submission_service(
     folder = config["id"]
     return {
         "id": folder,
-        "name": f"{config['name']} → dmp-registry/{folder}",
+        "name": f"{config['name']} → {registry.repo}/{folder}",
         "description": "",
         "props": [],
         "request": {
@@ -496,7 +502,7 @@ def publish_submission(client: DswClient, config: dict[str, Any], pid: str) -> N
     tenant = client.get("/tenants/current/config")
     submission = tenant.setdefault("submission", {})
     services = submission.setdefault("services", [])
-    service = submission_service(config, template_uuid, webhook)
+    service = submission_service(config, template_uuid, webhook, registry_from_env())
     current = next((s for s in services if s.get("id") == folder), None)
     unchanged = current is not None and installed_service(current) == service
     if unchanged and submission.get("enabled"):
