@@ -436,7 +436,9 @@ madmp-core/
 │   └── sync_registry.py          the one thing here that writes outside
 ├── tests/                        one test file per module
 ├── build/                        where the generators write, never committed
-├── .github/workflows/ci.yml      eight jobs, six that report and two that act
+├── .github/workflows/
+│   ├── ci.yml                    eight jobs, six that report and two that act
+│   └── release.yml               a tag says the same thing as pyproject.toml
 ├── .env.example                  every name the environment has to carry
 ├── pyproject.toml                one environment for the whole repository
 ├── uv.lock                       the versions, committed and installed from
@@ -478,6 +480,18 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
   which is the point of gating on a variable rather than commenting it out.
   It has to be a variable and not a secret: the `secrets` context is not
   available in a job-level `if:`.
+
+### Cutting a release
+
+A release is a tag, and the version lives in `pyproject.toml` and nowhere else.
+It is what `importlib.metadata` hands the webhook, which writes it into every
+verdict it commits, so a tag disagreeing with it would put a version in the
+registry naming a release nobody can check out. Bumping it is part of cutting
+the tag, and `release.yml` refuses a tag that forgot.
+
+What a release is for: the deployment beside DSW installs the webhook from
+here, `pip install madmp-core[submission]==<version>`, and that pins the engine
+and the rules files a submitted document is checked against.
 
 The registry's coordinates are repository variables too, so no deployment's
 address is written into the workflow. `REGISTRY_OWNER` and `REGISTRY_REPO`

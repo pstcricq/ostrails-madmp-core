@@ -10,7 +10,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "madmp-core"
-version = "0.1.0"
+version = "1.0.0"
 description = "Declarative maDMP rules with an explicit meta-schema, merged into one typed model."
 # The version CI runs and the only one this is ever installed on.
 requires-python = ">=3.12"
