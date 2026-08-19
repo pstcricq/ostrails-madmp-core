@@ -436,9 +436,7 @@ madmp-core/
 │   └── sync_registry.py          the one thing here that writes outside
 ├── tests/                        one test file per module
 ├── build/                        where the generators write, never committed
-├── .github/workflows/
-│   ├── ci.yml                    eight jobs, six that report and two that act
-│   └── quality-control.yml       the check the registry calls on a DMP
+├── .github/workflows/ci.yml      eight jobs, six that report and two that act
 ├── .env.example                  every name the environment has to carry
 ├── pyproject.toml                one environment for the whole repository
 ├── uv.lock                       the versions, committed and installed from
@@ -480,34 +478,6 @@ Six jobs in parallel, then two that act, all installing from the lockfile with
   which is the point of gating on a variable rather than commenting it out.
   It has to be a variable and not a secret: the `secrets` context is not
   available in a job-level `if:`.
-
-### The check the registry calls
-
-`quality-control.yml` is not part of the run above, it is a reusable workflow the
-repository holding a DMP calls on one document:
-
-```yaml
-jobs:
-  qc:
-    uses: pstcricq/ostrails-madmp-core/.github/workflows/quality-control.yml@v0.2.0
-    with:
-      dmp_path: projects/glider/template/dmp_glider_template.json
-      pins_path: projects/glider/template/dmp_glider_template.meta.json
-    secrets:
-      madmp_core_token: ${{ secrets.MADMP_CORE_TOKEN }}
-```
-
-It checks out the caller, checks out this repository beside it, and runs
-`quality_control.run` from the caller's root. The engine comes from the
-release that workflow file belongs to, never from the default branch: a DMP
-that passed must go on passing, and pulling the latest engine under a document
-nobody touched would turn old submissions red for a change made here. A called
-workflow cannot read its own ref, so the tag is written in the file itself,
-and cutting a release means bumping it in the same commit.
-
-The token is needed only while this repository is private: a called workflow
-runs with the caller's own `GITHUB_TOKEN`, which cannot read another private
-repository.
 
 The registry's coordinates are repository variables too, so no deployment's
 address is written into the workflow. `REGISTRY_OWNER` and `REGISTRY_REPO`
