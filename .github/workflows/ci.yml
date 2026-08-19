@@ -179,6 +179,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Builds the arm64 half under emulation. The runner is amd64, and without
+      # this the job would only ever prove that the architecture it happens to
+      # run on works.
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
@@ -187,6 +191,10 @@ jobs:
           # directory away from the Dockerfile.
           context: .
           file: submission/Dockerfile
+          # Both, and the same two `release` publishes. A deployment host is
+          # amd64 and a developer's Mac is arm64, and an image that carries one
+          # of them refuses to run on the other rather than running slowly.
+          platforms: linux/amd64,linux/arm64
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -300,6 +308,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -315,6 +324,7 @@ jobs:
         with:
           context: .
           file: submission/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository }}/submission:${{ github.ref_name }}
           cache-from: type=gha
