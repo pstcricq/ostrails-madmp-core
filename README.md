@@ -194,6 +194,22 @@ field it would have held.
 carrying the verdict, the counts and the results, so no reader recounts. Exit
 code 0 when the document has no real violation, 1 otherwise.
 
+### `submission/` : what DSW posts, and what the registry receives
+
+The webhook DSW calls on Submit. It runs beside a DSW deployment, which holds
+its configuration and none of its code, and it is installed from here:
+`pip install madmp-core[submission]`. Its dependencies are declared apart, so
+installing the rules and the generators drags no web server in.
+
+`handle_submission()` is the whole of what the endpoint does, free of HTTP, so
+a submission can be driven without a server. It takes the `metadata` object out
+of the rendered document, refuses one that carries none or names another
+project, and offers the DMP and that object on a branch of their own, under one
+pull request per project.
+
+It creates nothing. A folder that is not laid out is refused rather than half
+built, `registry/` being what lays one out.
+
 ### The code beside the data
 
 - `rules/loader.py` : `load_rules_file` reads one rules file and validates it
@@ -264,6 +280,12 @@ code 0 when the document has no real violation, 1 otherwise.
   document in, a list of results out.
 - `quality_control/run.py` : the command, and the envelope every other step
   reads. The only place that decides where the pins come from.
+- `submission/service.py` : the envelope taken out of the document, the two
+  files offered in one commit, and the one pull request a project has. It is
+  the only module here that runs in a long-lived process rather than a job.
+- `submission/github_client.py` : the calls the webhook needs, standard library
+  only. Not the same client as `registry/github.py`, which lays folders out
+  through the Contents API where this one commits through the Git Data API.
 - `utils/schema.py` : the JSON-Schema plumbing both loaders sit on. Compile a
   schema once, report every violation of a document at once.
 - `utils/errors.py` : `ProblemsError`, the one error shape for the whole
@@ -383,6 +405,10 @@ madmp-core/
 ├── registry/                     where a project's DMPs will land
 │   ├── folder.py                 one project's folder, read and laid out
 │   └── github.py                 the two GitHub Contents API calls this needs
+├── submission/                   what DSW posts, and what the registry receives
+│   ├── app.py                    the HTTP surface and what it reads at startup
+│   ├── service.py                what a submission means, free of HTTP
+│   └── github_client.py          reading a file, and committing onto a branch
 ├── quality_control/              whether a submitted DMP holds up
 │   ├── engine.py                 a model and a document, walked together
 │   └── run.py                    the command, and the envelope it writes

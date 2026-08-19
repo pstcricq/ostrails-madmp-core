@@ -20,7 +20,27 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["rules", "configs", "project", "dsw", "registry", "quality_control", "utils"]
+include = [
+    "rules",
+    "configs",
+    "project",
+    "dsw",
+    "registry",
+    "quality_control",
+    "submission",
+    "utils",
+]
+
+# The webhook is the one thing here that runs as a service, and the only one
+# that needs a web framework. Declared apart so installing the rules and the
+# generators does not drag a server in: `pip install madmp-core[submission]`
+# is what a DSW deployment installs.
+[project.optional-dependencies]
+submission = [
+    "fastapi",
+    "uvicorn",
+    "python-multipart",  # DSW submits the document as a multipart upload
+]
 
 [dependency-groups]
 dev = [
@@ -29,6 +49,9 @@ dev = [
     # The generator writes Jinja and never runs it, so parsing it is a
     # repository check and not something an installed package has to carry.
     "jinja2",
+    # What FastAPI's TestClient drives the webhook through. Starlette refuses
+    # to build one without it.
+    "httpx2",
 ]
 
 # Caches go inside .venv, as disposable as the environment itself.

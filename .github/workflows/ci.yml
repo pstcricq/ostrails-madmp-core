@@ -67,8 +67,11 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
+      # The one job that needs the webhook's own dependencies, being the one
+      # that runs its tests. Every other job here works on the rules and the
+      # generators, which carry no server.
       - name: Install the locked environment
-        run: uv sync --frozen
+        run: uv sync --frozen --extra submission
       - name: Lint
         run: uv run ruff check .
       # --check reports, never rewrites. CI states the verdict, the editor
