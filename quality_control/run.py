@@ -28,12 +28,9 @@ from typing import Any
 
 import yaml
 
-from project import Model, merge_rules, resolve_pins
+from project import RULES_DIR, Model, merge_rules, resolve_pins
 from quality_control.engine import has_failures, results_to_dicts, run_qc
 from utils.errors import ProblemsError
-
-ROOT = Path(__file__).resolve().parents[1]
-RULES_DIR = ROOT / "rules" / "standards"
 
 # What a status means for the run as a whole is decided in engine.py. This is
 # only the order they are counted in, so a summary always reads the same way.

@@ -1470,26 +1470,29 @@ sans **aucun** schéma que personne ne valide en entrant, mais il est repoussé
 sans date, et le correctif se décide avec son appelant sous les yeux : une
 passe de forme dans `resolve_pins`, ou un schéma pour ce fichier.
 
-### La roue n'embarque aucun fichier de données
+### La roue embarque ses fichiers de données, depuis le 19/08/2026
 
-`[tool.setuptools.packages.find]` déclare les paquets, mais setuptools
-n'embarque que les `.py` tant que le reste n'est pas déclaré à part. Une roue
-construite depuis une copie vierge, sans cache, ne contient donc **ni JSON ni
-YAML** : elle s'importe, puis meurt au premier appel réel sur
+Elle ne les embarquait pas. `[tool.setuptools.packages.find]` déclare les
+paquets, mais setuptools n'embarque que les `.py` tant que le reste n'est pas
+déclaré à part, donc une roue construite depuis une copie vierge ne contenait
+**ni JSON ni YAML** : elle s'importait, puis mourait au premier appel réel sur
 `FileNotFoundError: .../site-packages/rules/rules.schema.json`.
 
-**Latent, et destiné à le rester.** L'unité d'exécution est le **dépôt cloné**,
-pas la roue : la CI fait `uv sync --frozen` dans le checkout, et le code y lit
-ses fichiers de données là où ils sont, sur le disque. Le déploiement visé fera
-pareil, décidé le 05/08/2026 en constatant que « le jour où on conteneurise »
-était le prochain jalon, et qu'aucun consommateur de roue n'y apparaissait pour
-autant. La cible a changé depuis, Codespaces jusqu'au 12/08/2026 puis le GitLab
-interne SOCIB, sans que la conclusion bouge : les deux clonent.
+C'était noté « latent, et destiné à le rester », l'unité d'exécution étant le
+dépôt cloné et non la roue. **Le déclencheur prévu s'est produit** : le webhook
+de soumission entre dans ce dépôt et sera installé depuis lui, sans `-e`, dans
+l'image qui tourne à côté de DSW. Il lui faut les règles pour contrôler un
+document, donc il lui faut la roue complète.
 
-**Déclencheur pour rejuger :** publier sur un index, ou installer depuis git
-sans `-e`. Le correctif tient alors en deux lignes
-(`[tool.setuptools.package-data]`, avec un glob par niveau de répertoire car
-ils ne les traversent pas).
+Le correctif tient dans ce qui avait été prévu, `[tool.setuptools.package-data]`
+avec un glob par niveau de répertoire, ceux-ci ne traversant pas. Vérifié
+autrement que par la construction, seule preuve qui vaille : roue installée
+dans un venv neuf, `cd /` hors de tout checkout, fusion des deux standards et
+contrôle d'un document, 163 champs et 21 contrôles.
+
+Ce qui n'entre pas dans la roue et ne doit pas y entrer : `configs/projects/`,
+qui est la donnée du dépôt et non du paquet. Un appelant passe le chemin de la
+config qu'il veut.
 
 **Deux pièges pour qui vérifiera**, tous deux donnant un faux succès :
 setuptools **ne nettoie jamais `build/`** entre deux constructions, donc des

@@ -204,8 +204,16 @@ installing the rules and the generators drags no web server in.
 `handle_submission()` is the whole of what the endpoint does, free of HTTP, so
 a submission can be driven without a server. It takes the `metadata` object out
 of the rendered document, refuses one that carries none or names another
-project, and offers the DMP and that object on a branch of their own, under one
-pull request per project.
+project, **checks the document against the rules that object names**, and
+offers the DMP and that object on a branch of their own, under one pull request
+per project.
+
+The check runs before anything is read or written: it needs no network, and it
+is the answer the researcher is most likely waiting for. A document that does
+not hold up is refused with a `422` naming the first few violations and the
+versions they were judged against, so nothing half checked ever reaches the
+registry. Warnings do not refuse, or every free-text answer would stop a
+submission.
 
 It creates nothing. A folder that is not laid out is refused rather than half
 built, `registry/` being what lays one out.

@@ -35,6 +35,14 @@ include = [
 # that needs a web framework. Declared apart so installing the rules and the
 # generators does not drag a server in: `pip install madmp-core[submission]`
 # is what a DSW deployment installs.
+# setuptools ships `.py` and nothing else unless told. Without this the rules
+# and the two schemas stay behind, and an installed madmp-core can neither
+# validate a rules file nor resolve a pin: the wheel would carry the loader
+# and not what it loads.
+[tool.setuptools.package-data]
+rules = ["*.json", "standards/*/*.json"]
+configs = ["*.json"]
+
 [project.optional-dependencies]
 submission = [
     "fastapi",

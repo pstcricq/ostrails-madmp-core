@@ -1,5 +1,9 @@
 """The webhook's logic, free of HTTP plumbing.
 
+A document is checked before it is offered, against the rules its own envelope
+names, so a DMP that does not hold up never reaches the registry at all and
+the researcher hears why while they are still in DSW.
+
 A submission is offered, not merged. It lands on a branch of its own and a
 pull request carries it, so the registry's default branch only ever holds
 documents a check has passed.
@@ -17,7 +21,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from project import RULES_DIR, merge_rules, resolve_pins
+from quality_control import has_failures, run_qc
 from submission.github_client import GitHubClient
+from utils.errors import ProblemsError
 
 # A safe folder slug: no dots or slashes, so a submission can never escape
 # projects/<folder>/ (path traversal) or name anything but a folder.
@@ -41,8 +48,22 @@ _BRANCH_PREFIX = "submission/"
 _ENVELOPE = "metadata"
 
 
+# How many violations a refusal spells out before counting the rest. DSW
+# shows this message on the submission, not a report, and a document missing
+# forty fields would push the beginning of it out of sight.
+_SPELLED_OUT = 5
+
+
 class SubmissionError(ValueError):
     """The submission cannot be routed to a registry folder."""
+
+
+class QualityControlError(ValueError):
+    """The document does not hold up against the rules it names.
+
+    Told apart from a routing failure because it is the one thing the
+    researcher can fix, and the only one worth spelling out to them.
+    """
 
 
 @dataclass(frozen=True)
@@ -108,6 +129,37 @@ def take_envelope(document: dict, folder: str) -> dict[str, Any]:
     return envelope
 
 
+def check(document: Any, envelope: dict[str, Any]) -> None:
+    """Check the document against the rules its envelope names, and raise
+    with what to fix when it does not hold up.
+
+    The versions come from the document, so what judges it is what it was
+    built from, and a project whose pins moved since does not change the
+    answer.
+    """
+    try:
+        model = merge_rules(resolve_pins(envelope["rules"], RULES_DIR))
+    except ProblemsError as err:
+        raise QualityControlError(
+            f"the rules this document names cannot be loaded, {err}"
+        ) from err
+
+    results = run_qc(model, document)
+    if not has_failures(results):
+        return
+
+    violations = [r for r in results if r.status == "fail"]
+    spelled = "\n".join(f"  {r.message}" for r in violations[:_SPELLED_OUT])
+    rest = len(violations) - _SPELLED_OUT
+    versions = ", ".join(
+        f"{name} {version}" for name, version in model.standard_versions
+    )
+    raise QualityControlError(
+        f"quality control failed, {len(violations)} violation(s) against "
+        f"{versions}:\n{spelled}" + (f"\n  and {rest} more" if rest > 0 else "")
+    )
+
+
 def _bytes(document: Any) -> bytes:
     """One JSON file as it is committed. Trailing newline, so the registry
     holds text files git and every editor agree on."""
@@ -151,6 +203,9 @@ def handle_submission(
     project, and rewrite ``dmp_id``, in the document it is given, to the DMP's
     raw URL on the default branch.
 
+    A document that does not hold up against the rules its envelope names is
+    refused before any of that, so nothing half checked is ever offered.
+
     The two files go in one commit, so nothing ever holds a DMP whose versions
     are missing. Idempotent: a submission that says what is already offered
     commits nothing. Returns a small summary DSW shows as the result."""
@@ -159,6 +214,9 @@ def handle_submission(
     if not isinstance(document, dict) or not isinstance(document.get("dmp"), dict):
         raise SubmissionError("document has no dmp object")
     envelope = take_envelope(document, folder)
+    # Before anything is read or written: it needs no network, and it is the
+    # answer the researcher is most likely waiting for.
+    check(document, envelope)
 
     owner, repo = config.github_owner, config.registry_repo
     base = f"projects/{folder}"

@@ -18,6 +18,8 @@ from fastapi.testclient import TestClient
 from submission.app import Settings, _from_environment, app
 from submission.github_client import GitHubClient, GitHubError
 from submission.service import (
+    _SPELLED_OUT,
+    QualityControlError,
     SubmissionConfig,
     SubmissionError,
     handle_submission,
@@ -35,12 +37,39 @@ ENVELOPE = {
 }
 
 
-def _document(title="Glider mission DMP", identifier=DSW_URL, envelope=None):
+# A DMP answering everything the pinned rules require. The webhook checks a
+# document before it offers it, so anything less is refused before the routing
+# these tests are about is ever reached.
+COMPLETE = {
+    "title": "Glider mission DMP",
+    "language": "eng",
+    "created": "2026-08-18T09:00:00Z",
+    "modified": "2026-08-18T09:00:00Z",
+    "ethical_issues_exist": "no",
+    "dmp_id": {"identifier": DSW_URL, "type": "url"},
+    "contact": {
+        "name": "Albert Einstein",
+        "mbox": "albert@example.com",
+        "contact_id": [{"identifier": "0000-0001-2345-6789", "type": "orcid"}],
+    },
+    "dataset": [
+        {
+            "title": "CTD",
+            "personal_data": "no",
+            "sensitive_data": "no",
+            "dataset_id": {"identifier": "https://doi.org/10.5281/x", "type": "doi"},
+        }
+    ],
+}
+
+
+def _document(title="Glider mission DMP", identifier=DSW_URL, envelope=None, dmp=None):
     """What a maDMP document template renders: the dmp object, and beside it
     the provenance block the webhook takes back out."""
-    document = {
-        "dmp": {"title": title, "dmp_id": {"identifier": identifier, "type": "url"}}
-    }
+    document = {"dmp": json.loads(json.dumps(COMPLETE if dmp is None else dmp))}
+    if dmp is None:
+        document["dmp"]["title"] = title
+        document["dmp"]["dmp_id"] = {"identifier": identifier, "type": "url"}
     envelope = ENVELOPE if envelope is None else envelope
     if envelope is not ...:
         document["metadata"] = json.loads(json.dumps(envelope))
@@ -341,6 +370,60 @@ def test_a_new_submission_after_a_merge_starts_again_from_the_default_branch():
     assert offered["dmp"]["title"] == "Second season"
     # Built on the merged state, so the file it replaces is the merged one.
     assert DMP_PATH in github.files_on("main")
+
+
+# The check the document has to pass
+
+
+def test_a_document_that_does_not_hold_up_is_refused():
+    """Refused before anything is read or written, so a DMP with holes never
+    reaches the registry and the researcher hears why in DSW."""
+    github = _initialized()
+    incomplete = {k: v for k, v in COMPLETE.items() if k != "language"}
+    with pytest.raises(QualityControlError, match="quality control failed"):
+        handle_submission(_document(dmp=incomplete), "glider", github, CONFIG)
+    assert github.commits == []
+    assert github.pulls == {}
+
+
+def test_a_refusal_names_what_to_fix_and_what_judged_it():
+    """The message is the whole of what the researcher gets, so it says which
+    fields and against which versions."""
+    incomplete = {k: v for k, v in COMPLETE.items() if k != "language"}
+    with pytest.raises(QualityControlError) as raised:
+        handle_submission(_document(dmp=incomplete), "glider", _initialized(), CONFIG)
+    message = str(raised.value)
+    assert "dmp.language" in message
+    assert "rda_dcs 1.0.0" in message and "ostrails 1.0.0" in message
+
+
+def test_a_refusal_spells_out_only_the_first_few():
+    """DSW shows this on the submission, not a report. A document missing
+    everything must not push the beginning of the message out of sight."""
+    with pytest.raises(QualityControlError) as raised:
+        handle_submission(_document(dmp={}), "glider", _initialized(), CONFIG)
+    message = str(raised.value)
+    assert message.count("\n  ") == _SPELLED_OUT + 1
+    assert "and 3 more" in message
+
+
+def test_a_warning_alone_does_not_refuse():
+    """Suggestions do not gate here either, or every free-text answer would
+    stop a submission."""
+    loose = json.loads(json.dumps(COMPLETE))
+    loose["contact"]["contact_id"][0]["type"] = "something else"
+    result = handle_submission(_document(dmp=loose), "glider", _initialized(), CONFIG)
+    assert result["action"] == "created"
+
+
+def test_pins_naming_rules_nobody_wrote_are_refused():
+    """The envelope is well formed and names a version that does not exist.
+    Nothing can judge the document, so it is not offered."""
+    envelope = {**ENVELOPE, "rules": [{"rda_dcs": "9.9.9"}]}
+    github = _initialized()
+    with pytest.raises(QualityControlError, match="cannot be loaded"):
+        handle_submission(_document(envelope=envelope), "glider", github, CONFIG)
+    assert github.commits == []
 
 
 # Guards

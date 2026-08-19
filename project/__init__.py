@@ -20,7 +20,7 @@ generator's has.
 only module that composes them.
 """
 
-from project.assemble import Project, assemble_project
+from project.assemble import RULES_DIR, Project, assemble_project
 from project.merge import (
     Field,
     Model,
@@ -32,6 +32,7 @@ from project.merge import (
 from project.pins import UnresolvedPinsError, resolve_pins
 
 __all__ = [
+    "RULES_DIR",
     "Field",
     "Model",
     "Project",

@@ -29,7 +29,12 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from submission.github_client import GitHubClient, GitHubError
-from submission.service import SubmissionConfig, SubmissionError, handle_submission
+from submission.service import (
+    QualityControlError,
+    SubmissionConfig,
+    SubmissionError,
+    handle_submission,
+)
 
 REQUIRED = ("SUBMISSION_TOKEN", "REGISTRY_TOKEN", "REGISTRY_OWNER", "REGISTRY_REPO")
 
@@ -142,6 +147,12 @@ async def submissions(request: Request) -> JSONResponse:
         )
     except SubmissionError as e:
         raise HTTPException(400, str(e)) from e
+    # 422 and not 400: the request was understood and the document is the one
+    # that does not hold up. It is also the only refusal the researcher can do
+    # anything about, so DSW showing a different code for it is worth the one
+    # extra branch.
+    except QualityControlError as e:
+        raise HTTPException(422, str(e)) from e
     # Anything GitHub refused, a write included. 502 rather than 500: the
     # webhook worked, the service behind it did not.
     except GitHubError as e:
