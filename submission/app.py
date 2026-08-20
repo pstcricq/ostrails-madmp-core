@@ -24,9 +24,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from submission.service import (
     QualityControlError,
@@ -95,6 +95,22 @@ app = FastAPI(title="maDMP submission webhook", lifespan=lifespan)
 # The one seam: the tests install a builder that returns a fake GitHub and a
 # fixed config, so nothing in the suite depends on the process environment.
 app.state.build = _from_environment
+
+
+@app.exception_handler(HTTPException)
+async def refuse_in_plain_text(request: Request, exc: HTTPException) -> Response:
+    """Every refusal, as the text it says and nothing around it.
+
+    (!!) DSW shows a failed submission as a "View error" link opening the
+    response body raw, unparsed, with escaped newlines turned back into real
+    ones. FastAPI's default renders a refusal as ``{"detail": "..."}``, so the
+    researcher would read the JSON wrapper around their own message, and a
+    message written in lines would arrive as one. Text, so what was written is
+    what is read.
+    """
+    return PlainTextResponse(
+        str(exc.detail), status_code=exc.status_code, headers=exc.headers
+    )
 
 
 @app.get("/health")

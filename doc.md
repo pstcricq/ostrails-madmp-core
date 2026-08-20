@@ -1350,6 +1350,47 @@ gravité n'ait pas de cas particulier. Et l'ordre du parcours du document, lui,
 ne survit qu'à l'intérieur de chaque liste, plus entre elles. C'est l'échange
 qu'on fait en triant par gravité.
 
+### Ce que DSW montre d'une soumission, et ce qu'il jette
+
+**Relevé le 20/08/2026**, en lisant le bundle du client de la pile locale
+plutôt qu'en supposant. DSW garde trois choses par soumission, sa table
+`submission` porte `state`, `location` et `returned_data`, et son client en
+affiche ceci :
+
+| état | ce que le chercheur voit |
+|---|---|
+| `Submitting` | un badge |
+| `Submitted` | un badge, et un lien « View submission » vers l'en-tête `Location` |
+| `Error` | un badge, et un lien « View error » ouvrant une fenêtre « Submission error » |
+
+Dans la fenêtre d'erreur, le client écrit `Response Body:` puis le **corps brut
+de la réponse**, sans le parser, après avoir retransformé les `\n` échappés en
+vraies fins de ligne.
+
+**D'où le texte brut sur tous les chemins de refus.** Le rendu par défaut de
+FastAPI, `{"detail": "..."}`, mettrait l'emballage JSON sous les yeux du
+chercheur, et un message écrit en lignes lui arriverait sur une seule. Un
+gestionnaire d'exception unique dans `app.py` rend donc chaque `HTTPException`
+en `PlainTextResponse`, les 400, 401, 422 et 502 compris, puisqu'ils
+atterrissent tous dans la même fenêtre.
+
+**Et d'où le message de succès qui n'est lu par personne.** Sur un `Submitted`,
+le client ne rend que le lien, il ne lit `returned_data` que dans la branche
+`Error`. Les trois cas d'affichage qu'on voulait au succès, avertissements ou
+pas, n'ont donc nulle part où s'écrire. Le champ `message` est quand même dans
+le corps du 200 : il ne coûte rien, il est en base côté DSW, il sert à tout
+autre client, et le jour où DSW l'affichera il sera déjà juste. Les comptes,
+eux, sont dans le `.check.json`, qui est précisément au bout du lien que le
+chercheur a sous la main.
+
+**La coupe à vingt violations.** Un document très incomplet en produit des
+dizaines, cinq datasets vides en donnent vingt-sept, et la fenêtre de DSW n'est
+pas un rapport. Le compte total est annoncé au-dessus de la liste et la coupe
+se referme sur `[...] N more not shown`, pour qu'on ne corrige jamais vingt
+violations en croyant avoir tout fait. Les avertissements suivent, dans un bloc
+qui dit qu'ils ne bloquent pas, et la dernière ligne donne l'échelle, ce qui a
+tenu et ce qui est resté vide.
+
 ### Trois cibles, et deux natures
 
 `km`, `template`, `submission`. Les deux premières publient un **paquet** :

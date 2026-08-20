@@ -212,9 +212,23 @@ commits three files in one commit: the DMP, that object, and the verdict.
 
 The check runs before anything is read or written: it needs no network, and it
 is the answer the researcher is most likely waiting for. A document that does
-not hold up is refused with a `422` naming the first few violations and the
-versions they were judged against, so what the registry holds is what passed.
-Warnings do not refuse, or every free-text answer would stop a submission.
+not hold up is refused with a `422` naming the violations and the versions
+they were judged against, so what the registry holds is what passed. Warnings
+do not refuse, or every free-text answer would stop a submission.
+
+**Every refusal answers in plain text, and this is not cosmetic.** DSW shows a
+failed submission as a "View error" link opening the response body raw,
+unparsed, with escaped newlines turned back into real ones. FastAPI's default
+`{"detail": "..."}` would show the researcher the JSON wrapper around their
+own message, and a message written in lines would arrive as one. At most 20
+violations are spelled out, the count above the list saying how many there
+were, so a cut list never passes for the whole of it.
+
+A submitted document answers `200` with a `message` of its own. **DSW shows
+none of it**: its client renders a submitted document as a badge and a link to
+the `Location` header, and reads the body only on a failure. The line is
+carried anyway, for whatever else reads a submission, and the counts are in
+the verdict behind that link.
 
 The verdict is committed beside the DMP because a document nobody can tell was
 checked is a document nobody can trust. It is the same envelope the command

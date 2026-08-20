@@ -307,7 +307,7 @@ def test_a_document_that_does_not_hold_up_is_refused():
     reaches the registry and the researcher hears why in DSW."""
     github = _initialized()
     incomplete = {k: v for k, v in COMPLETE.items() if k != "language"}
-    with pytest.raises(QualityControlError, match="quality control failed"):
+    with pytest.raises(QualityControlError, match="Quality control failed"):
         handle_submission(_document(dmp=incomplete), "glider", github, CONFIG)
     assert github.commits == []
 
@@ -326,11 +326,53 @@ def test_a_refusal_names_what_to_fix_and_what_judged_it():
 def test_a_refusal_spells_out_only_the_first_few():
     """DSW shows this on the submission, not a report. A document missing
     everything must not push the beginning of the message out of sight."""
+    many = {"dataset": [{} for _ in range(5)]}
+    with pytest.raises(QualityControlError) as raised:
+        handle_submission(_document(dmp=many), "glider", _initialized(), CONFIG)
+    message = str(raised.value)
+    listed = [line for line in message.splitlines() if line.startswith("  ")]
+    assert len(listed) == _SPELLED_OUT + 1  # the cut is one of them
+    assert listed[-1] == "  [...] 7 more not shown."
+
+
+def test_a_truncated_refusal_still_names_the_whole_count():
+    """The list is cut, the number never is, or a researcher fixes twenty and
+    submits again believing they are done."""
+    many = {"dataset": [{} for _ in range(5)]}
+    with pytest.raises(QualityControlError) as raised:
+        handle_submission(_document(dmp=many), "glider", _initialized(), CONFIG)
+    assert "27 violation(s) to fix, the first 20:" in str(raised.value)
+
+
+def test_a_short_refusal_announces_no_cut():
+    """Under the cap there is nothing to warn about, and saying "the first 20"
+    of eight would read as if something were hidden."""
     with pytest.raises(QualityControlError) as raised:
         handle_submission(_document(dmp={}), "glider", _initialized(), CONFIG)
     message = str(raised.value)
-    assert message.count("\n  ") == _SPELLED_OUT + 1
-    assert "and 3 more" in message
+    assert "8 violation(s) to fix:" in message
+    assert "not shown" not in message
+
+
+def test_a_refusal_separates_the_warnings_from_what_it_refuses_for():
+    """A warning never blocks, so a message that lists it beside the
+    violations would have the researcher chasing something that is not the
+    reason."""
+    loose = {k: v for k, v in COMPLETE.items() if k != "language"}
+    loose = json.loads(json.dumps(loose))
+    loose["contact"]["contact_id"][0]["type"] = "something else"
+    with pytest.raises(QualityControlError) as raised:
+        handle_submission(_document(dmp=loose), "glider", _initialized(), CONFIG)
+    message = str(raised.value)
+    assert "which do not block" in message
+    assert message.index("violation(s) to fix") < message.index("warning(s)")
+
+
+def test_a_refusal_ends_on_what_did_hold_up():
+    """The scale of what is wrong, against the scale of the document."""
+    with pytest.raises(QualityControlError) as raised:
+        handle_submission(_document(dmp={}), "glider", _initialized(), CONFIG)
+    assert str(raised.value).splitlines()[-1].endswith("optional fields left empty.")
 
 
 def test_a_warning_alone_does_not_refuse():
@@ -350,6 +392,23 @@ def test_pins_naming_rules_nobody_wrote_are_refused():
     with pytest.raises(QualityControlError, match="cannot be loaded"):
         handle_submission(_document(provenance=provenance), "glider", github, CONFIG)
     assert github.commits == []
+
+
+def test_a_submitted_document_carries_a_message_of_its_own():
+    """(!!) DSW shows none of this, its client reads the body only on a
+    failure. Carried anyway, so anything else reading a submission has it."""
+    github = _initialized()
+    result = handle_submission(_document(), "glider", github, CONFIG)
+    assert result["message"].startswith("Submitted.")
+    assert "checks passed" in result["message"]
+
+
+def test_a_submission_with_warnings_says_so_in_its_message():
+    loose = json.loads(json.dumps(COMPLETE))
+    loose["contact"]["contact_id"][0]["type"] = "something else"
+    result = handle_submission(_document(dmp=loose), "glider", _initialized(), CONFIG)
+    assert "Submitted with 1 warning(s):" in result["message"]
+    assert "contact_id" in result["message"]
 
 
 # Guards
@@ -493,6 +552,39 @@ def test_http_bad_json_is_400(client):
         headers={"Authorization": "Bearer s3cret"},
     )
     assert response.status_code == 400
+
+
+def test_a_refused_submission_answers_in_plain_text(client):
+    """(!!) DSW opens the response body raw on a failed submission, so
+    FastAPI's `{"detail": ...}` would show the researcher the JSON wrapper
+    around their own message, on one line."""
+    response = client.post(
+        "/submissions?project=glider",
+        content=json.dumps(_document(dmp={})),
+        headers={
+            "Authorization": "Bearer s3cret",
+            "Content-Type": "application/json",
+        },
+    )
+    assert response.status_code == 422
+    assert response.headers["content-type"].startswith("text/plain")
+    assert not response.text.startswith("{")
+    assert response.text.startswith("Quality control failed against")
+    assert "\n  Required field" in response.text
+
+
+def test_every_other_refusal_is_plain_text_too(client):
+    """One rendering for all of them, they all land in the same DSW window."""
+    response = client.post(
+        "/submissions",
+        content="{}",
+        headers={
+            "Authorization": "Bearer s3cret",
+            "Content-Type": "application/json",
+        },
+    )
+    assert response.status_code == 400
+    assert response.text == "missing ?project=<folder> query parameter"
 
 
 # Configuration read from the environment

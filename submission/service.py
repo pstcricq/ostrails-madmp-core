@@ -17,8 +17,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from project import RULES_DIR, Model, merge_rules, resolve_pins
-from quality_control import CheckResult, envelope, has_failures, run_qc
+from project import RULES_DIR, merge_rules, resolve_pins
+from quality_control import envelope, run_qc
 from utils.errors import ProblemsError
 from utils.github import GitHubClient
 
@@ -38,8 +38,10 @@ _PROVENANCE = "metadata"
 
 # How many violations a refusal spells out before counting the rest. DSW
 # shows this message on the submission, not a report, and a document missing
-# forty fields would push the beginning of it out of sight.
-_SPELLED_OUT = 5
+# forty fields would push the beginning of it out of sight. The count above
+# the list says how many there were, so a truncated list never passes for
+# the whole of it.
+_SPELLED_OUT = 20
 
 
 class SubmissionError(ValueError):
@@ -117,11 +119,72 @@ def take_provenance(document: dict, folder: str) -> dict[str, Any]:
     return provenance
 
 
-def check(document: Any, provenance: dict[str, Any]) -> tuple[Model, list[CheckResult]]:
-    """Check the document against the rules its provenance names. Raises with
-    what to fix when it does not hold up, and otherwise hands back the model
-    it was judged against and every result, which is what the verdict beside
-    the DMP is written from.
+def _listed(rows: list[dict[str, Any]], head: str) -> list[str]:
+    """One headed block of result messages, cut at ``_SPELLED_OUT``.
+
+    The head names the whole count, and a cut list says so on its last line,
+    so nobody reads the first twenty as the whole of what is wrong.
+    """
+    lines = [
+        f"{head}, the first {_SPELLED_OUT}:" if len(rows) > _SPELLED_OUT else f"{head}:"
+    ]
+    lines += [f"  {row['message']}" for row in rows[:_SPELLED_OUT]]
+    if len(rows) > _SPELLED_OUT:
+        lines.append(f"  [...] {len(rows) - _SPELLED_OUT} more not shown.")
+    return lines
+
+
+def _counted(qc: dict[str, Any]) -> str:
+    """The line that closes every message: what held up, and what was left
+    empty."""
+    return (
+        f"{qc['summary']['pass']} checks passed, "
+        f"{qc['summary']['missing']} optional fields left empty."
+    )
+
+
+def _refusal(qc: dict[str, Any]) -> str:
+    """What a researcher is told when their document does not hold up.
+
+    Plain text in blocks, the violations first because they are the only
+    thing they have to act on, then the warnings, which the refusal is not
+    about and which say so.
+    """
+    versions = ", ".join(f"{name} {v}" for name, v in qc["rules_versions"].items())
+    lines = [f"Quality control failed against {versions}.", ""]
+    lines += _listed(qc["fail"], f"{len(qc['fail'])} violation(s) to fix")
+    if qc["warning"]:
+        lines += [
+            "",
+            *_listed(
+                qc["warning"], f"{len(qc['warning'])} warning(s), which do not block"
+            ),
+        ]
+    return "\n".join([*lines, "", _counted(qc)])
+
+
+def _outcome(qc: dict[str, Any]) -> str:
+    """What a researcher is told when their document is committed.
+
+    (!!) DSW renders none of this. Its client shows a submitted document as a
+    badge and a link to the Location header, and reads the response body only
+    on a failure. The line is written and carried anyway, for whatever else
+    reads a submission, and so the day DSW does show it there is nothing to
+    write.
+    """
+    if not qc["warning"]:
+        return f"Submitted. {_counted(qc)}"
+    lines = _listed(qc["warning"], f"Submitted with {len(qc['warning'])} warning(s)")
+    return "\n".join([*lines, "", _counted(qc)])
+
+
+def check(document: Any, provenance: dict[str, Any], dmp: str) -> dict[str, Any]:
+    """Check the document against the rules its provenance names, and hand
+    back the envelope saying what was found. ``dmp`` is the path the envelope
+    names, where the DMP will land.
+
+    Raises with what to fix when the document does not hold up, so nothing
+    downstream ever sees a failing envelope.
 
     The versions come from the document, so what judges it is what it was
     built from, and a project whose pins moved since does not change the
@@ -134,20 +197,10 @@ def check(document: Any, provenance: dict[str, Any]) -> tuple[Model, list[CheckR
             f"the rules this document names cannot be loaded, {err}"
         ) from err
 
-    results = run_qc(model, document)
-    if not has_failures(results):
-        return model, results
-
-    violations = [r for r in results if r.status == "fail"]
-    spelled = "\n".join(f"  {r.message}" for r in violations[:_SPELLED_OUT])
-    rest = len(violations) - _SPELLED_OUT
-    versions = ", ".join(
-        f"{name} {version}" for name, version in model.standard_versions
-    )
-    raise QualityControlError(
-        f"quality control failed, {len(violations)} violation(s) against "
-        f"{versions}:\n{spelled}" + (f"\n  and {rest} more" if rest > 0 else "")
-    )
+    qc = envelope(model, run_qc(model, document), dmp)
+    if qc["verdict"] == "fail":
+        raise QualityControlError(_refusal(qc))
+    return qc
 
 
 def _bytes(document: Any) -> bytes:
@@ -177,12 +230,14 @@ def handle_submission(
     if not isinstance(document, dict) or not isinstance(document.get("dmp"), dict):
         raise SubmissionError("document has no dmp object")
     provenance = take_provenance(document, folder)
-    # Before anything is read or written: it needs no network, and it is the
-    # answer the researcher is most likely waiting for.
-    model, results = check(document, provenance)
 
     owner, repo = config.github_owner, config.registry_repo
     base = f"projects/{folder}"
+    dmp_path = f"{base}/template/dmp_{folder}_template.json"
+    # Before anything is read or written: it needs no network, and it is the
+    # answer the researcher is most likely waiting for.
+    qc = check(document, provenance, dmp_path)
+
     # The folder must have been laid out from madmp-core, otherwise dropping a
     # DMP would leave it in a folder nobody registered. Refuse rather than
     # create a half-folder.
@@ -192,7 +247,6 @@ def handle_submission(
             f"token. Register the project from madmp-core first."
         )
 
-    dmp_path = f"{base}/template/dmp_{folder}_template.json"
     meta_path = f"{base}/template/dmp_{folder}_template.meta.json"
     check_path = f"{base}/template/dmp_{folder}_template.check.json"
     raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{_BRANCH}/{dmp_path}"
@@ -203,7 +257,7 @@ def handle_submission(
     wanted = {
         dmp_path: _bytes(document),
         meta_path: _bytes(provenance),
-        check_path: _bytes(envelope(model, results, dmp_path)),
+        check_path: _bytes(qc),
     }
     current = {path: github.get_file(owner, repo, path) for path in wanted}
 
@@ -233,4 +287,5 @@ def handle_submission(
         "check": check_path,
         "action": action,
         "folder": folder,
+        "message": _outcome(qc),
     }
