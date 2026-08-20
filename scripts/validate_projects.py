@@ -38,20 +38,20 @@ def main() -> int:
             project = assemble_project(path)
         except ConfigFileError:
             print(
-                f"SKIP {path}\n     does not load, run scripts/validate_configs.py to see why.",
+                f"SKIP {path.relative_to(ROOT)}\n     does not load, run scripts/validate_configs.py to see why.",
                 file=sys.stderr,
             )
             failures += 1
             continue
         except ProblemsError as err:  # unresolved pins, ill-formed or conflicting set
             details = "\n".join(f"       - {problem}" for problem in err.problems)
-            print(f"FAIL {path}\n{details}", file=sys.stderr)
+            print(f"FAIL {path.relative_to(ROOT)}\n{details}", file=sys.stderr)
             failures += 1
             continue
 
         merged = " + ".join(project.model.standards)
         fields = sum(1 for _ in project.model.walk())
-        print(f"ok   {path} - {merged} -> {fields} fields")
+        print(f"ok   {path.relative_to(ROOT)} : {merged}, {fields} fields")
 
     if failures:
         print(f"\n{failures} of {len(paths)} projects rejected.", file=sys.stderr)

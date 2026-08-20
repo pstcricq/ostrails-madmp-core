@@ -17,7 +17,8 @@ from pathlib import Path
 
 from configs import ConfigFileError, load_config_file
 
-PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
+ROOT = Path(__file__).parent.parent
+PROJECTS = ROOT / "configs" / "projects"
 
 
 def main() -> int:
@@ -31,11 +32,11 @@ def main() -> int:
         try:
             config = load_config_file(path)
         except ConfigFileError as err:
-            print(f"FAIL {path}\n     {err}", file=sys.stderr)
+            print(f"FAIL {path.relative_to(ROOT)}\n     {err}", file=sys.stderr)
             failures += 1
             continue
 
-        print(f"ok   {path} - {config['id']} {config['version']}")
+        print(f"ok   {path.relative_to(ROOT)} : {config['id']} {config['version']}")
 
     if failures:
         print(

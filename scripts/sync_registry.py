@@ -27,7 +27,8 @@ from registry import (
 )
 from utils.github import GitHubClient, GitHubError
 
-PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
+ROOT = Path(__file__).parent.parent
+PROJECTS = ROOT / "configs" / "projects"
 
 
 def main() -> int:
@@ -60,7 +61,7 @@ def main() -> int:
             config = load_config_file(path)
         except ConfigFileError:
             print(
-                f"SKIP {path}\n     does not load, run scripts/validate_configs.py to see why.",
+                f"SKIP {path.relative_to(ROOT)}\n     does not load, run scripts/validate_configs.py to see why.",
                 file=sys.stderr,
             )
             failures += 1
@@ -68,7 +69,7 @@ def main() -> int:
         try:
             verb = converge(gh, registry, config)
         except GitHubError as err:
-            print(f"FAIL {path}\n     {err}", file=sys.stderr)
+            print(f"FAIL {path.relative_to(ROOT)}\n     {err}", file=sys.stderr)
             failures += 1
             continue
         verbs[verb] = verbs.get(verb, 0) + 1

@@ -23,7 +23,8 @@ from registry import (
 )
 from utils.github import GitHubClient, GitHubError
 
-PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
+ROOT = Path(__file__).parent.parent
+PROJECTS = ROOT / "configs" / "projects"
 
 # Every state FolderStatus can hold: a state added there and forgotten here
 # would raise a KeyError on the one run that found it.
@@ -63,7 +64,7 @@ def main() -> int:
             config = load_config_file(path)
         except ConfigFileError:
             print(
-                f"SKIP {path}\n     does not load, run scripts/validate_configs.py to see why.",
+                f"SKIP {path.relative_to(ROOT)}\n     does not load, run scripts/validate_configs.py to see why.",
                 file=sys.stderr,
             )
             faults += 1
@@ -71,11 +72,11 @@ def main() -> int:
         try:
             status = folder_status(gh, registry, config)
         except GitHubError as err:
-            print(f"FAIL {path}\n     {err}", file=sys.stderr)
+            print(f"FAIL {path.relative_to(ROOT)}\n     {err}", file=sys.stderr)
             faults += 1
             continue
 
-        print(f"{MARK[status.state]} {status.folder} - {status.detail}")
+        print(f"{MARK[status.state]} {status.folder} : {status.detail}")
 
     if faults:
         print(

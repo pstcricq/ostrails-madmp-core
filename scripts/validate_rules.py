@@ -17,7 +17,8 @@ from pathlib import Path
 
 from rules import RulesFileError, load_rules_file
 
-STANDARDS = Path(__file__).parent.parent / "rules" / "standards"
+ROOT = Path(__file__).parent.parent
+STANDARDS = ROOT / "rules" / "standards"
 
 
 def main() -> int:
@@ -31,11 +32,11 @@ def main() -> int:
         try:
             doc = load_rules_file(path)
         except RulesFileError as err:
-            print(f"FAIL {path}\n     {err}", file=sys.stderr)
+            print(f"FAIL {path.relative_to(ROOT)}\n     {err}", file=sys.stderr)
             failures += 1
             continue
 
-        print(f"ok   {path} - {doc['standard']} {path.stem}")
+        print(f"ok   {path.relative_to(ROOT)} : {doc['standard']} {path.stem}")
 
     if failures:
         print(f"\n{failures} of {len(paths)} rules files rejected.", file=sys.stderr)

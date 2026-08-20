@@ -51,6 +51,12 @@
 # (!!) `setup-uv` is pinned to a patch, where every other action here floats on
 # a major. It stopped publishing moving major tags at v8, so `@v10` resolves to
 # nothing at all and every job fails to start. Bumping it is deliberate.
+#
+# Its cache is off, and that is measured rather than assumed. On a run with no
+# cache at all, setting uv up took 2 seconds and `uv sync --frozen` took 1: the
+# environment is small enough that downloading it beats restoring it. On it, it
+# held 14 MB and had seven of the eight jobs report a failure to reserve the
+# same key, all of them racing to write one cache nobody was waiting for.
 name: CI
 
 # Tags are here for `version` and `release`. Every reporting job runs again on a
@@ -87,7 +93,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       # The one job that needs the webhook's own dependencies, being the one
       # that runs its tests. Every other job here works on the rules and the
       # generators, which carry no server.
@@ -109,7 +115,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       - name: Install the locked environment
         run: uv sync --frozen
       - name: Validate every rules file against the meta-schema
@@ -122,7 +128,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       - name: Install the locked environment
         run: uv sync --frozen
       - name: Validate every project config against its schema
@@ -135,7 +141,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       - name: Install the locked environment
         run: uv sync --frozen
       - name: Resolve and merge what every project pins
@@ -161,7 +167,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       - name: Install the locked environment
         run: uv sync --frozen
       - name: Build every project's KM and document template
@@ -196,7 +202,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       - name: Install the locked environment
         run: uv sync --frozen
       # Without the secret, on a pull request from a fork, it skips loudly,
@@ -321,7 +327,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       - name: Install the locked environment
         run: uv sync --frozen
       # Runs on every push to the default branch, not only when a config
@@ -368,7 +374,7 @@ jobs:
       - uses: astral-sh/setup-uv@v10.0.1
         with:
           python-version: "3.12"
-          enable-cache: true
+          enable-cache: false
       - name: Install the locked environment
         run: uv sync --frozen
       - uses: actions/download-artifact@v7

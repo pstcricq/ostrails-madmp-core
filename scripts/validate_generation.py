@@ -33,7 +33,8 @@ from dsw.generate_template import build_template_bundle
 from project import assemble_project
 from utils.errors import ProblemsError
 
-PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
+ROOT = Path(__file__).parent.parent
+PROJECTS = ROOT / "configs" / "projects"
 
 # One stamp for the whole run, so that a project's KM and its template carry
 # the same creation time however long the run takes.
@@ -96,7 +97,7 @@ def main() -> int:
             project = assemble_project(path)
         except ProblemsError:
             print(
-                f"SKIP {path}\n     does not load, run "
+                f"SKIP {path.relative_to(ROOT)}\n     does not load, run "
                 f"scripts/validate_configs.py and scripts/validate_projects.py "
                 f"to see why.",
                 file=sys.stderr,
@@ -108,13 +109,16 @@ def main() -> int:
             km = build_km_bundle(project, created_at=STAMP)
             template = build_template_bundle(project, created_at=STAMP)
         except (ValueError, TypeError, KeyError) as err:
-            print(f"FAIL {path}\n     {type(err).__name__}: {err}", file=sys.stderr)
+            print(
+                f"FAIL {path.relative_to(ROOT)}\n     {type(err).__name__}: {err}",
+                file=sys.stderr,
+            )
             failures += 1
             continue
 
         if twice := _duplicate_entities(km):
             print(
-                f"FAIL {path}\n     the KM emits {len(twice)} entity(ies) "
+                f"FAIL {path.relative_to(ROOT)}\n     the KM emits {len(twice)} entity(ies) "
                 f"twice, first {twice[0]}.",
                 file=sys.stderr,
             )
@@ -123,7 +127,7 @@ def main() -> int:
 
         if error := _jinja_error(template):
             print(
-                f"FAIL {path}\n     the document template is not Jinja, {error}.",
+                f"FAIL {path.relative_to(ROOT)}\n     the document template is not Jinja, {error}.",
                 file=sys.stderr,
             )
             failures += 1
@@ -135,7 +139,7 @@ def main() -> int:
 
         events = len(km["packages"][0]["events"])
         chars = len(template["files"][0]["content"])
-        print(f"ok   {project_id} - {events} events, {chars} chars of Jinja")
+        print(f"ok   {project_id} : {events} events, {chars} chars of Jinja")
 
     if failures:
         print(
@@ -143,7 +147,7 @@ def main() -> int:
         )
         return 1
 
-    print(f"\n{len(paths)} projects generate, written under {BUILD_DIR}.")
+    print(f"\n{len(paths)} projects generate, written under {BUILD_DIR.name}/.")
     return 0
 
 
