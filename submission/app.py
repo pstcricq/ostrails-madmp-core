@@ -52,7 +52,7 @@ def _from_environment() -> Settings:
     """The four variables, or one error naming every one of them that is unset.
 
     Missing and empty are the same failure and have to be treated alike:
-    compose always defines what its `environment:` block lists, so a value
+    compose always defines what its ``environment:`` block lists, so a value
     absent from .env arrives here as an empty string rather than not at all. A
     default written in this file would therefore never apply, and would read as
     a guarantee it could not keep. The values' one home is .env.example.
@@ -67,7 +67,7 @@ def _from_environment() -> Settings:
     return Settings(
         submission_token=values["SUBMISSION_TOKEN"],
         github=GitHubClient(token=values["REGISTRY_TOKEN"]),
-        # The field stays `github_owner`, it really is a GitHub account. Only
+        # The field stays ``github_owner``, it really is a GitHub account. Only
         # the environment variable is namespaced, to keep it collision-free.
         config=SubmissionConfig(
             github_owner=values["REGISTRY_OWNER"],
@@ -83,7 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     A misconfigured webhook then refuses to start, where reading the variables
     per request would let it answer /health and fail on the first real
     submission, which is the moment nobody is watching. The container restarts
-    in a loop until .env is complete, and `docker compose logs submission`
+    in a loop until .env is complete, and ``docker compose logs submission``
     names what is missing.
     """
     app.state.settings = app.state.build()
@@ -92,8 +92,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="maDMP submission webhook", lifespan=lifespan)
 
-# The one seam: the tests install a builder that returns a fake GitHub and a
-# fixed config, so nothing in the suite depends on the process environment.
+# The one seam: what builds the settings is replaceable, so the webhook can be
+# served with a configuration that did not come from the process environment.
 app.state.build = _from_environment
 
 

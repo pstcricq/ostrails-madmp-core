@@ -148,7 +148,7 @@ def _check_scalar_type(value: Any, value_type: str) -> tuple[bool, str]:
     if value_type == "date":
         if not isinstance(value, str):
             return False, "expected an ISO 8601 date string (YYYY-MM-DD)"
-        # The pattern first, `date.fromisoformat` also accepting forms this
+        # The pattern first, ``date.fromisoformat`` also accepting forms this
         # does not mean, YYYYMMDD and week dates among them. Then the parse,
         # which is what rejects a day the calendar does not have.
         if _DATE_RE.match(value):
@@ -230,7 +230,7 @@ def _unexpected_keys(
 
 
 def _check_value(field: Field, value: Any, instance_path: str) -> Iterator[CheckResult]:
-    """Checks on one present, non-list value of `field`: its shape, and for a
+    """Checks on one present, non-list value of ``field``: its shape, and for a
     scalar its type and vocabularies. Recurses into an object's children."""
 
     def result(category: str, status: str, message: str) -> CheckResult:
@@ -308,7 +308,7 @@ def _check_value(field: Field, value: Any, instance_path: str) -> Iterator[Check
 
 
 def _visit(field: Field, container: dict, parent_path: str) -> Iterator[CheckResult]:
-    """All checks for `field` inside one concrete parent object, recursing
+    """All checks for ``field`` inside one concrete parent object, recursing
     into descendants.
 
     An absent or empty field yields exactly one presence result and nothing
@@ -371,7 +371,7 @@ def _visit(field: Field, container: dict, parent_path: str) -> Iterator[CheckRes
 
 
 def run_qc(model: Model, document: Any) -> list[CheckResult]:
-    """Check `document`, a parsed DMP JSON, against `model`.
+    """Check ``document``, a parsed DMP JSON, against ``model``.
 
     Always starts with one ``structure`` result: the document must be an
     object holding a ``dmp`` object. Without that there is nothing to walk,

@@ -68,7 +68,7 @@ ANCHORLESS = {
 }
 
 # A boolean a standard made mandatory. No standard on disk does today, but
-# `0..1` -> `1` is a tightening the merge allows, so an extension turns this on
+# ``0..1`` -> ``1`` is a tightening the merge allows, so an extension turns this on
 # without a line of code changing.
 REQUIRED_BOOLEAN = {
     "is_reused": {"_cardinality": "1", "_type": "boolean"},
@@ -76,7 +76,7 @@ REQUIRED_BOOLEAN = {
 }
 
 # A vocabulary spelling its values the way an institution's name is spelt.
-# The apostrophe is the character that closes the Jinja literal `AL` holds the
+# The apostrophe is the character that closes the Jinja literal ``AL`` holds the
 # label in, taking the whole template down with it.
 AWKWARD_VOCABULARY = {
     "funder": {
@@ -261,11 +261,11 @@ def test_every_uuid_the_template_reads_is_an_entity_the_km_emits(project, body):
 def test_the_template_reads_every_question_where_the_km_hangs_it(project, body):
     """The other half, and the one an existing UUID cannot cover: a reply
     path is a chain of parenthood, so reading the right entity from the wrong
-    place finds nothing. Both generators build those chains from `dsw.uuids`,
+    place finds nothing. Both generators build those chains from ``dsw.uuids``,
     separately, in code that never meets.
 
     Rendering is how the chains are collected rather than parsed, DSW handing
-    `reply_path` the very list the template assembled, so the filter sees what
+    ``reply_path`` the very list the template assembled, so the filter sees what
     the instance would see. The list item DSW would mint at runtime is not an
     entity, so it drops out and the question beneath a list answers to the
     list itself.
@@ -319,7 +319,7 @@ def test_a_vocabulary_that_names_its_own_escape_can_render_that_value(tmp_path):
     """Picking it must put the word in the document. The synthetic "Other"
     shares its UUID and is deliberately absent from AL, so a declared value
     dropped in its favour would make the lookup fall back and a DMP that
-    should say `other` say `""` instead."""
+    should say ``other`` say ``""`` instead."""
     body = _body_from_rules(tmp_path, OWN_ESCAPE)
     asked = f"{chapter_uuid('general')}.{question_uuid(('id_type',))}"
     chosen = answer_uuid(("id_type",), "other")
@@ -368,7 +368,7 @@ def test_an_answered_project_still_renders_valid_json(body):
 def test_an_object_whose_every_key_is_optional_still_renders_valid_json(tmp_path):
     """A key is emitted with a comma in front of it, so an object closes only
     if something else emitted a key first. Nothing entitles the template to
-    that, `cost { type?, unit? }` being an ordinary shape for a standard to
+    that, ``cost { type?, unit? }`` being an ordinary shape for a standard to
     declare.
 
     It takes a filled object to fail. Answer nothing and every block stays
@@ -402,8 +402,8 @@ def test_anything_a_researcher_can_type_still_renders_valid_json(body, typed):
 
 
 def test_a_vocabulary_label_with_an_apostrophe_still_gives_a_template(tmp_path):
-    """`AL` holds each label as a Jinja literal, so a label is not only
-    data, it is source the generator writes. `Institut d'Optique` closes that
+    """``AL`` holds each label as a Jinja literal, so a label is not only
+    data, it is source the generator writes. ``Institut d'Optique`` closes that
     literal early and the body stops being Jinja at all, which nothing before
     the render would find out."""
     body = _body_from_rules(tmp_path, AWKWARD_VOCABULARY)
@@ -422,8 +422,8 @@ def test_a_multi_choice_array_carries_its_labels_and_its_free_text_intact(tmp_pa
     and is appended to the array. No standard on disk gives a multi-choice a
     synthetic escape today.
 
-    `reply_items` gives back what a multi-choice actually stores, the UUIDs of
-    the answers that were chosen, because a label that never comes out of `AL`
+    ``reply_items`` gives back what a multi-choice actually stores, the UUIDs of
+    the answers that were chosen, because a label that never comes out of ``AL``
     cannot show it arrived whole."""
     body = _body_from_rules(tmp_path, AWKWARD_MULTI)
     labels = AWKWARD_MULTI["keyword"]["_suggested_values"]
@@ -440,12 +440,12 @@ def test_a_multi_choice_array_carries_its_labels_and_its_free_text_intact(tmp_pa
 
 def test_a_required_boolean_nobody_answered_is_null_and_never_false(tmp_path):
     """A required key is emitted answered or not, so a DMP missing a
-    mandatory field says so. A scalar says it with `""`, and a boolean has no
+    mandatory field says so. A scalar says it with ``""``, and a boolean has no
     empty value.
 
-    `false` would not be a silence, it is an answer, and on `is_reused`
+    ``false`` would not be a silence, it is an answer, and on ``is_reused``
     "nobody answered" and "answered no" are not remotely the same claim.
-    `null` is what a boolean has instead of an empty string, so the three
+    ``null`` is what a boolean has instead of an empty string, so the three
     states are three values."""
     body = _body_from_rules(tmp_path, REQUIRED_BOOLEAN)
     asked = f"{chapter_uuid('general')}.{question_uuid(('is_reused',))}"
@@ -464,7 +464,7 @@ def test_a_required_boolean_nobody_answered_is_null_and_never_false(tmp_path):
 
 def test_an_optional_boolean_is_absent_until_it_is_answered(tmp_path):
     """The other half. Optional keys are conditional, so an unanswered one
-    renders nothing at all rather than a null. `dataset.is_reused` is `0..1`
+    renders nothing at all rather than a null. ``dataset.is_reused`` is ``0..1``
     in RDA DCS, which is every boolean on disk today."""
     optional = dict(
         REQUIRED_BOOLEAN, is_reused={"_cardinality": "0..1", "_type": "boolean"}
@@ -515,8 +515,8 @@ def test_the_metadata_block_carries_no_jinja(body):
     here would make the provenance depend on the DSW project rendering it,
     which is the one thing it must not do: a researcher left on an older
     template has to go on rendering that template's versions."""
-    # From the last `"metadata":`, the root one. RDA DCS declares a
-    # `dmp.dataset[].metadata` too, emitted higher up in the same body.
+    # From the last ``"metadata":``, the root one. RDA DCS declares a
+    # ``dmp.dataset[].metadata`` too, emitted higher up in the same body.
     start = body.rindex('\n  "metadata": ')
     block = body[start : body.rindex("}\n{% endautoescape %}")]
     assert "{{" not in block

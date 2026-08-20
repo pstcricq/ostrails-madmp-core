@@ -46,8 +46,8 @@ def _duplicate_entities(km: dict) -> list[str]:
     the first and one of the two questions would simply not be there.
 
     Data-dependent, which is why it is checked per config rather than once in
-    the tests: `uuids.other_answer_uuid(path)` is by construction
-    `answer_uuid(path, "other")`, so a standard whose vocabulary lists the word
+    the tests: ``uuids.other_answer_uuid(path)`` is by construction
+    ``answer_uuid(path, "other")``, so a standard whose vocabulary lists the word
     literally collides with the synthetic "Other".
     """
     seen, twice = set(), []
@@ -69,7 +69,7 @@ def _jinja_error(template: dict) -> str | None:
     Data-dependent for the same reason the duplicate check is, and for a
     sharper one: a vocabulary label is not only data the template reads, it is
     source the generator writes, the answer-label table holding each one as a
-    Jinja literal. `Institut d'Optique` closes that literal early and leaves a
+    Jinja literal. ``Institut d'Optique`` closes that literal early and leaves a
     body that is not Jinja at all.
     """
     try:

@@ -8,8 +8,9 @@ standard per version. This package reads them.
 ``loader.py``, and against the path the file sits at.
 
 ``field_children()`` returns a field node's declared child fields, its keys
-that do not start with ``_``. It is exported so that anything walking a rules
-tree splits metadata from children the same way the loader does.
+that do not start with ``_``. Anything walking a rules tree splits metadata
+from children through it, so the loader and its consumers never disagree on
+what a child is.
 """
 
 from rules.loader import RulesFileError, field_children, load_rules_file

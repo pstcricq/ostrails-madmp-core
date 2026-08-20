@@ -50,10 +50,10 @@ from dsw.uuids import (
 from project import Field, Model, Project, assemble_project
 
 # The DSW metamodel schema version this bundle targets. Tied to the DSW
-# instance and not to the project, `knowledgeModelMetamodelVersion` is 20 in
-# engine-backend at v4.31.0, and `kmp_schema_v20.json` in
+# instance and not to the project, ``knowledgeModelMetamodelVersion`` is 20 in
+# engine-backend at v4.31.0, and ``kmp_schema_v20.json`` in
 # https://github.com/ds-wizard/dsw-schemas is what an event of this bundle has
-# to look like. Each schema is `additionalProperties: false`, so a field it
+# to look like. Each schema is ``additionalProperties: false``, so a field it
 # does not define is not a field this may send.
 METAMODEL_VERSION = 20
 
@@ -174,9 +174,9 @@ class KmBuilder:
                     "description": description,
                 },
             )
-        # One tag per standard, derived from each file's own `standard`
+        # One tag per standard, derived from each file's own ``standard``
         # declaration. Identity from the code name, display from
-        # `standard_label`, so the uuid stays put whatever a reader is shown.
+        # ``standard_label``, so the uuid stays put whatever a reader is shown.
         for i, origin in enumerate(self.model.standards):
             label = standard_label(origin)
             self.emit(
@@ -411,7 +411,7 @@ class KmBuilder:
 
     def process_field(self, field: Field, parent_uuid: str) -> None:
         """Emit the question(s) for one field and its descendants, dispatching
-        on the kind `common` decided."""
+        on the kind ``common`` decided."""
         kind = field_kind(field, self.computed_fields)
         if kind == "computed":
             return
@@ -516,7 +516,7 @@ class KmBuilder:
             self.process_field(field, chapter_uuid(field.name))
 
     def build_readme(self) -> str:
-        lines = readme_head(self.config, "Knowledge model") + [
+        lines = readme_head(self.config, "Knowledge Model") + [
             "## Structure",
             "",
             (

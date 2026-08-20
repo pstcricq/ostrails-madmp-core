@@ -13,10 +13,8 @@ class ProblemsError(ValueError):
     """Every problem found by one attempt, in one exception.
 
     Subclass per domain to get a distinct type to catch, and set ``noun``
-    to whatever the problems are called there:
-
-        class RulesConflictError(ProblemsError):
-            noun = "rules conflict"
+    to whatever the problems are called there, so a message reads
+    "3 conflict(s)" rather than "3 problem(s)".
 
     ``subject`` is what the problems are about when there is a single one, a
     file path typically. Omit it when they concern a set of things.

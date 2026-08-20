@@ -4,9 +4,6 @@ A folder that is not laid out is a folder a submission cannot land in, so this
 is the step that makes a project submittable. It needs no DSW instance and
 nothing generated, a valid config is enough.
 
-Runs on the default branch only, and on every push to it rather than only when
-a config changed.
-
 Idempotent, and visibly so, nothing is sent when nothing changed, so a push
 that touched no config leaves no commit behind.
 

@@ -3,7 +3,7 @@
 There is no expected bundle to compare to: a KM is whatever the rules of a
 project say, so freezing one project's output would record this generator
 rather than judge it. What can be judged is what has a specification, the
-DSW metamodel, the UUID convention and the mapping stated in `field_kind`,
+DSW metamodel, the UUID convention and the mapping stated in ``field_kind``,
 plus one invariant that holds for any project whatsoever: an event may not
 reference a parent nobody emitted.
 """
@@ -39,7 +39,7 @@ GATED = ("dataset", "distribution", "host")
 SUGGESTED = ("contact", "affiliation", "affiliation_id", "type")
 MULTI_VALUE = ("dataset", "data_quality_assurance")
 # Two vocabularies that spell the escape value themselves: RDA DCS writes it
-# `other`, DataCite writes it `Other`.
+# ``other``, DataCite writes it ``Other``.
 OWN_OTHER = ("dataset", "creator", "creator_id", "type")
 OWN_OTHER_MULTI = ("contributor", "role")
 
@@ -99,7 +99,7 @@ def test_two_runs_of_one_project_are_the_same_bundle(project):
 def test_every_event_carries_the_fields_its_metamodel_defines_and_no_others(events):
     """The one thing about this bundle that is somebody else's specification.
 
-    Each ``Add*EventContent`` of `kmp_schema_v20.json` is
+    Each ``Add*EventContent`` of ``kmp_schema_v20.json`` is
     ``additionalProperties: false``, so a field the metamodel does not define
     is not a field this may send. A bundle that is out of schema publishes
     today and is a bundle nobody else can validate.
@@ -204,7 +204,7 @@ def test_the_general_chapter_comes_first_and_the_others_follow_in_order(events):
 def test_every_top_level_object_becomes_a_chapter_unless_it_is_computed(
     project, by_entity
 ):
-    """`dmp_id` is the case that matters, a top-level object and computed, so
+    """``dmp_id`` is the case that matters, a top-level object and computed, so
     it gets no chapter rather than an empty one."""
     computed = {"dmp_id", "created", "modified"}
     for field in project.model.fields:
@@ -219,7 +219,7 @@ def test_every_top_level_object_becomes_a_chapter_unless_it_is_computed(
 
 
 def test_a_computed_field_becomes_neither_chapter_nor_question(project, by_entity):
-    """`dmp_id` and, under auto_timestamps, `created`/`modified` are filled
+    """``dmp_id`` and, under auto_timestamps, ``created``/``modified`` are filled
     by the template from the render context, so asking them would be asking
     the researcher for something already known."""
     for name in ("dmp_id", "created", "modified"):
@@ -262,7 +262,7 @@ def test_a_suggested_vocabulary_gets_an_other_answer_and_a_follow_up(events, by_
 def test_a_vocabulary_that_names_its_own_escape_keeps_it_and_gets_no_second(
     events, by_entity
 ):
-    """`other` is a value of the RDA DCS vocabulary, it says the identifier
+    """``other`` is a value of the RDA DCS vocabulary, it says the identifier
     scheme is outside the list and the standard offers no field to say which.
     So a field that names one is asked like a closed vocabulary, its own value
     offered in its own spelling and nothing beside it. A second escape would
@@ -275,7 +275,7 @@ def test_a_vocabulary_that_names_its_own_escape_keeps_it_and_gets_no_second(
 
 
 def test_a_multi_choice_vocabulary_keeps_the_escape_it_names(events, by_entity):
-    """DataCite ends contributorType with `Other`, and a multi-choice
+    """DataCite ends contributorType with ``Other``, and a multi-choice
     question has no answer to hang a follow-up off. Dropping it would leave a
     required controlled vocabulary missing one of its own values, reachable
     only by typing it into the free-text question next door."""
@@ -332,7 +332,7 @@ def test_no_question_is_asked_without_saying_what_it_fills(events):
 
 def test_one_tag_per_standard_shown_the_way_a_standard_is_shown(project, events):
     """Beside the three fixed tags, which are upper case too, a standard is
-    written `rda_dcs` in code and shown `RDA_DCS`."""
+    written ``rda_dcs`` in code and shown ``RDA_DCS``."""
     tags = [e for e in events if e["content"]["eventType"] == "AddTagEvent"]
     names = [t["content"]["name"] for t in tags]
     assert names == [

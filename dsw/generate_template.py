@@ -1,7 +1,9 @@
 """Document Template generator: a merged rules model -> a DSW template bundle.
 
 Emits a Jinja2 Document Template producing a plain JSON export. DSW renders it
-against a project's replies to produce the final maDMP JSON document.
+against a project's replies to produce the final maDMP JSON document. That
+document carries two top-level keys, ``dmp`` and the ``metadata`` block naming
+the versions it was built from.
 
 Every question UUID it references comes from ``dsw.uuids``, applied to the
 same merged model ``dsw.generate_km`` walks. Never write a UUID by hand here,
@@ -73,12 +75,12 @@ COMPUTED_FIELD_EXPR: dict[str, str] = {
 }
 
 # Every output format this template knows of, implemented or not: one source
-# for both the bundle's `formats` (only `available` entries become a real DSW
+# for both the bundle's ``formats`` (only ``available`` entries become a real DSW
 # format) and the README's table.
 FORMATS: list[dict[str, Any]] = [
     {
-        # Named from `common` rather than spelt here, this is the format the
-        # submission service points at, and `publish` has to name the same one.
+        # Named from ``common`` rather than spelt here, this is the format the
+        # submission service points at, and ``publish`` has to name the same one.
         "name": SUBMISSION_FORMAT,
         "available": True,
         "content_type": "application/json",
@@ -121,7 +123,7 @@ def q(text: str) -> str:
 # every character below U+0020. The backslash comes first, escaping it after
 # the others would escape the backslashes the others just produced.
 #
-# Written out rather than deferred to Jinja's `tojson`, which is HTML-safe as
+# Written out rather than deferred to Jinja's ``tojson``, which is HTML-safe as
 # well and escapes the ampersand and the apostrophe to their \u form. Both are
 # ordinary in an institution's name, in a file meant to be read and diffed.
 _JSON_ESCAPES: tuple[tuple[str, str], ...] = (
@@ -259,7 +261,7 @@ class TemplateBuilder:
             # what identifies it. Do not add it to AL. The value finally
             # emitted falls back to '' instead, never to 'other'.
             #
-            # `jv` and `js` rather than `sv` and `av`, this is the one branch
+            # ``jv`` and ``js`` rather than ``sv`` and ``av``, this is the one branch
             # that renders something a researcher typed by hand, so the one
             # that most needs escaping.
             value_expr = (
@@ -285,12 +287,12 @@ class TemplateBuilder:
             for value in ("yes", "no"):
                 self.answer_labels[answer_uuid(field.path, value)] = value
             # A JSON boolean, not a quoted string, the Yes/No answer maps to a
-            # bare true/false literal and an unanswered one to `null`, never
-            # to `false`.
+            # bare true/false literal and an unanswered one to ``null``, never
+            # to ``false``.
             #
             # A required key is emitted whether or not it was answered, so a
             # DMP missing a mandatory field says so. A scalar says it with
-            # `""`, and `null` is what a boolean has instead: `false` would be
+            # ``""``, and ``null`` is what a boolean has instead: ``false`` would be
             # an answer, not a silence.
             answered = f"av({own_path}, '')"
             return OutputField(
@@ -304,7 +306,7 @@ class TemplateBuilder:
         elif kind == "value":
             value_expr = f"jv({own_path})"
         else:
-            # Named rather than defaulted, for the reason `generate_km` gives,
+            # Named rather than defaulted, for the reason ``generate_km`` gives,
             # a kind rendered as a plain value is a document that reads a
             # question the KM asked as something else. "computed" lands here
             # too, reaching it means a caller forgot to fill it from the
@@ -657,7 +659,7 @@ def build_template_bundle(
             lines.append(
                 "- `dmp.dmp_id`, the DMP's current URL in DSW "
                 "(`ctx.config.clientUrl` + `/projects/<uuid>`); the submission "
-                "webhook rewrites it to the dmp-registry location on commit"
+                "webhook rewrites it to the registry location on commit"
             )
             lines.append("")
         lines += readme_tail(

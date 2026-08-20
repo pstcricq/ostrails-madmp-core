@@ -200,8 +200,8 @@ document has no real violation, 1 otherwise.
 ### `submission/` : what DSW posts, and what the registry receives
 
 The webhook DSW calls on Submit. It runs beside a DSW deployment, which holds
-its configuration and none of its code, and it is installed from here:
-`pip install madmp-core[submission]`. Its dependencies are declared apart, so
+its configuration and none of its code, and what that deployment runs is the
+image this repository publishes. Its dependencies are declared apart, so
 installing the rules and the generators drags no web server in.
 
 `handle_submission()` is the whole of what the endpoint does, free of HTTP, so
@@ -346,7 +346,7 @@ document template.
 ## Usage
 
 ```bash
-uv sync
+uv sync --extra submission
 uv run ruff check .
 uv run ruff format .
 uv run pytest
@@ -357,8 +357,10 @@ uv run python scripts/validate_generation.py
 ```
 
 `uv sync` creates `.venv` from the committed `uv.lock` and installs the
-package in editable mode, so `rules`, `configs`, `project`, `dsw`, `registry`
-and `utils` import without any path juggling.
+package in editable mode, so `rules`, `configs`, `project`, `dsw`, `registry`,
+`quality_control`, `submission` and `utils` import without any path juggling.
+The `submission` extra brings the webhook's own dependencies, which its tests
+need.
 
 The last one writes: it builds every project's KM and document template under
 `build/`. One project at a time, to a path of your choosing, is what the
@@ -569,12 +571,6 @@ The registry's coordinates are repository variables too, so no deployment's
 address is written into the workflow. `REGISTRY_OWNER` and `REGISTRY_REPO`
 have to be set for `registry` and `registry-sync` to run.
 
-The first three fail for different reasons and get fixed by different people,
-a Python change, a rules change, a new project. `projects` is the only one
-that sees a combination, and `registry` the only one that looks outside.
-Neither has `needs:`, because a project whose pins do not resolve, or whose
-folder is taken, is broken whether or not something else is.
-
-The line is not "before or after validation", it is **report or act**. Every
-job that reports runs concurrently and names its own culprit, the three that
-act wait, for every verdict and, where it matters, for each other.
+Eight jobs report and three act, and why the graph is shaped that way is
+written in [`ci.yml`](.github/workflows/ci.yml) itself, beside the jobs it
+decides.

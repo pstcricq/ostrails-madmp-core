@@ -1,7 +1,7 @@
 """quality_control/engine.py: what a check says about one concrete value.
 
 The engine takes a merged Model and a document, so most tests here build a
-tiny standard in `tmp_path` rather than leaning on the real rules: one field
+tiny standard in ``tmp_path`` rather than leaning on the real rules: one field
 with one constraint, and one document that satisfies it or does not, which is
 what makes a failure name its own cause. The real files are used only where
 what is being checked is that the two fit together.
@@ -139,7 +139,7 @@ def test_an_optional_field_that_is_absent_is_missing_and_never_fails(tmp_path):
 
 
 def test_an_empty_list_is_an_absence(tmp_path):
-    """`[]` is what a list question nobody answered renders as, so it has to
+    """``[]`` is what a list question nobody answered renders as, so it has to
     read like a missing field and not like a list of zero."""
     required = _check(tmp_path, {"tag": dict(STRING_1N)}, {"tag": []}, "presence")
     optional = _check(tmp_path, {"tag": dict(STRING_0N)}, {"tag": []}, "presence")
@@ -194,8 +194,8 @@ def test_a_scalar_field_given_an_object_fails(tmp_path):
 
 
 def test_a_list_reports_every_item_at_its_own_index(tmp_path):
-    """One rule, several concrete spots. `rule_path` groups a report and
-    `instance_path` is what somebody opens the file to fix."""
+    """One rule, several concrete spots. ``rule_path`` groups a report and
+    ``instance_path`` is what somebody opens the file to fix."""
     rules = {"tag": {"_cardinality": "1..n", "_type": "number"}}
     results = _check(tmp_path, rules, {"tag": [1, "two", 3]}, "type")
     assert [(r.instance_path, r.status) for r in results] == [
@@ -250,7 +250,7 @@ def test_every_scalar_type_refuses_what_it_is_not(tmp_path, scalar_type):
 
 
 def test_a_date_must_be_written_the_one_way(tmp_path):
-    """`date.fromisoformat` alone accepts forms the rules do not mean, so the
+    """``date.fromisoformat`` alone accepts forms the rules do not mean, so the
     pattern is checked first."""
     rules = {"field": {"_cardinality": "1", "_type": "date"}}
     assert [
@@ -381,7 +381,7 @@ def test_the_results_are_json(tmp_path):
 @pytest.mark.parametrize("config", PROJECT_CONFIGS, ids=lambda p: p.stem)
 def test_every_project_pins_rules_the_engine_can_check(config):
     """The set a project actually pins, which no other test here sees: a rules
-    file may declare a `_type` nothing in this repository implements, and a
+    file may declare a ``_type`` nothing in this repository implements, and a
     field the engine cannot check is only found the day a submitted DMP
     carries a value for it."""
     model = assemble_project(config).model
@@ -437,7 +437,7 @@ def test_the_engine_knows_every_type_the_meta_schema_allows():
 
 @pytest.mark.parametrize("scalar_type", SCALAR_TYPES)
 def test_every_named_scalar_type_is_actually_handled(tmp_path, scalar_type):
-    """`SCALAR_TYPES` is a tuple kept by hand next to the dispatch, so it has
+    """``SCALAR_TYPES`` is a tuple kept by hand next to the dispatch, so it has
     to be the list that dispatch really implements. An unknown type raises,
     so reaching a verdict at all is the assertion."""
     rules = {"field": {"_cardinality": "1", "_type": scalar_type}}

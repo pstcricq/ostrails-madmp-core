@@ -1,6 +1,6 @@
 """The decisions the generators are not allowed to disagree on.
 
-`field_kind` is the one that matters: every kind it can return is a different
+``field_kind`` is the one that matters: every kind it can return is a different
 DSW entity in the KM and a different render in the template, so a kind nobody
 tests is a pair of packages that can be published half-wrong. Every branch is
 covered here, from a field built for it, rather than from whichever fields the
@@ -88,8 +88,8 @@ _ONE_OF_EACH_KIND = {
 
 
 def test_the_kinds_are_declared_where_the_generators_read_them():
-    """`FIELD_KINDS` is what a generator dispatches over, so it has to be
-    the whole of what `field_kind` can answer, a kind returned but not listed
+    """``FIELD_KINDS`` is what a generator dispatches over, so it has to be
+    the whole of what ``field_kind`` can answer, a kind returned but not listed
     is one nothing had to handle."""
     assert set(FIELD_KINDS) == set(_ONE_OF_EACH_KIND)
     for kind, field in _ONE_OF_EACH_KIND.items():
@@ -135,7 +135,7 @@ def test_a_strict_vocabulary_wins_over_a_suggested_one():
 
 def test_only_a_suggested_vocabulary_naming_no_escape_of_its_own_gets_one():
     """RDA DCS and DataCite both end several vocabularies with a value
-    meaning "none of those listed", spelled `other` by one and `Other` by the
+    meaning "none of those listed", spelled ``other`` by one and ``Other`` by the
     other, and neither gives a field beside it to say which.
 
     So a synthetic "Other" answer is added only where the vocabulary admits
@@ -154,7 +154,7 @@ def test_only_a_suggested_vocabulary_naming_no_escape_of_its_own_gets_one():
 
 
 def test_computed_applies_to_top_level_fields_only():
-    """`dmp_id` is computed, and a nested field that happens to share the
+    """``dmp_id`` is computed, and a nested field that happens to share the
     name is a question like any other."""
     assert field_kind(_field(name="dmp_id"), {"dmp_id"}) == "computed"
     nested = _field(name="dmp_id", path=("project", "dmp_id"))
@@ -227,7 +227,7 @@ def test_the_package_id_is_the_three_fields_dsw_reads():
 
 def test_the_provenance_line_names_every_standard_and_version():
     """A fact, with no bullet of its own, how a compatibility fact is set is
-    `readme_tail`'s to decide."""
+    ``readme_tail``'s to decide."""
     line = rules_provenance_line(assemble_project(GLIDER_CONFIG).model)
     assert line == "Rules: RDA_DCS 1.0.0, OSTRAILS 1.0.0"
 
@@ -249,16 +249,16 @@ def test_markdown_reduces_to_its_plain_reading(markdown, plain):
 
 def test_a_readme_opens_with_the_project_and_ends_with_its_references():
     config = yaml.safe_load(GLIDER_CONFIG.read_text())
-    head = readme_head(config, "Knowledge model")
+    head = readme_head(config, "Knowledge Model")
     tail = readme_tail(config, ["Compatible with everything", "And with this"])
-    assert head[0] == "# SOCIB Glider : Knowledge model"
+    assert head[0] == "# SOCIB Glider : Knowledge Model"
     assert tail[-1] == "- [SOCIB](https://www.socib.es)"
     assert tail[2:4] == ["- Compatible with everything", "- And with this"]
 
 
 def test_both_packages_set_their_compatibility_facts_the_same_way():
     """Both READMEs get their compatibility facts marked the same way, by
-    `readme_tail` and not by either caller."""
+    ``readme_tail`` and not by either caller."""
     project = assemble_project(GLIDER_CONFIG)
     stamp = "2026-01-01T00:00:00.000Z"
     readmes = (

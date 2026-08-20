@@ -70,7 +70,7 @@ def test_unknown_version_lists_the_ones_that_exist():
 
 def test_only_directories_holding_a_versioned_file_are_offered(tmp_path):
     """A directory with nothing of the right kind in it is not a standard,
-    `rules/standards/` would otherwise offer `__pycache__` if one appeared."""
+    ``rules/standards/`` would otherwise offer ``__pycache__`` if one appeared."""
     (tmp_path / "ostrails" / "nested").mkdir(parents=True)
     (tmp_path / "ostrails" / "1.0.0.json").write_text("{}")
     (tmp_path / "junk").mkdir()

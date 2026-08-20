@@ -1,8 +1,8 @@
 """Validate every rules file, and check the tree they sit in.
 
-Two things, over the whole of `rules/standards/`:
+Two things, over the whole of ``rules/standards/``:
 
-1. each file loads through `load_rules_file`, the same entry point the rest
+1. each file loads through ``load_rules_file``, the same entry point the rest
    of the code uses, so a file that passes here is a file the loader accepts
    and not merely one that parses as JSON
 2. each file declares the standard and the version its path names, a static

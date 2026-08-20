@@ -153,8 +153,8 @@ def test_each_list_holds_exactly_what_the_summary_counted(tmp_path, sidecar):
 
 def test_every_list_is_there_even_when_empty(tmp_path, sidecar):
     """A key that appears only when non-empty makes every reader write a
-    `.get`, and one of them will forget. A passing document has no failures,
-    and `fail` is still an empty list."""
+    ``.get``, and one of them will forget. A passing document has no failures,
+    and ``fail`` is still an empty list."""
     _, envelope = _run(tmp_path, COMPLETE, sidecar)
     assert envelope["fail"] == []
     assert all(status in envelope for status in STATUSES)
@@ -170,7 +170,7 @@ def test_the_envelope_carries_no_timestamp(tmp_path, sidecar):
 
 def test_every_status_is_counted_even_at_zero(tmp_path, sidecar):
     """A key that appears only when non-zero makes every reader write a
-    `.get`, and one of them will forget."""
+    ``.get``, and one of them will forget."""
     _, envelope = _run(tmp_path, COMPLETE, sidecar)
     assert set(envelope["summary"]) == {"total", *STATUSES}
 

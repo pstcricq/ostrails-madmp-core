@@ -131,7 +131,7 @@ def test_folder_only_touches_its_own_path():
 
 
 def test_commit_message_names_the_project():
-    """Every project commits into the same repository, so `git log` needs the
+    """Every project commits into the same repository, so ``git log`` needs the
     folder in the message to be readable at all."""
     github = _initialized("glider")
     handle_submission(_document(), "glider", github, CONFIG)
@@ -438,7 +438,7 @@ def test_document_without_dmp_refused():
 
 @pytest.fixture()
 def client(monkeypatch):
-    """`app` is a module-level singleton, so its one seam is installed through
+    """``app`` is a module-level singleton, so its one seam is installed through
     monkeypatch, which puts the real builder back after every test."""
     settings = Settings(
         submission_token="s3cret", github=_initialized("glider"), config=CONFIG
@@ -449,7 +449,7 @@ def client(monkeypatch):
 
 
 def test_health_answers_when_the_webhook_is_configured(client):
-    """The compose healthcheck polls this, so `up --wait` and the container's
+    """The compose healthcheck polls this, so ``up --wait`` and the container's
     restart both hang on it answering."""
     response = client.get("/health")
     assert response.status_code == 200
@@ -556,7 +556,7 @@ def test_http_bad_json_is_400(client):
 
 def test_a_refused_submission_answers_in_plain_text(client):
     """(!!) DSW opens the response body raw on a failed submission, so
-    FastAPI's `{"detail": ...}` would show the researcher the JSON wrapper
+    FastAPI's ``{"detail": ...}`` would show the researcher the JSON wrapper
     around their own message, on one line."""
     response = client.post(
         "/submissions?project=glider",
@@ -590,7 +590,7 @@ def test_every_other_refusal_is_plain_text_too(client):
 # Configuration read from the environment
 #
 # Unset and empty are tested alike because compose always defines what its
-# `environment:` block lists: a value absent from .env reaches the container as
+# ``environment:`` block lists: a value absent from .env reaches the container as
 # an empty string, not as a missing variable. Both must fail, and fail the same
 # way, or the webhook commits somewhere nobody asked for, or serves with no
 # shared secret at all.

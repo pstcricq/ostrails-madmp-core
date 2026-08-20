@@ -19,9 +19,9 @@ from typing import Any
 from utils.errors import ProblemsError
 from utils.github import GitHubClient
 
-# The two directories a project's folder holds, `template/` for the submitted
-# DMP and `productions/` for the deployment DMPs derived from it. Git stores
-# no empty directory, so each is created holding a .gitkeep.
+# The two directories a project's folder holds, ``template/`` for the
+# submitted DMP and ``productions/`` for the deployment DMPs derived from it.
+# Git stores no empty directory, so each is created holding a .gitkeep.
 SUBDIRS = ("template", "productions")
 
 

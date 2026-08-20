@@ -72,7 +72,7 @@ def test_minimal_valid_doc_loads(tmp_path):
 
 
 def test_non_snake_case_standard_rejected(tmp_path):
-    """`standard` is a code identifier, the name of the directory the file
+    """``standard`` is a code identifier, the name of the directory the file
     sits in, so its spelling is checked at the door."""
     doc = _minimal_doc(title={"_cardinality": "1", "_type": "string"})
     doc["standard"] = "RDA DCS"
@@ -261,7 +261,7 @@ def test_all_problems_reported_at_once(tmp_path):
 
 def test_coherence_waits_for_a_schema_valid_document(tmp_path):
     """The order of the layers is a precondition: layers 2 and 3 read
-    `standard`, `version` and `dmp` unguarded, which is only safe once the
+    ``standard``, ``version`` and ``dmp`` unguarded, which is only safe once the
     schema has vouched for them. A document wrong on both counts therefore
     reports the schema alone, and the coherence problem below (a child field
     under a string) stays unsaid until the first is fixed."""
@@ -301,7 +301,7 @@ def test_coherence_checked_deep_in_the_tree(tmp_path):
 
 def _placed(tmp_path, directory, filename, standard, version):
     """One rules file at <directory>/<filename>.json, declaring whatever
-    `standard` and `version` say, so it can be made to contradict its path."""
+    ``standard`` and ``version`` say, so it can be made to contradict its path."""
     path = tmp_path / directory / f"{filename}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -333,7 +333,7 @@ def test_a_file_declaring_another_standard_rejected(tmp_path):
 
 
 def test_a_file_declaring_another_version_rejected(tmp_path):
-    # `cp 1.0.0.json 1.1.0.json`: same content, new name, silently a new
+    # ``cp 1.0.0.json 1.1.0.json``: same content, new name, silently a new
     # version until the declaration disagrees with the filename.
     path = _placed(tmp_path, "rda_dcs", "1.1.0", "rda_dcs", "1.0.0")
     with pytest.raises(RulesFileError) as excinfo:

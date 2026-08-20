@@ -74,7 +74,7 @@ from utils.github import GitHubClient, GitHubError
 
 # The format a submitted document is rendered in, so the submission service can
 # name it without reading the template bundle back. Both the name and the
-# derivation come from `common`, this and generate_template must answer with
+# derivation come from ``common``, this and generate_template must answer with
 # the same uuid.
 SUBMISSION_FORMAT_UUID = format_uuid(SUBMISSION_FORMAT)
 
@@ -146,8 +146,8 @@ class Webhook:
     without the webhook's own path writes a service that posts to the
     container root.
 
-    The secret is as required as the address. The webhook answers 500 when it
-    holds none and 401 when the header does not match.
+    The secret is as required as the address. Without a matching one the
+    webhook answers 401 to every submission.
 
     Either one wrong writes a Submit button that fails every time, over a
     service that worked, on a value nothing downstream can check.
@@ -398,8 +398,7 @@ def submission_service(
     for this project's documents and for nothing else.
 
     The registry is here for the name alone, which is what a researcher reads
-    in the Submit menu, so it says where the DMP goes rather than naming one
-    repository for every deployment.
+    in the Submit menu, so it says where this deployment's DMP actually goes.
 
     Nothing here is the instance's to assign. A service is stored with a tenant
     uuid on itself and on each supported format, a service id repeated inside
@@ -425,8 +424,8 @@ def submission_service(
 
 
 # What a write carries, at each of the two levels a service has one. The rest
-# of what a read gives back, `tenantUuid` on both levels, `serviceId` inside
-# the format, `createdAt` and `updatedAt`, is assigned by the instance.
+# of what a read gives back, ``tenantUuid`` on both levels, ``serviceId`` inside
+# the format, ``createdAt`` and ``updatedAt``, is assigned by the instance.
 _WRITTEN_SERVICE_FIELDS = ("id", "name", "description", "props", "request")
 _WRITTEN_FORMAT_FIELDS = ("templateUuid", "formatUuid")
 

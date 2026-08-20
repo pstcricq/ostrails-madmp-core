@@ -4,7 +4,7 @@ allowed to touch.
 The registry is a private repository reached over HTTP, so these tests stand a
 fake in its place: an in-memory tree of paths to bytes, which records every
 write, so "nothing is sent when nothing changed" is a claim the assertions can
-be made on, against `fake.writes`.
+be made on, against ``fake.writes``.
 """
 
 from pathlib import Path
@@ -26,7 +26,7 @@ ROOT = Path(__file__).parent.parent
 GLIDER_CONFIG = ROOT / "configs" / "projects" / "glider.yaml"
 
 REGISTRY = Registry(owner="o", repo="r")
-# `id` is the one key this package reads, a real config carries many more.
+# ``id`` is the one key this package reads, a real config carries many more.
 CONFIG = {"id": "glider"}
 KEEPS = [f"projects/glider/{sub}/.gitkeep" for sub in SUBDIRS]
 
@@ -34,7 +34,7 @@ KEEPS = [f"projects/glider/{sub}/.gitkeep" for sub in SUBDIRS]
 class FakeGitHub:
     """The registry as a dict of path -> bytes, remembering what was written.
 
-    It answers `None` for an unknown path exactly as the real client does on a
+    It answers ``None`` for an unknown path exactly as the real client does on a
     404, which is the only behaviour of the transport this module depends on.
     """
 
@@ -102,7 +102,7 @@ def test_a_folder_already_laid_out_is_left_alone():
 
 def test_a_missing_subdirectory_is_put_back_alone():
     """Only what is absent is written, and the verb answers for the folder. A
-    run that says `unchanged` and leaves a commit behind is the one claim that
+    run that says ``unchanged`` and leaves a commit behind is the one claim that
     must not be wrong."""
     fake = registry_with("template")
     assert converge(fake, REGISTRY, CONFIG) == "updated"
@@ -113,7 +113,7 @@ def test_a_missing_subdirectory_is_put_back_alone():
     ("laid_out", "absent"), [("template", "productions"), ("productions", "template")]
 )
 def test_a_folder_missing_a_subdirectory_is_stale(laid_out, absent):
-    """Reading and writing must agree on what a folder is. `converge` lays out
+    """Reading and writing must agree on what a folder is. ``converge`` lays out
     two things, so a read that looked at one would call a folder registered
     and then quietly change it. Either half missing is the same verdict, and
     the detail names the half to look for."""
@@ -132,7 +132,7 @@ def test_the_folder_is_named_after_the_id():
 
 
 def test_the_token_has_one_name():
-    """`REGISTRY_TOKEN` is the one name this deployment uses."""
+    """``REGISTRY_TOKEN`` is the one name this deployment uses."""
     with pytest.MonkeyPatch.context() as env:
         env.setenv("REGISTRY_TOKEN", "t")
         assert token_from_env() == "t"

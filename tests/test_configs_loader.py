@@ -122,7 +122,7 @@ def test_bare_standard_name_rejected(tmp_path):
 
 def test_pinned_standard_not_snake_case_rejected(tmp_path):
     """A standard has one spelling, snake_case where it declares itself and
-    snake_case in the pin that names it. Otherwise `RDA DCS: "1.0.0"` loads
+    snake_case in the pin that names it. Otherwise ``RDA DCS: "1.0.0"`` loads
     and only fails at resolution."""
     problems = _load_problems(tmp_path, _valid_config(rules=[{"RDA DCS": "1.0.0"}]))
     assert "rules.0" in problems
@@ -151,14 +151,14 @@ def test_id_pattern_rejected(tmp_path):
 
 
 def test_empty_human_name_rejected(tmp_path):
-    """`name` is free-form prose, but a package with a blank name is a
+    """``name`` is free-form prose, but a package with a blank name is a
     package nobody can pick out of a DSW list."""
     assert "name" in _load_problems(tmp_path, _valid_config(name=""))
 
 
 @pytest.mark.parametrize("version", ["1.0", "v1.0.2", "1.0.2-beta", "latest"])
 def test_non_semver_version_rejected(tmp_path, version):
-    """`version` is the last third of the DSW package id, and DSW wants
+    """``version`` is the last third of the DSW package id, and DSW wants
     X.Y.Z. Unchecked, it generates fine and only fails on the publish call,
     with everything already built."""
     assert "version" in _load_problems(tmp_path, _valid_config(version=version))

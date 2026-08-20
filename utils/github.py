@@ -66,8 +66,9 @@ class GitHubClient:
                 return json.loads(payload) if payload else None
         except urllib.error.HTTPError as e:
             raise GitHubError(e.code, e.read().decode()) from e
-        # HTTPError first, it is a subclass of both. This one catches what never
-        # became a response: DNS failure, refused connection, timeout.
+        # HTTPError first, it is an OSError too and the clause below would
+        # swallow it. That one catches what never became a response: DNS
+        # failure, refused connection, timeout.
         except OSError as e:
             raise GitHubError(None, str(e)) from e
 
@@ -84,7 +85,7 @@ class GitHubClient:
                 return None
             raise
         # Past a megabyte the API stops inlining the content and answers with
-        # an empty string and `"encoding": "none"`. Decoding that would hand
+        # an empty string and ``"encoding": "none"``. Decoding that would hand
         # back an empty file as if it were the truth.
         if data.get("encoding") != "base64":
             raise GitHubError(

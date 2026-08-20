@@ -102,7 +102,7 @@ def test_content_the_api_did_not_inline_is_refused(monkeypatch):
 
 
 def test_a_write_sends_the_bytes_and_names_no_version(monkeypatch):
-    """A creation. GitHub takes a `sha` to mean "replace that version", and
+    """A creation. GitHub takes a ``sha`` to mean "replace that version", and
     sending none is what makes it refuse rather than overwrite a file that is
     already there."""
     requests = []

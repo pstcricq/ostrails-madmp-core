@@ -411,9 +411,9 @@ def test_every_order_of_three_extensions_gives_the_same_model(tmp_path):
 
 
 def test_a_prose_conflict_names_who_wrote_the_prose(tmp_path):
-    """`origin` answers who introduced the field, and the base introduced
+    """``origin`` answers who introduced the field, and the base introduced
     it while describing nothing, so naming it here would send the reader to a
-    file with no `_description` in it at all."""
+    file with no ``_description`` in it at all."""
     conflicts = _merge_three_conflicts(
         tmp_path,
         {"title": dict(STRING_1)},

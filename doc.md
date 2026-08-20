@@ -11,12 +11,15 @@ section arrive avec le code qu'elle justifie. La numérotation est celle du plan
 d'ensemble, donc les numéros ne bougeront pas quand les sections manquantes
 arriveront, mais la table des matières ne liste que ce qui existe.*
 
-*Où on en est, au 18/08/2026. Une tranche apporte un paquet, les tests qui le
+*Où on en est, au 20/08/2026. Une tranche apporte un paquet, les tests qui le
 couvrent, les dépendances que son code importe réellement, et le job de CI qui
 le vérifie. Tout ce que ce document décrit est présent et vérifié en CI, sauf
 ce qui est explicitement marqué comme décidé et pas encore construit. Tranche
-en cours : le contrôle qualité d'un DMP soumis, dont la première étape a été
-d'ôter du registre les épingles de règles ([§10](#10-le-registre-et-la-publication)).*
+close : le contrôle qualité d'un DMP soumis, du moteur au verdict commité à
+côté du DMP, et `v1.0.0` est publiée, image multi-architecture comprise.
+Restent ouverts la reprise de la prose du contenu généré et les contrôles
+croisés du contrôle qualité, décidés non construits
+([§14](#14-limites-connues)).*
 
 ---
 
@@ -1258,11 +1261,13 @@ module de sens.
 
 ### Rendre compte, ou agir
 
-Cinq jobs ne font que **rendre compte** : ils tournent en parallèle, sans
-`needs:`, et chacun nomme son propre fautif. Un seul **agit**,
-`registry-sync`, la seule chose de ce dépôt qui écrive à l'extérieur, et lui
-attend tous les verdicts, et ne tourne que sur la branche par défaut. La ligne
-est là, et pas à « avant ou après la validation ».
+Huit jobs ne font que **rendre compte** : ils tournent en parallèle, sans
+`needs:`, et chacun nomme son propre fautif. Trois **agissent**, et ce sont les
+trois seuls à porter un `needs:` : `registry-sync` écrit dans le dépôt du
+registre, `publish` écrit dans une instance DSW, `release` pousse l'image du
+webhook dans GHCR. Les deux premiers ne tournent que sur la branche par défaut
+et le troisième que sur un tag. La ligne est là, et pas à « avant ou après la
+validation ».
 
 Sur une pull request il apparaît **`skipped`** : présent dans la liste des
 contrôles, donc son abstention se lit au lieu de passer inaperçue.

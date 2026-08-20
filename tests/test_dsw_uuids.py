@@ -92,13 +92,13 @@ def test_the_path_is_what_distinguishes_two_questions():
 def test_the_other_answer_is_the_answer_named_other():
     """A vocabulary listing the word literally hands its answer the identity
     of the synthetic "Other". The two can no longer be asked at once, since
-    `needs_a_synthetic_escape` withholds the synthetic answer from a
+    ``needs_a_synthetic_escape`` withholds the synthetic answer from a
     vocabulary naming an escape of its own, but the shared identity is
     frozen."""
     assert other_answer_uuid(SUGGESTED) == answer_uuid(SUGGESTED, "other")
 
 
 def test_the_parts_are_joined_and_not_escaped():
-    """`u` joins on "::", so a name containing the separator would collide
+    """``u`` joins on "::", so a name containing the separator would collide
     with a deeper path. Field names are dmp keys, and none carries it."""
     assert u("dataset::title") == u("dataset", "title")

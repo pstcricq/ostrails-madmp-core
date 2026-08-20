@@ -37,9 +37,9 @@ class PinsFileError(ProblemsError):
 def read_pins(path: str | Path) -> list[dict[str, str]]:
     """The pins declared by one file, JSON or YAML by its suffix.
 
-    The file comes from another repository and no schema validates it on its
-    way in, so the two ways it can fail before the pins are even readable are
-    named here rather than surfacing as a bare KeyError or TypeError.
+    Neither file is schema-validated on its way in, so the two ways it can
+    fail before the pins are even readable are named here rather than
+    surfacing as a bare KeyError or TypeError.
     """
     path = Path(path)
     try:

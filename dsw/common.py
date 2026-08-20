@@ -28,14 +28,14 @@ from project import Field, Model
 # Every generated artifact lands under build/, one subdirectory per kind.
 BUILD_DIR = Path(__file__).resolve().parents[1] / "build"
 
-# The dmp fields filled from the render context instead of a reply. `created`
-# and `modified` are opt-in per project through `auto_timestamps`, `dmp_id` is
+# The dmp fields filled from the render context instead of a reply. ``created``
+# and ``modified`` are opt-in per project through ``auto_timestamps``, ``dmp_id`` is
 # always computed, its value coming entirely from the context.
 _TIMESTAMP_FIELDS = {"created", "modified"}
 _DMP_ID_FIELD = {"dmp_id"}
 
 # What a vocabulary calls "none of those listed", compared case-insensitively
-# so that RDA DCS's `other` and DataCite's `Other` are one convention.
+# so that RDA DCS's ``other`` and DataCite's ``Other`` are one convention.
 ESCAPE_VALUE = "other"
 
 

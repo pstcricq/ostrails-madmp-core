@@ -11,10 +11,8 @@ is what?
   order that works
 
 Two conditions for a module to belong here: it answers "this project,
-resolved, is what?", and it knows no destination and no file format. It may
-import a data package's façade, but a ``json`` or ``yaml`` import means a
-loader's job has leaked in, and a DSW identifier or an output path means a
-generator's has.
+resolved, is what?", and it knows no file format and no destination. It may
+import a data package's façade, never a parser.
 
 ``pins.py`` and ``merge.py`` do not call each other, ``assemble.py`` is the
 only module that composes them.

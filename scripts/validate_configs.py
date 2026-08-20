@@ -1,8 +1,8 @@
 """Validate every project config, and check the tree they sit in.
 
-Two things, over the whole of `configs/projects/`:
+Two things, over the whole of ``configs/projects/``:
 
-1. each file loads through `load_config_file`, the same entry point the rest
+1. each file loads through ``load_config_file``, the same entry point the rest
    of the code uses, so a file that passes here is a file the loader accepts
    and not merely one that parses as YAML
 2. each file's name agrees with the id it declares, a static property of the

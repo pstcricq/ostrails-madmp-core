@@ -126,7 +126,7 @@ WEBHOOK = Webhook("http://w", "s3cret")
 REGISTRY = Registry("an-owner", "a-registry")
 
 # What the instance stamps on a service of its own accord, and hands back on
-# the next read. A `PUT` takes none of it, it is assigned and not declared.
+# the next read. A ``PUT`` takes none of it, it is assigned and not declared.
 TENANT = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 
@@ -136,7 +136,7 @@ def as_dsw_returns_it(service: dict) -> dict:
     service id repeated inside the format, and the two timestamps.
 
     Every fixture below goes through this, and that is the point: a fake that
-    hands back what `publish.py` writes is a fake that agrees with the code
+    hands back what ``publish.py`` writes is a fake that agrees with the code
     about a shape neither of them owns. This one agrees with DSW.
     """
     return {
@@ -178,12 +178,12 @@ def test_the_service_is_scoped_to_this_project_s_own_template(config):
 
 def test_the_service_names_a_format_the_template_bundle_actually_carries(config):
     """The third thing this module and a generator must answer identically.
-    `publish` names a format uuid in the submission service,
-    `generate_template` emits the formats a template has, neither reads the
+    ``publish`` names a format uuid in the submission service,
+    ``generate_template`` emits the formats a template has, neither reads the
     other and they run in different runs. A service naming a format the bundle
     does not carry is an entry in the Submit menu that produces nothing.
 
-    Both derive it from `common`, so this builds a real bundle and looks for
+    Both derive it from ``common``, so this builds a real bundle and looks for
     the uuid in it."""
     project = assemble_project(GLIDER_CONFIG)
     bundle = build_template_bundle(project, created_at="2026-01-01T00:00:00.000Z")
@@ -195,7 +195,7 @@ def test_the_service_names_a_format_the_template_bundle_actually_carries(config)
 
 def test_a_service_this_module_builds_is_already_what_a_write_carries(config):
     """The two halves of one fact, tied together so neither can drift. What
-    `submission_service` declares is exactly what `installed_service` keeps,
+    ``submission_service`` declares is exactly what ``installed_service`` keeps,
     so a field added to one and forgotten in the other cannot quietly drop out
     of the comparison."""
     service = submission_service(config, "tpl-uuid", WEBHOOK, REGISTRY)
@@ -214,7 +214,7 @@ def test_what_the_instance_stamped_on_a_service_is_not_a_difference(config):
 
 
 class _Instance(DswClient):
-    """A DSW instance reduced to what `publish_submission` reads, one
+    """A DSW instance reduced to what ``publish_submission`` reads, one
     published document template and a tenant configuration it may rewrite.
     Subclassing the client rather than faking it keeps the paging and the id
     reconciliation under test, which are what decide which uuid the service
@@ -347,7 +347,7 @@ def test_an_unregistered_folder_stops_the_submission_service(config, registered_
 
 @pytest.mark.parametrize("state", ["registered", "stale"])
 def test_a_registered_folder_lets_it_through(config, registered_env, state):
-    """`stale` too, a subdirectory to put back is a sync away and the folder
+    """``stale`` too, a subdirectory to put back is a sync away and the folder
     is there, which is what the webhook needs."""
     registered_env.setattr("dsw.publish.folder_status", _Registry(state))
     _require_registered(config)
@@ -376,7 +376,7 @@ def test_a_bundle_that_was_never_built_names_the_generator(tmp_path):
 
 
 def test_a_bundle_built_for_another_version_is_not_published(tmp_path, config):
-    """The file name carries no version, so a `version` bumped without
+    """The file name carries no version, so a ``version`` bumped without
     regenerating leaves the previous bundle exactly where the new one goes.
     Nothing downstream catches it, the listing is asked about the new id,
     says "not published", and the old bundle goes up under the version it was

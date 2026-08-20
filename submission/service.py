@@ -7,7 +7,7 @@ holds is therefore what has passed, and it holds the verdict beside it.
 
 Stateless: everything derives from the document, the folder and a small static
 config. Nothing here creates a repository or any scaffolding, the folder and
-its subdirectories are laid out beforehand from madmp-core.
+its subdirectories are laid out beforehand, by ``registry/``.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ _FOLDER_RE = re.compile(r"^[a-z0-9-]{1,64}$")
 # another branch would leave every identifier ever issued pointing nowhere.
 _BRANCH = "main"
 
-# The key the document template renders beside `dmp`, carrying the versions
+# The key the document template renders beside ``dmp``, carrying the versions
 # the document was built from.
 _PROVENANCE = "metadata"
 
@@ -60,14 +60,14 @@ class QualityControlError(ValueError):
 class SubmissionConfig:
     """Static webhook configuration (from the environment, see app.py)."""
 
-    # Both required, neither defaulted: the values live in .env.example and
-    # nowhere else, and app.py refuses to build this without them.
-    github_owner: str  # account owning the dmp-registry repo
+    # Both required, neither defaulted: app.py refuses to build this without
+    # them.
+    github_owner: str  # account owning the registry repo
     registry_repo: str  # the mono-repo all projects live in
 
 
 def _pins_are_well_formed(rules: Any) -> bool:
-    """Whether `rules` is a non-empty list of one-key mappings of strings,
+    """Whether ``rules`` is a non-empty list of one-key mappings of strings,
     which is the shape a pinned rules version is written in."""
     return (
         isinstance(rules, list)
@@ -85,7 +85,7 @@ def _pins_are_well_formed(rules: Any) -> bool:
 
 def take_provenance(document: dict, folder: str) -> dict[str, Any]:
     """The provenance block, taken out of the document before anything is
-    written, so what is committed is the `dmp` object alone.
+    written, so what is committed is the ``dmp`` object alone.
 
     Absent or malformed is a refusal, not a default: a DMP whose rules
     versions are unknown cannot be checked against them, and guessing is
@@ -244,7 +244,7 @@ def handle_submission(
     if github.get_file(owner, repo, f"{base}/template/.gitkeep") is None:
         raise SubmissionError(
             f"{base}/ is not initialized in {repo}, or not visible with this "
-            f"token. Register the project from madmp-core first."
+            f"token. Register the project first."
         )
 
     meta_path = f"{base}/template/dmp_{folder}_template.meta.json"
@@ -270,7 +270,7 @@ def handle_submission(
         if parent is None:
             raise SubmissionError(f"{repo} has no {_BRANCH} branch to commit to")
         # Named after the folder: every project commits into the same
-        # repository, and `git log` shows the message before the path.
+        # repository, and ``git log`` shows the message before the path.
         github.commit_files(
             owner,
             repo,

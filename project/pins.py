@@ -9,7 +9,7 @@ It opens nothing and validates no content, only which files are named and
 whether they exist.
 
 Pins are expected to be single-key mappings of strings, the shape a validated
-config guarantees, which is what lets the unpacking below be a one-liner.
+config guarantees.
 """
 
 from __future__ import annotations

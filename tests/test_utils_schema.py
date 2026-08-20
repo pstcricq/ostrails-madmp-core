@@ -46,7 +46,7 @@ def test_the_cache_key_is_the_file_not_how_it_was_spelled(tmp_path):
 
 
 def test_broken_schema_fails_at_build_time(tmp_path):
-    # `minLength: "no"` is not a valid schema, check_schema must catch it
+    # ``minLength: "no"`` is not a valid schema, check_schema must catch it
     # here rather than let it mis-validate real files later.
     broken = {"type": "object", "properties": {"name": {"minLength": "no"}}}
     with pytest.raises(SchemaError):

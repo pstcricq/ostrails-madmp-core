@@ -1,4 +1,4 @@
-"""Public API of a project's destination in the dmp-registry mono-repo.
+"""Public API of a project's destination in the registry mono-repo.
 
 What this package owns is making sure the folder a submitted DMP lands in
 exists and is laid out.
@@ -10,7 +10,7 @@ exists and is laid out.
 it over a client from ``utils.github``.
 
 One condition for a module to belong here: it says what a project's folder is
-made of. A module that does not does not belong.
+made of. Nothing else has a place in it.
 """
 
 from registry.folder import (

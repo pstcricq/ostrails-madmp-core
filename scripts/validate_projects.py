@@ -2,8 +2,8 @@
 
 The one check that crosses the data packages. A config pinning a version
 nobody ever wrote passes every per-file check there is, so here every
-`configs/projects/*.yaml` is loaded the way a generator will load it, through
-`assemble_project`, its pins resolved against `rules/standards/` and the files
+``configs/projects/*.yaml`` is loaded the way a generator will load it, through
+``assemble_project``, its pins resolved against ``rules/standards/`` and the files
 behind them merged.
 
 Whether a file is well formed is answered file by file elsewhere. What no
