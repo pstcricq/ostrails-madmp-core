@@ -171,12 +171,34 @@ jobs:
         run: uv sync --frozen
       # Without the secret, on a pull request from a fork, it skips loudly,
       # the registry being private so that even reading it needs a token.
+      #
+      # Both streams into one file, the ok lines going to stdout and the skips
+      # and failures to stderr, so what the summary shows is the whole of what
+      # the script said. `pipefail`, or the exit code would be `tee`'s and a
+      # registry nobody could read would report green.
       - name: Check every project's destination in the registry
-        run: uv run python scripts/validate_registry.py
+        run: |
+          set -o pipefail
+          uv run python scripts/validate_registry.py 2>&1 | tee registry.txt
         env:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
           REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
           REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}
+      # This job answers with a state per project rather than with a yes or a
+      # no, and a state is worth reading without opening a log. The summary
+      # mirrors the script rather than reformatting it, so there is one place
+      # that decides how a destination is phrased.
+      #
+      # `always()`, because the run worth reading is the one that just failed.
+      - name: What it found
+        if: always()
+        run: |
+          {
+            echo '### Project destinations in the registry'
+            echo '```'
+            cat registry.txt 2>/dev/null || echo '(the check wrote nothing)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Builds the image, starts it and asks it two questions. It pushes nothing,
   # so a broken image is a red check on the pull request that broke it rather
@@ -199,6 +221,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
+        # The action uploads a build record as an artifact of its own, on by
+        # default. A run's artifacts should be what it meant to produce, and
+        # that record outlived `dsw-artifacts` six times over on the repository
+        # default. The build summary it also writes stays, it is markdown on
+        # the run page and costs no storage.
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           # The context is the repository, not `submission/`: the image
           # installs this package, and the rules it has to carry sit one
@@ -416,6 +445,9 @@ jobs:
       # moves the package with it instead of publishing under a name that no
       # longer exists.
       - uses: docker/build-push-action@v6
+        # As in `image`: the build record is not an artifact of this release.
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: .
           file: submission/Dockerfile
