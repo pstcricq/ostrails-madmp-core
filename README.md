@@ -297,10 +297,6 @@ chooses which engine and which rules judge a submission.
   constructor.
 - `registry/folder.py` : what one project's folder is made of, the three
   states a read of it can find, and the write that lays it out.
-- `registry/github.py` : the two calls of the GitHub Contents API this needs,
-  standard library only. It hands out bytes, base64, shas and status codes end
-  here. A 404 means "no file yet" on a read and a failure on a write, which is
-  the one asymmetry worth knowing about it.
 - `quality_control/engine.py` : the seven categories, the four statuses, and
   the one PASS/FAIL rule over them. It knows nothing of files, a Model and a
   document in, a list of results out.
@@ -309,9 +305,11 @@ chooses which engine and which rules judge a submission.
 - `submission/service.py` : the envelope taken out of the document, the check
   it has to pass, and the three files committed together. It is the only module
   here that runs in a long-lived process rather than a job.
-- `submission/github_client.py` : the calls the webhook needs, standard library
-  only. Not the same client as `registry/github.py`, which lays folders out
-  through the Contents API where this one commits through the Git Data API.
+- `utils/github.py` : every call to GitHub this repository makes, standard
+  library only. It hands out bytes, base64 and status codes end here. A 404
+  means "no file yet" on a read and a failure on a write, which is the one
+  asymmetry worth knowing about it. Laying a folder out goes through the
+  Contents API, committing several files at once through the Git Data API.
 - `utils/schema.py` : the JSON-Schema plumbing both loaders sit on. Compile a
   schema once, report every violation of a document at once.
 - `utils/errors.py` : `ProblemsError`, the one error shape for the whole
@@ -429,17 +427,16 @@ madmp-core/
 │   ├── generate_template.py      a project into a Document Template bundle
 │   └── publish.py                the three targets, and the wizard-api client
 ├── registry/                     where a project's DMPs will land
-│   ├── folder.py                 one project's folder, read and laid out
-│   └── github.py                 the two GitHub Contents API calls this needs
+│   └── folder.py                 one project's folder, read and laid out
 ├── submission/                   what DSW posts, and what the registry receives
 │   ├── app.py                    the HTTP surface and what it reads at startup
 │   ├── service.py                what a submission means, free of HTTP
-│   ├── github_client.py          reading a file, and committing onto a branch
 │   └── Dockerfile                its image, built from this repository
 ├── quality_control/              whether a submitted DMP holds up
 │   ├── engine.py                 a model and a document, walked together
 │   └── run.py                    the command, and the envelope it writes
 ├── utils/                        what several packages build on
+│   ├── github.py                 every call to GitHub, in one client
 │   ├── schema.py                 the shared JSON-Schema plumbing
 │   └── errors.py                 the one error shape
 ├── scripts/                      what the CI jobs run, runnable by hand

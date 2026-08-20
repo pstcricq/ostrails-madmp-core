@@ -83,11 +83,16 @@ Un module appartient à ce qui l'utilise, pas à ce à quoi il ressemble.
 **`utils/` prend ce que plusieurs paquets importent, et rien d'autre.** Deux
 conditions, toutes les deux requises : le module ne connaît rien de maDMP, ni
 règle, ni config, ni projet, ni DSW, ni registre, **et** au moins deux paquets
-l'importent. La première seule ne suffit pas, et c'est le point : un client
-pour une destination est du code générique à un seul consommateur, donc il
-appartient à cette destination. C'est pourquoi `registry/` porte son client
-GitHub et `dsw/` le sien ([§10](#10-le-registre-et-la-publication)). Être
-générique rend éligible, être partagé fait entrer.
+l'importent. La première seule ne suffit pas : un code générique à un seul
+consommateur appartient à ce consommateur. Être générique rend éligible, être
+partagé fait entrer.
+
+**La règle a joué le 20/08/2026.** Le client GitHub a vécu dans `registry/`
+tant que le registre était son seul appelant. Le webhook, une fois rapatrié
+dans ce dépôt, en portait un second, copié puis dérivé, et la seconde condition
+était remplie : le client est devenu `utils/github.py`, et les deux copies ont
+disparu ([§10](#10-le-registre-et-la-publication)). Le client DSW, lui, n'a
+toujours qu'un consommateur et reste dans `dsw/`.
 
 **`utils/` n'exporte rien.** Une façade nomme l'API publique d'un paquet, et
 il n'y en a pas une seule à nommer ici : un appelant importe le module dont il
@@ -1055,14 +1060,36 @@ de généré. Une config valide suffit. C'est donc l'étape qui vient
 c'est aussi ce qui permet de la mener à bien aujourd'hui, alors que la
 publication attend un déploiement joignable.
 
-Chaque destination porte son client. `registry/` connaît l'API Contents de
-GitHub et embarque `GitHubClient`, `dsw/` connaît l'API DSW et embarque
-`DswClient`. `utils/` est pour ce que **plusieurs** paquets partagent, et un
-client n'a qu'un consommateur : sa destination. La règle qui permet à
-`registry/` de refuser un ajout est celle-là : *rien d'autre dans ce dépôt
-n'appelle GitHub*.
+**Un seul client GitHub, dans `utils/`, depuis le 20/08/2026.** Il y en a eu
+deux, `registry/github.py` et `submission/github_client.py`, le second né d'une
+copie du premier dans `madmp-dsw` puis rentré ici avec le webhook. Les fondre a
+demandé de trancher quatre écarts, dont trois avaient un gagnant clair :
 
-Une asymétrie entre les deux, et elle est justifiée : le jeton du registre se
+- **le 404** est traité par chaque lecture, pas par le transport. `_request`
+  lève sur tout statut d'erreur, et `get_file` et `branch_head` sont les deux
+  seules à savoir qu'un 404 leur dit « pas là ». Une écriture n'a plus à
+  connaître cette règle pour y échapper.
+- **GitHub injoignable**, DNS mort, connexion refusée ou expiration, devient la
+  même `GitHubError`, sans statut. Un appelant a un seul type à attraper. Côté
+  registre, un `URLError` sortait tel quel et traversait le `except GitHubError`
+  de `publish.py`.
+- **au-delà d'1 Mo**, la lecture lève au lieu de rendre un fichier vide
+  ([§14](#14-limites-connues)).
+
+Le quatrième écart, ce que rend `get_file`, découle du troisième : des octets,
+ou `None`.
+
+**Le `sha` a disparu dans la fusion.** Il ne servait qu'à remplacer un fichier
+en nommant la version lue, et personne ne remplace, `converge()` n'écrivant que
+les `.gitkeep` absents. Sans `sha`, une écriture ne peut que créer, et GitHub
+refuse par un 422 un fichier déjà là au lieu de l'écraser : le garde-fou est
+chez GitHub, pas dans le paramètre. D'où le nom, `create_file` et non
+`put_file`, qui promettait la sémantique de PUT. Enlever le `sha` ne coûte donc
+rien, et le jour où un remplacement sera nécessaire, celui qui le remettra sera
+celui qui doit penser à la course entre sa lecture et son écriture.
+
+`dsw/` garde le sien, `DswClient`, qui n'a qu'un consommateur. Une asymétrie
+entre les deux, et elle est justifiée : le jeton du registre se
 **lit dans l'environnement** (`token_from_env`), celui de DSW s'**obtient par
 un appel**. D'où `DswClient.login(instance)` comme constructeur : ce qui fait
 des appels est ce qui fait celui-là.
@@ -1216,17 +1243,18 @@ Le registre étant privé, même **lire** demande un jeton. Le contrôle s'absti
 donc bruyamment quand il n'en a pas (une PR issue d'un fork n'a pas les
 secrets), la synchronisation refusant de s'abstenir.
 
-### Un 404 GitHub n'est « fichier absent » que sur un GET
+### Un 404 GitHub n'est « fichier absent » que sur une lecture
 
 Sur une écriture, un 404 veut dire que le dépôt ou l'accès du jeton est faux,
 GitHub répond 404 plutôt que 403 pour ne pas confirmer l'existence d'un dépôt
 privé, et il ne doit jamais passer pour un succès. C'est la seule asymétrie du
 transport, et elle est testée dans les deux sens.
 
-Le transport s'arrête là. Il rend et prend des **octets**, le base64, le `sha`
-qu'une mise à jour doit nommer et les codes de statut sont son affaire seule,
-si bien que `folder.py` n'importe que `yaml`. Dans le prototype, `folder.py`
-importait `base64` : l'encodage du transport fuyait dans le module de sens.
+Le transport s'arrête là. Il rend et prend des **octets**, le base64 et les
+codes de statut sont son affaire seule, si bien qu'aucun module de sens
+n'importe `base64`. Le webhook l'importait encore avant la fusion, pour décoder
+ce que sa lecture lui rendait brut : l'encodage du transport fuyait dans le
+module de sens.
 
 ### Rendre compte, ou agir
 
@@ -1804,14 +1832,19 @@ format. À ce moment-là, un `.prettierrc` versionné (trois lignes, zéro secon
 de CI) répond au premier cas, le check CI ne se justifiant que si le format
 dérive vraiment malgré ça.
 
-### L'idempotence de la soumission s'arrête au-dessus de 1 Mo
+### Un fichier de plus d'1 Mo ne se lit pas
 
 L'API Contents de GitHub inline le contenu d'un fichier jusqu'à 1 Mo et répond
 un `content` vide au-delà, et c'est cette lecture qui compare une soumission à
-ce que le registre détient. Un DMP de cette taille ne compare donc jamais égal,
-et chaque soumission recommite au lieu de rapporter `unchanged`. Rien ne casse,
-la garantie cesse discrètement de tenir. Seule la lecture est concernée, un
-commit porte ses fichiers en entrées d'arbre et n'a pas cette limite.
+ce que le registre détient. **La lecture lève** plutôt que de rendre ce vide,
+depuis le 20/08/2026, donc un DMP de cette taille fait échouer la soumission.
+Avant, le webhook ne le trouvait jamais égal à ce qu'il détenait et le
+recommittait à chaque envoi en rapportant `updated`, sans que rien ne le
+signale. La dégradation silencieuse est devenue un échec, ce qui n'est pas la
+même chose qu'une garantie.
+
+Seule la lecture est concernée, un commit porte ses fichiers en entrées
+d'arbre et n'a pas cette limite.
 
 ### Le webhook n'a ni reprise ni gestion du quota
 

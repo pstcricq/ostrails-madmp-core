@@ -12,7 +12,6 @@ its subdirectories are laid out beforehand from madmp-core.
 
 from __future__ import annotations
 
-import base64
 import json
 import re
 from collections import Counter
@@ -22,8 +21,8 @@ from typing import Any
 
 from project import RULES_DIR, merge_rules, resolve_pins
 from quality_control import CheckResult, has_failures, run_qc
-from submission.github_client import GitHubClient
 from utils.errors import ProblemsError
+from utils.github import GitHubClient
 
 # A safe folder slug: no dots or slashes, so a submission can never escape
 # projects/<folder>/ (path traversal) or name anything but a folder.
@@ -189,19 +188,6 @@ def _bytes(document: Any) -> bytes:
     ).encode()
 
 
-def _stored(entry: dict | None) -> bytes | None:
-    """What the registry currently holds at a path, or None when nothing.
-
-    (!!) GitHub inlines the content up to 1 MB only, and answers with an empty
-    `content` and `encoding: "none"` above that. A DMP that large would never
-    compare equal, so it would be committed again on every submission instead
-    of reported unchanged.
-    """
-    if entry is None:
-        return None
-    return base64.b64decode(entry.get("content") or "")
-
-
 def handle_submission(
     document: Any, folder: str, github: GitHubClient, config: SubmissionConfig
 ) -> dict[str, Any]:
@@ -249,7 +235,7 @@ def handle_submission(
         meta_path: _bytes(envelope),
         check_path: _bytes(verdict(results, envelope)),
     }
-    current = {path: _stored(github.get_file(owner, repo, path)) for path in wanted}
+    current = {path: github.get_file(owner, repo, path) for path in wanted}
 
     if current == wanted:
         action = "unchanged"

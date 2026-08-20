@@ -63,8 +63,6 @@ from dsw.common import (
     template_path,
 )
 from registry import (
-    GitHubClient,
-    GitHubError,
     Registry,
     RegistryError,
     folder_status,
@@ -72,6 +70,7 @@ from registry import (
     token_from_env,
 )
 from utils.errors import ProblemsError
+from utils.github import GitHubClient, GitHubError
 
 # The format a submitted document is rendered in, so the submission service can
 # name it without reading the template bundle back. Both the name and the

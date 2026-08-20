@@ -16,8 +16,8 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from registry.github import GitHubClient
 from utils.errors import ProblemsError
+from utils.github import GitHubClient
 
 # The two directories a project's folder holds, `template/` for the submitted
 # DMP and `productions/` for the deployment DMPs derived from it. Git stores
@@ -138,7 +138,7 @@ def converge(gh: GitHubClient, registry: Registry, config: dict[str, Any]) -> st
     """
     absent = _absent_subdirs(gh, registry, config)
     for subdir in absent:
-        gh.put_file(
+        gh.create_file(
             registry.owner,
             registry.repo,
             keep_path(config, subdir),

@@ -1,22 +1,17 @@
-"""The submission webhook, in six sections.
+"""The submission webhook, in seven sections.
 
-Routing, idempotence and guards drive service.py through FakeGitHub. The HTTP
-layer goes through TestClient. Configuration covers what app.py reads at
-startup. The last section is the only one to exercise the real GitHub client,
-with urlopen replaced, and it is where the transport and the status codes are
-pinned down."""
+Routing, the provenance envelope, idempotence, the check and the guards drive
+service.py through FakeGitHub. The HTTP layer goes through TestClient.
+Configuration covers what app.py reads at startup.
 
-import base64
-import io
+Nothing here touches the transport, FakeGitHub stands in for it throughout."""
+
 import json
-import urllib.error
-import urllib.request
 
 import pytest
 from fastapi.testclient import TestClient
 
 from submission.app import Settings, _from_environment, app
-from submission.github_client import GitHubClient, GitHubError
 from submission.service import (
     _SPELLED_OUT,
     QualityControlError,
@@ -24,6 +19,7 @@ from submission.service import (
     SubmissionError,
     handle_submission,
 )
+from utils.github import GitHubError
 
 CONFIG = SubmissionConfig(github_owner="Pierrott64", registry_repo="dmp-registry")
 DSW_URL = "http://localhost:8080/wizard/projects/7c42caa4-a0e0-4112-9623-4334641c457a"
@@ -78,7 +74,7 @@ def _document(title="Glider mission DMP", identifier=DSW_URL, envelope=None, dmp
 
 
 class FakeGitHub:
-    """In-memory stand-in for GitHubClient: the registry as path -> bytes,
+    """In-memory stand-in for the client: the registry as path -> bytes,
     plus the commit its default branch points at.
 
     A commit is recorded as the paths it carried and its message, so a test
@@ -93,12 +89,7 @@ class FakeGitHub:
         self.head = "sha0"
 
     def get_file(self, owner, repo, path):
-        if path not in self.files:
-            return None
-        return {
-            "sha": f"sha-{len(self.files[path])}",
-            "content": base64.b64encode(self.files[path]).decode(),
-        }
+        return self.files.get(path)
 
     def branch_head(self, owner, repo, branch):
         return self.head
@@ -555,148 +546,3 @@ def test_startup_refuses_an_incomplete_environment(monkeypatch):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(RuntimeError, match="SUBMISSION_TOKEN"), TestClient(app):
         pass  # pragma: no cover
-
-
-# The GitHub client
-#
-# Everything above runs against FakeGitHub, so these are the only tests that
-# reach the real client: the request it builds, and what it makes of a status
-# code. urlopen is replaced, nothing here touches the network.
-
-
-class _Reply:
-    """Shaped like urlopen's return value: a context manager that reads once."""
-
-    def __init__(self, payload: bytes):
-        self._payload = payload
-
-    def read(self) -> bytes:
-        return self._payload
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
-
-
-def _stub_urlopen(monkeypatch, *, status=200, payload=b"{}"):
-    """Answers with `status`, raising HTTPError above 400 the way urllib does.
-    Returns a dict where the request that was built lands, so a test can look
-    at what would have gone over the wire."""
-    seen: dict[str, urllib.request.Request] = {}
-
-    def stub(request, timeout=None):
-        seen["request"] = request
-        if status >= 400:
-            raise urllib.error.HTTPError(
-                request.full_url, status, "", {}, io.BytesIO(b'{"message": "nope"}')
-            )
-        return _Reply(payload)
-
-    monkeypatch.setattr(urllib.request, "urlopen", stub)
-    return seen
-
-
-def test_get_file_reads_a_404_as_absent(monkeypatch):
-    _stub_urlopen(monkeypatch, status=404)
-    assert GitHubClient("token").get_file("owner", "repo", "path") is None
-
-
-def test_get_file_raises_on_any_other_error(monkeypatch):
-    _stub_urlopen(monkeypatch, status=403)
-    with pytest.raises(GitHubError) as raised:
-        GitHubClient("token").get_file("owner", "repo", "path")
-    assert raised.value.status == 403
-
-
-def test_a_commit_treats_a_404_as_a_failure(monkeypatch):
-    """A 404 on a write means the write did not happen. Reading it as an
-    absence, the way a GET does, let a submission that wrote nothing answer
-    200 with `"action": "created"` and a link to a file that was never there."""
-    _stub_urlopen(monkeypatch, status=404)
-    with pytest.raises(GitHubError) as raised:
-        GitHubClient("token").commit_files(
-            "o", "r", "main", {"p": b"x"}, "message", "parent"
-        )
-    assert raised.value.status == 404
-
-
-def test_an_absent_branch_is_absent_and_not_an_error(monkeypatch):
-    """A registry whose default branch cannot be read is one nothing can be
-    committed to, and the caller has to be able to tell that from a refusal."""
-    _stub_urlopen(monkeypatch, status=404)
-    assert GitHubClient("token").branch_head("o", "r", "main") is None
-
-
-def test_unreachable_github_is_the_same_error_without_a_status(monkeypatch):
-    """DNS down, connection refused, timeout: never a response, so no status.
-    Same exception as a refusal, so app.py answers 502 rather than letting an
-    OSError out as a 500."""
-
-    def stub(request, timeout=None):
-        raise urllib.error.URLError("nodename nor servname provided")
-
-    monkeypatch.setattr(urllib.request, "urlopen", stub)
-    with pytest.raises(GitHubError) as raised:
-        GitHubClient("token").get_file("owner", "repo", "path")
-    assert raised.value.status is None
-    assert "unreachable" in str(raised.value)
-
-
-def _stub_git_data(monkeypatch):
-    """A GitHub that answers the four calls a commit makes, and hands back
-    every request that was built, in order."""
-    seen: list[urllib.request.Request] = []
-    answers = {
-        "/git/commits/parent": {"tree": {"sha": "base"}},
-        "/git/trees": {"sha": "new-tree"},
-        "/git/commits": {"sha": "new-commit"},
-        "/git/refs/heads/main": {},
-    }
-
-    def stub(request, timeout=None):
-        seen.append(request)
-        for suffix, payload in answers.items():
-            if request.full_url.endswith(suffix):
-                return _Reply(json.dumps(payload).encode())
-        raise AssertionError(f"unexpected call {request.full_url}")
-
-    monkeypatch.setattr(urllib.request, "urlopen", stub)
-    return seen
-
-
-def test_a_commit_builds_a_tree_then_moves_the_branch(monkeypatch):
-    """The order is what makes the write atomic: the files go into a tree and
-    a commit, neither of which anything points at, and one reference move
-    publishes them all at once."""
-    seen = _stub_git_data(monkeypatch)
-    sha = GitHubClient("token").commit_files(
-        "o", "r", "main", {"a/one.json": b"1", "a/two.json": b"2"}, "msg", "parent"
-    )
-    assert sha == "new-commit"
-    assert [r.get_method() for r in seen] == ["GET", "POST", "POST", "PATCH"]
-    assert [r.full_url.split("/repos/o/r")[1] for r in seen] == [
-        "/git/commits/parent",
-        "/git/trees",
-        "/git/commits",
-        "/git/refs/heads/main",
-    ]
-    tree = json.loads(seen[1].data)
-    assert tree["base_tree"] == "base"
-    assert {entry["path"]: entry["content"] for entry in tree["tree"]} == {
-        "a/one.json": "1",
-        "a/two.json": "2",
-    }
-    assert all(entry["mode"] == "100644" for entry in tree["tree"])
-    commit = json.loads(seen[2].data)
-    assert (commit["tree"], commit["parents"], commit["message"]) == (
-        "new-tree",
-        ["parent"],
-        "msg",
-    )
-    moved = json.loads(seen[3].data)
-    # Not forced: two submissions racing, the second one's parent is stale and
-    # the write does not happen, rather than replacing what the first wrote.
-    assert moved == {"sha": "new-commit"}
-    assert seen[0].headers["Authorization"] == "Bearer token"

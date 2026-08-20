@@ -21,7 +21,6 @@ from registry import (
     token_from_env,
 )
 from registry.folder import SUBDIRS, keep_path
-from registry.github import File
 
 ROOT = Path(__file__).parent.parent
 GLIDER_CONFIG = ROOT / "configs" / "projects" / "glider.yaml"
@@ -44,13 +43,11 @@ class FakeGitHub:
         self.writes: list[str] = []
         self.calls: list[tuple[str, str, str]] = []
 
-    def get_file(self, owner: str, repo: str, path: str) -> File | None:
+    def get_file(self, owner: str, repo: str, path: str) -> bytes | None:
         self.calls.append((owner, repo, path))
-        if path not in self.files:
-            return None
-        return File(sha=f"sha-of-{path}", content=self.files[path])
+        return self.files.get(path)
 
-    def put_file(self, owner, repo, path, content, message, sha=None) -> None:
+    def create_file(self, owner, repo, path, content, message) -> None:
         self.calls.append((owner, repo, path))
         self.files[path] = content
         self.writes.append(path)

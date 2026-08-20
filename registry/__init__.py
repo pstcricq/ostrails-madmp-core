@@ -6,12 +6,11 @@ exists and is laid out.
 ``projects/<id>/`` holds ``template/`` where the DMP is dropped, and
 ``productions/``.
 
-- ``github.py`` is the transport, two calls of the GitHub Contents API
-- ``folder.py`` reads a project's folder and converges it
+``folder.py`` is the whole of it, reading a project's folder and converging
+it over a client from ``utils.github``.
 
-One condition for a module to belong here: nothing else in this repository
-calls GitHub. A module that does not, or that would have another caller here,
-does not belong.
+One condition for a module to belong here: it says what a project's folder is
+made of. A module that does not does not belong.
 """
 
 from registry.folder import (
@@ -23,12 +22,9 @@ from registry.folder import (
     registry_from_env,
     token_from_env,
 )
-from registry.github import GitHubClient, GitHubError
 
 __all__ = [
     "FolderStatus",
-    "GitHubClient",
-    "GitHubError",
     "Registry",
     "RegistryError",
     "converge",

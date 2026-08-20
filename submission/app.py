@@ -28,13 +28,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
-from submission.github_client import GitHubClient, GitHubError
 from submission.service import (
     QualityControlError,
     SubmissionConfig,
     SubmissionError,
     handle_submission,
 )
+from utils.github import GitHubClient, GitHubError
 
 REQUIRED = ("SUBMISSION_TOKEN", "REGISTRY_TOKEN", "REGISTRY_OWNER", "REGISTRY_REPO")
 

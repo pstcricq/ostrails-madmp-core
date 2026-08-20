@@ -6,9 +6,8 @@ configuration and nothing of its code.
 
 - ``app.py`` is the HTTP surface, the shared secret and the four variables
   read at startup
-- ``service.py`` is what a submission means, free of HTTP
-- ``github_client.py`` is the transport, reading a file and committing
-  several onto a branch
+- ``service.py`` is what a submission means, free of HTTP, over a client
+  from ``utils.github``
 
 ``handle_submission()`` is the whole of what the endpoint does, so it can be
 driven without a server.

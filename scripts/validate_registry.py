@@ -16,13 +16,12 @@ from pathlib import Path
 
 from configs import ConfigFileError, load_config_file
 from registry import (
-    GitHubClient,
-    GitHubError,
     RegistryError,
     folder_status,
     registry_from_env,
     token_from_env,
 )
+from utils.github import GitHubClient, GitHubError
 
 PROJECTS = Path(__file__).parent.parent / "configs" / "projects"
 
