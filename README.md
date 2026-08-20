@@ -248,6 +248,11 @@ whenever either of them moved, with nothing to say so until the next build. It
 builds from this checkout and reads no credential, where installing from a tag
 of a private repository needed a token and git inside the build.
 
+It installs with `uv sync --frozen`, so the versions come from the committed
+`uv.lock` and two builds of one tag are the same bytes. In two steps, the
+dependencies before the source, so the layer that costs is rebuilt when the
+lockfile moves and not when a line of Python does.
+
 CI builds it on every run and pushes it on a version tag alone, to
 `ghcr.io/pstcricq/ostrails-madmp-core/submission:<tag>`. That tag is what a DSW
 deployment names in its `.env`, and naming it is the whole of how an operator

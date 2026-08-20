@@ -1350,6 +1350,42 @@ gravité n'ait pas de cas particulier. Et l'ordre du parcours du document, lui,
 ne survit qu'à l'intérieur de chaque liste, plus entre elles. C'est l'échange
 qu'on fait en triant par gravité.
 
+### L'image s'installe depuis le lockfile, pas depuis les fourchettes
+
+**Fermé le 20/08/2026**, et c'était une limite connue jusque-là. Le
+`Dockerfile` faisait `pip install "/src[submission]"`, donc pip résolvait les
+dépendances au moment de la construction, à partir des fourchettes de
+`pyproject.toml`, dont la plupart n'ont pas de borne du tout. Deux
+constructions du même tag, à quelques semaines d'écart, pouvaient embarquer
+des versions différentes. Le `uv.lock` était commité et lu par tous les jobs
+de CI, l'image était le seul endroit du dépôt qui l'ignorait.
+
+Elle installe maintenant avec `uv sync --frozen`, en deux temps. Le premier ne
+copie que `pyproject.toml` et `uv.lock` et installe les dépendances seules, le
+second copie les sources et installe le projet. Deux gains d'un coup :
+
+- **la reproductibilité.** Les versions viennent du lockfile, donc deux
+  constructions d'un tag rendent les mêmes octets. Ce que le verdict commité à
+  côté d'un DMP annonce sous `engine` vaut alors pour tout ce qui a jugé, et
+  pas seulement pour le code de ce dépôt.
+- **le cache.** La couche des dépendances ne bouge que quand le lockfile
+  bouge. Mesuré : un commit qui ne touche que du code source reconstruit en
+  2,4 secondes contre une réinstallation complète avant.
+
+Trois drapeaux ne sont pas décoratifs, et chacun casse quelque chose de
+différent si on l'oublie. `UV_PROJECT_ENVIRONMENT=/venv` met le venv là où
+l'étage d'exécution le cherche. `--no-dev` empêche le groupe `dev`, que uv
+installe par défaut, de faire entrer un lanceur de tests et un linter dans un
+webhook. `--no-editable` empêche le venv de garder un chemin vers `/src`, qui
+n'existe pas dans l'étage final.
+
+**Ce que ça coûte.** Un correctif de sécurité dans une dépendance transitive
+n'arrive plus par une simple reconstruction, il demande un `uv lock`, un commit
+et un tag. C'est le sens voulu : ce dépôt rend des verdicts, et le jeu de
+bibliothèques qui les rend doit bouger par décision. Mais c'est un devoir
+d'entretien qui n'existait pas. L'image de base, elle, continue de flotter pour
+les mises à jour Debian, ce sont deux couches et deux risques distincts.
+
 ### Ce que DSW montre d'une soumission, et ce qu'il jette
 
 **Relevé le 20/08/2026**, en lisant le bundle du client de la pile locale
@@ -1970,16 +2006,6 @@ instance qui soumet occasionnellement.
 ### `api_url` du client GitHub est paramétrable et inutilisé
 
 Il permettrait GitHub Enterprise. Rien ne le passe, les tests compris.
-
-### Les dépendances de l'image sont résolues à la construction, pas verrouillées
-
-Le webhook installait autrefois depuis un `requirements.txt` épinglé par
-empreintes, généré depuis un lockfile. L'image l'installe maintenant depuis les
-sources de ce dépôt, ce qui épingle le dépôt exactement et laisse ses
-dépendances transitives à pip, donc deux constructions du même tag peuvent
-différer. Le déploiement en est épargné, il ne construit plus et une image tirée
-est un seul jeu d'octets pour qui la tire. Ce qui refermerait ça : installer
-depuis le `uv.lock` versionné dans l'image, et rien n'en a besoin pour l'instant.
 
 ### Les comptes de démonstration sont une étape manuelle
 
