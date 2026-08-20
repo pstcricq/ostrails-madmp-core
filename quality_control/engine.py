@@ -40,6 +40,7 @@ import re
 from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
+from importlib.metadata import version
 from typing import Any
 
 from project import Field, Model
@@ -90,6 +91,45 @@ def has_failures(results: Iterable[CheckResult]) -> bool:
     """Whether any check is a real violation, which is the whole PASS/FAIL
     rule."""
     return any(r.status == "fail" for r in results)
+
+
+# The four lists an envelope carries, and the order a reader shows them in,
+# from what has to be fixed down to what is already right.
+STATUSES = ("fail", "warning", "missing", "pass")
+
+
+def envelope(model: Model, results: list[CheckResult], dmp: str) -> dict[str, Any]:
+    """Everything one check produced, in the one shape it is written and read.
+
+    The results are split by status rather than handed over flat, so a reader
+    shows them by severity without filtering, and ``len(envelope[status])``
+    equals ``envelope["summary"][status]`` for each of the four.
+
+    ``dmp`` names the file this is about, and ``engine`` the version of this
+    package that judged it, ``rules_versions`` saying only what it judged
+    against.
+
+    (!!) No timestamp. One would change the bytes at every check of an
+    unchanged document, so a caller that commits this could never report it
+    unchanged.
+    """
+    rows = results_to_dicts(results)
+    by_status = {
+        status: [row for row in rows if row["status"] == status] for status in STATUSES
+    }
+
+    return {
+        "dmp": str(dmp),
+        "standards": list(model.standards),
+        "rules_versions": dict(model.standard_versions),
+        "verdict": "fail" if has_failures(results) else "pass",
+        "engine": version("madmp-core"),
+        "summary": {
+            "total": len(rows),
+            **{status: len(found) for status, found in by_status.items()},
+        },
+        **by_status,
+    }
 
 
 # Scalar type and format checks

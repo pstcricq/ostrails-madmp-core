@@ -1,6 +1,6 @@
 """The submission webhook, in seven sections.
 
-Routing, the provenance envelope, idempotence, the check and the guards drive
+Routing, the provenance block, idempotence, the check and the guards drive
 service.py through FakeGitHub. The HTTP layer goes through TestClient.
 Configuration covers what app.py reads at startup.
 
@@ -11,6 +11,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from quality_control import STATUSES
 from submission.app import Settings, _from_environment, app
 from submission.service import (
     _SPELLED_OUT,
@@ -27,7 +28,7 @@ DMP_PATH = "projects/glider/template/dmp_glider_template.json"
 META_PATH = "projects/glider/template/dmp_glider_template.meta.json"
 CHECK_PATH = "projects/glider/template/dmp_glider_template.check.json"
 RAW_URL = f"https://raw.githubusercontent.com/Pierrott64/dmp-registry/main/{DMP_PATH}"
-ENVELOPE = {
+PROVENANCE = {
     "project": "glider",
     "template_version": "1.0.0",
     "rules": [{"rda_dcs": "1.0.0"}, {"ostrails": "1.0.0"}],
@@ -60,16 +61,18 @@ COMPLETE = {
 }
 
 
-def _document(title="Glider mission DMP", identifier=DSW_URL, envelope=None, dmp=None):
+def _document(
+    title="Glider mission DMP", identifier=DSW_URL, provenance=None, dmp=None
+):
     """What a maDMP document template renders: the dmp object, and beside it
     the provenance block the webhook takes back out."""
     document = {"dmp": json.loads(json.dumps(COMPLETE if dmp is None else dmp))}
     if dmp is None:
         document["dmp"]["title"] = title
         document["dmp"]["dmp_id"] = {"identifier": identifier, "type": "url"}
-    envelope = ENVELOPE if envelope is None else envelope
-    if envelope is not ...:
-        document["metadata"] = json.loads(json.dumps(envelope))
+    provenance = PROVENANCE if provenance is None else provenance
+    if provenance is not ...:
+        document["metadata"] = json.loads(json.dumps(provenance))
     return document
 
 
@@ -139,10 +142,10 @@ def test_commit_message_names_the_project():
     ]
 
 
-# The provenance envelope
+# The provenance block
 
 
-def test_the_envelope_leaves_the_dmp_and_lands_beside_it():
+def test_the_provenance_leaves_the_dmp_and_lands_beside_it():
     """The whole point of the block: what the registry holds is RDA DCS and
     nothing else, and the versions it was built from sit next to it, written
     by the same commit so the two can never disagree."""
@@ -150,10 +153,10 @@ def test_the_envelope_leaves_the_dmp_and_lands_beside_it():
     result = handle_submission(_document(), "glider", github, CONFIG)
     assert result["metadata"] == META_PATH
     assert "metadata" not in json.loads(github.files[DMP_PATH])
-    assert json.loads(github.files[META_PATH]) == ENVELOPE
+    assert json.loads(github.files[META_PATH]) == PROVENANCE
 
 
-def test_the_envelope_travels_in_the_commit_that_carries_the_dmp():
+def test_the_provenance_travels_in_the_commit_that_carries_the_dmp():
     """One commit, both files. Two commits would let the second fail and
     leave a DMP whose rules versions nobody knows."""
     github = _initialized()
@@ -162,23 +165,23 @@ def test_the_envelope_travels_in_the_commit_that_carries_the_dmp():
     assert github.commits[0][0] == [CHECK_PATH, DMP_PATH, META_PATH]
 
 
-def test_a_document_without_an_envelope_is_refused():
+def test_a_document_without_provenance_is_refused():
     """A DMP whose rules versions are unknown cannot be checked against them,
     and a folder holding one would have to be cleaned up by hand."""
     github = _initialized()
     with pytest.raises(SubmissionError, match="carries no 'metadata' object"):
-        handle_submission(_document(envelope=...), "glider", github, CONFIG)
+        handle_submission(_document(provenance=...), "glider", github, CONFIG)
     assert github.commits == []
 
 
-def test_an_envelope_naming_another_project_is_refused():
+def test_provenance_naming_another_project_is_refused():
     """The folder comes from the service URL and the project name from the
     template. They disagreeing means the document was submitted through
     somebody else's service, and it must not land in that folder."""
-    envelope = {**ENVELOPE, "project": "canales"}
+    provenance = {**PROVENANCE, "project": "canales"}
     with pytest.raises(SubmissionError, match="generated for project 'canales'"):
         handle_submission(
-            _document(envelope=envelope), "glider", _initialized(), CONFIG
+            _document(provenance=provenance), "glider", _initialized(), CONFIG
         )
 
 
@@ -196,10 +199,10 @@ def test_an_envelope_naming_another_project_is_refused():
 def test_malformed_pins_are_refused(rules):
     """Quality control resolves these into file paths, so a shape it cannot
     read has to be caught here, while there is still somebody to tell."""
-    envelope = {**ENVELOPE, "rules": rules}
+    provenance = {**PROVENANCE, "rules": rules}
     github = _initialized()
     with pytest.raises(SubmissionError, match="metadata.rules"):
-        handle_submission(_document(envelope=envelope), "glider", github, CONFIG)
+        handle_submission(_document(provenance=provenance), "glider", github, CONFIG)
     assert github.commits == []
 
 
@@ -239,13 +242,15 @@ def test_resubmit_changed_content_updates():
 
 
 def test_a_new_template_version_alone_is_an_update():
-    """The envelope is compared like the DMP is. A researcher who answered
+    """The provenance block is compared like the DMP is. A researcher who answered
     nothing new but migrated to a newer template has to leave a trace, that
     is the fact quality control reads."""
     github = _initialized()
     handle_submission(_document(), "glider", github, CONFIG)
-    envelope = {**ENVELOPE, "template_version": "2.0.0"}
-    result = handle_submission(_document(envelope=envelope), "glider", github, CONFIG)
+    provenance = {**PROVENANCE, "template_version": "2.0.0"}
+    result = handle_submission(
+        _document(provenance=provenance), "glider", github, CONFIG
+    )
     assert result["action"] == "updated"
     assert json.loads(github.files[META_PATH])["template_version"] == "2.0.0"
 
@@ -262,25 +267,28 @@ def test_the_verdict_lands_beside_the_dmp():
     assert result["check"] == CHECK_PATH
     written = json.loads(github.files[CHECK_PATH])
     assert written["verdict"] == "pass"
-    assert written["rules"] == ENVELOPE["rules"]
+    assert written["rules_versions"] == {"rda_dcs": "1.0.0", "ostrails": "1.0.0"}
+    assert written["dmp"] == DMP_PATH
     assert written["engine"]
     assert written["summary"]["fail"] == 0
-    assert written["summary"]["total"] == sum(
-        written["summary"][s] for s in ("pass", "fail", "warning", "missing")
-    )
 
 
-def test_the_verdict_keeps_the_warnings_and_not_the_rest():
-    """A passing result says only that a field is a field. A warning is the
-    whole of what a document that passed still has to say."""
+def test_the_verdict_is_the_shape_the_command_writes():
+    """One shape for both, so anything reading a check reads one thing. The
+    four lists and their counts are the whole of it, and a reader shows them
+    by severity without filtering."""
     loose = json.loads(json.dumps(COMPLETE))
     loose["contact"]["contact_id"][0]["type"] = "something else"
     github = _initialized()
     handle_submission(_document(dmp=loose), "glider", github, CONFIG)
     written = json.loads(github.files[CHECK_PATH])
-    assert written["summary"]["warning"] == len(written["warnings"])
-    assert written["warnings"]
-    assert "contact_id" in written["warnings"][0]["instance_path"]
+    for status in STATUSES:
+        assert len(written[status]) == written["summary"][status], status
+    assert written["warning"]
+    assert "contact_id" in written["warning"][0]["instance_path"]
+    # Structurally empty here, a document that fails never reaches the
+    # registry at all, and the key is there so a reader needs no special case.
+    assert written["fail"] == []
 
 
 def test_the_verdict_carries_no_timestamp():
@@ -335,12 +343,12 @@ def test_a_warning_alone_does_not_refuse():
 
 
 def test_pins_naming_rules_nobody_wrote_are_refused():
-    """The envelope is well formed and names a version that does not exist.
+    """The provenance block is well formed and names a version that does not exist.
     Nothing can judge the document, so it is not offered."""
-    envelope = {**ENVELOPE, "rules": [{"rda_dcs": "9.9.9"}]}
+    provenance = {**PROVENANCE, "rules": [{"rda_dcs": "9.9.9"}]}
     github = _initialized()
     with pytest.raises(QualityControlError, match="cannot be loaded"):
-        handle_submission(_document(envelope=envelope), "glider", github, CONFIG)
+        handle_submission(_document(provenance=provenance), "glider", github, CONFIG)
     assert github.commits == []
 
 

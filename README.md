@@ -190,9 +190,12 @@ reading it as a value would let a required field nobody answered pass both
 its presence and its type. And an absent container reports once, not once per
 field it would have held.
 
-`python -m quality_control.run` is the command, and it writes an envelope
-carrying the verdict, the counts and the results, so no reader recounts. Exit
-code 0 when the document has no real violation, 1 otherwise.
+`python -m quality_control.run` is the command, and it writes the envelope
+every reader of a check gets: the verdict, the counts, and the results split
+into four lists by status, `fail`, `warning`, `missing` and `pass`, so a
+reader shows them by severity without filtering. `len(envelope[status])` is
+`envelope["summary"][status]` for each of the four. Exit code 0 when the
+document has no real violation, 1 otherwise.
 
 ### `submission/` : what DSW posts, and what the registry receives
 
@@ -214,10 +217,10 @@ versions they were judged against, so what the registry holds is what passed.
 Warnings do not refuse, or every free-text answer would stop a submission.
 
 The verdict is committed beside the DMP because a document nobody can tell was
-checked is a document nobody can trust. It records the counts, the rules
-versions, the engine that ran, and the warnings, which are the whole of what a
-passing document still has to say. No timestamp: git dates the commit, and one
-here would change the bytes at every submission.
+checked is a document nobody can trust. It is the same envelope the command
+writes, one shape for both, so anything reading a check reads one thing. No
+timestamp: git dates the commit, and one here would change the bytes at every
+submission, so an unchanged DMP would commit again for ever.
 
 It creates nothing. A folder that is not laid out is refused rather than half
 built, `registry/` being what lays one out.
@@ -299,11 +302,13 @@ chooses which engine and which rules judge a submission.
   states a read of it can find, and the write that lays it out.
 - `quality_control/engine.py` : the seven categories, the four statuses, and
   the one PASS/FAIL rule over them. It knows nothing of files, a Model and a
-  document in, a list of results out.
-- `quality_control/run.py` : the command, and the envelope every other step
-  reads. The only place that decides where the pins come from.
-- `submission/service.py` : the envelope taken out of the document, the check
-  it has to pass, and the three files committed together. It is the only module
+  document in, a list of results out, and the one envelope shape they are
+  written and read in.
+- `quality_control/run.py` : the command. The only place that decides where the
+  pins come from. The envelope it writes is shaped in `engine.py`, beside the
+  results it carries.
+- `submission/service.py` : the provenance block taken out of the document, the
+  check it has to pass, and the three files committed together. It is the only module
   here that runs in a long-lived process rather than a job.
 - `utils/github.py` : every call to GitHub this repository makes, standard
   library only. It hands out bytes, base64 and status codes end here. A 404
@@ -434,7 +439,7 @@ madmp-core/
 │   └── Dockerfile                its image, built from this repository
 ├── quality_control/              whether a submitted DMP holds up
 │   ├── engine.py                 a model and a document, walked together
-│   └── run.py                    the command, and the envelope it writes
+│   └── run.py                    the command, and where the pins come from
 ├── utils/                        what several packages build on
 │   ├── github.py                 every call to GitHub, in one client
 │   ├── schema.py                 the shared JSON-Schema plumbing

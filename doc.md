@@ -1130,13 +1130,13 @@ La correction n'est pas d'écrire ce fichier mieux, c'est de ne plus l'écrire.
 **Fait le 18/08/2026 :** `registry/` ne connaît plus les épingles du tout, et
 ce que ce dépôt écrit dans le registre se réduit à deux `.gitkeep`.
 
-**Décidé le même jour, pas encore construit :** les épingles voyageront **avec
-le DMP**. Le template les inscrira dans le document qu'il rend, sous une clé
-`metadata` sœur de `dmp`, le webhook sortira ce bloc du document et le
-commitera à côté de lui, dans le même commit. Un seul écrivain par fait, et un
-document qui ne peut pas être en désaccord avec ce qui le décrit. Les deux
-moitiés sont des tranches à venir, l'estampille dans `dsw/generate_template.py`
-et l'enveloppe dans le webhook.
+**Décidé le même jour, et construit depuis :** les épingles voyagent **avec le
+DMP**. Le template les inscrit dans le document qu'il rend, sous une clé
+`metadata` sœur de `dmp`, le webhook sort ce bloc du document et le commite à
+côté de lui, dans le même commit. Un seul écrivain par fait, et un document qui
+ne peut pas être en désaccord avec ce qui le décrit. Les deux moitiés sont en
+place, `_metadata_object()` dans `dsw/generate_template.py` pour l'estampille
+et `take_provenance()` dans le webhook pour la reprise.
 
 Ce qui disparaît avec le fichier : la règle des clés possédées
 (`OWNED = ("id", "rules")`, tout le reste recopié sans être comparé), la
@@ -1311,6 +1311,44 @@ de faire quand le dossier de registre manque. C'est délibéré ici, et ce qui e
 affirmé est que le service **peut être créé**, pas qu'une soumission aboutit.
 Le jour où l'instance déploie le webhook, la valeur cesse d'être une promesse
 sans que rien ne change dans le dépôt.
+
+### Un contrôle a une seule forme, et quatre listes
+
+**Fondu le 20/08/2026.** Il y avait deux formes pour la même chose :
+l'enveloppe que la commande écrit dans `--json`, complète, et le `.check.json`
+commité à côté du DMP, court. L'écart était historique et non conçu, l'une
+avait été écrite pour être exhaustive et l'autre pour tenir en dix lignes. Un
+lecteur devait donc savoir laquelle il tenait. Il n'y en a plus qu'une, produite
+par `envelope()` dans `engine.py`, et les deux appelants s'en servent.
+
+Les résultats y sont **découpés par statut**, quatre listes dans l'ordre de
+gravité, `fail`, `warning`, `missing`, `pass`, au lieu d'une liste plate que
+chaque lecteur refiltrait. L'invariant qui en découle est vérifiable et testé :
+`len(enveloppe[statut])` vaut `enveloppe["summary"][statut]` pour les quatre.
+
+**Ce que ça coûte, et pourquoi c'est accepté.** Sur un glider complet, le
+fichier commité passe de 764 octets à 26 Ko, la seule liste `pass` pesant 70 %
+du total pour dire quatre-vingt-dix fois qu'un champ est un champ. La retirer
+aurait ramené l'exception qu'on venait de supprimer, et un lecteur aurait dû
+réapprendre pourquoi une liste sur quatre manque. Git delta-compresse très bien
+des JSON quasi identiques, une soumission inchangée ne commite rien du tout, et
+`verdict` puis `summary` restent en tête du fichier, donc l'humain qui l'ouvre a
+sa réponse en trois lignes.
+
+**Deux clés ont disparu dans la fusion.** `generated_at` ne pouvait pas
+survivre : un horodatage change les octets à chaque contrôle d'un document
+inchangé, donc un appelant qui commite ce fichier ne pourrait plus jamais le
+rapporter `unchanged`. Et `rules`, la liste d'épingles recopiée telle quelle,
+cède la place à `standards` et `rules_versions`, qui disent la même chose en
+mieux, `standards` portant en plus l'ordre de fusion, base d'abord puis
+extensions.
+
+Deux choses à savoir en lisant un fichier commité : `fail` y est
+**structurellement vide**, un document qui échoue n'atteignant jamais le
+registre, et la clé est là quand même pour qu'un lecteur qui affiche par
+gravité n'ait pas de cas particulier. Et l'ordre du parcours du document, lui,
+ne survit qu'à l'intérieur de chaque liste, plus entre elles. C'est l'échange
+qu'on fait en triant par gravité.
 
 ### Trois cibles, et deux natures
 
@@ -1831,6 +1869,25 @@ de règles, ou un diff de règle devient pénible à relire à cause du bruit de
 format. À ce moment-là, un `.prettierrc` versionné (trois lignes, zéro seconde
 de CI) répond au premier cas, le check CI ne se justifiant que si le format
 dérive vraiment malgré ça.
+
+### Le contrôle qualité ne juge jamais deux valeurs ensemble
+
+Chaque valeur est contrôlée seule, contre la règle qui la déclare. Rien ne
+compare deux valeurs entre elles, donc deux datasets de même titre passent,
+deux distributions qui pointent la même `access_url` aussi, et un `modified`
+antérieur à `created` ne dit rien. Il n'y a pas non plus de règle
+conditionnelle, du genre « si `ethical_issues_exist` vaut `yes` alors
+`ethical_issues_description` devient requis ».
+
+C'est une limite du **format des règles** avant d'être une limite du moteur.
+Un fichier de règles décrit un arbre de champs, chacun portant sa cardinalité,
+son type et ses vocabulaires, et il n'a aucun moyen de parler d'un autre champ
+que lui-même. Les lever demanderait donc d'inventer cette expression dans
+`rules.schema.json` d'abord, et un second parcours du document ensuite, un
+contrôle croisé ne pouvant pas se rendre pendant la descente qui le découvre.
+
+Constaté le 20/08/2026, et accepté tel quel : ce que le QC garantit
+aujourd'hui, champ par champ, est ce qu'on lui demande.
 
 ### Un fichier de plus d'1 Mo ne se lit pas
 

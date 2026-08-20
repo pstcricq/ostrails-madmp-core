@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from quality_control import STATUSES
 from quality_control.run import PinsFileError, main, read_pins
 
 ROOT = Path(__file__).parent.parent
@@ -132,23 +133,46 @@ def test_a_warning_alone_still_passes(tmp_path, sidecar):
     assert (code, envelope["verdict"]) == (0, "pass")
 
 
-def test_the_counts_add_up_to_the_results(tmp_path, sidecar):
+def test_the_counts_add_up_to_the_lists(tmp_path, sidecar):
     """The summary exists so no reader recounts. It has to be the same
     answer, or two steps of one pipeline disagree about one run."""
     _, envelope = _run(tmp_path, COMPLETE, sidecar)
     summary = envelope["summary"]
-    assert summary["total"] == len(envelope["results"])
-    assert (
-        sum(summary[s] for s in ("pass", "fail", "warning", "missing"))
-        == summary["total"]
-    )
+    assert sum(summary[s] for s in STATUSES) == summary["total"]
+    assert sum(len(envelope[s]) for s in STATUSES) == summary["total"]
+
+
+def test_each_list_holds_exactly_what_the_summary_counted(tmp_path, sidecar):
+    """The invariant a reader shows results by severity on: the list under a
+    status and the count under the same name are one answer, not two."""
+    _, envelope = _run(tmp_path, COMPLETE, sidecar)
+    for status in STATUSES:
+        assert len(envelope[status]) == envelope["summary"][status], status
+        assert {row["status"] for row in envelope[status]} <= {status}
+
+
+def test_every_list_is_there_even_when_empty(tmp_path, sidecar):
+    """A key that appears only when non-empty makes every reader write a
+    `.get`, and one of them will forget. A passing document has no failures,
+    and `fail` is still an empty list."""
+    _, envelope = _run(tmp_path, COMPLETE, sidecar)
+    assert envelope["fail"] == []
+    assert all(status in envelope for status in STATUSES)
+
+
+def test_the_envelope_carries_no_timestamp(tmp_path, sidecar):
+    """Two checks of one unchanged document must produce the same bytes, or a
+    caller that commits this could never report it unchanged."""
+    _, first = _run(tmp_path, COMPLETE, sidecar)
+    _, second = _run(tmp_path, COMPLETE, sidecar)
+    assert first == second
 
 
 def test_every_status_is_counted_even_at_zero(tmp_path, sidecar):
     """A key that appears only when non-zero makes every reader write a
     `.get`, and one of them will forget."""
     _, envelope = _run(tmp_path, COMPLETE, sidecar)
-    assert set(envelope["summary"]) == {"total", "pass", "fail", "warning", "missing"}
+    assert set(envelope["summary"]) == {"total", *STATUSES}
 
 
 def test_the_envelope_is_written_where_it_was_asked_for(tmp_path, sidecar):

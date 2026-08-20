@@ -17,12 +17,12 @@ from submission.service import (
     SubmissionConfig,
     SubmissionError,
     handle_submission,
-    take_envelope,
+    take_provenance,
 )
 
 __all__ = [
     "SubmissionConfig",
     "SubmissionError",
     "handle_submission",
-    "take_envelope",
+    "take_provenance",
 ]

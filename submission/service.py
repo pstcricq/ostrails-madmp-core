@@ -1,6 +1,6 @@
 """The webhook's logic, free of HTTP plumbing.
 
-A document is checked against the rules its own envelope names before anything
+A document is checked against the rules its own provenance names before anything
 is written, so a DMP that does not hold up never reaches the registry at all
 and the researcher hears why while they are still in DSW. What the registry
 holds is therefore what has passed, and it holds the verdict beside it.
@@ -14,13 +14,11 @@ from __future__ import annotations
 
 import json
 import re
-from collections import Counter
 from dataclasses import dataclass
-from importlib.metadata import version
 from typing import Any
 
-from project import RULES_DIR, merge_rules, resolve_pins
-from quality_control import CheckResult, has_failures, run_qc
+from project import RULES_DIR, Model, merge_rules, resolve_pins
+from quality_control import CheckResult, envelope, has_failures, run_qc
 from utils.errors import ProblemsError
 from utils.github import GitHubClient
 
@@ -35,16 +33,13 @@ _BRANCH = "main"
 
 # The key the document template renders beside `dmp`, carrying the versions
 # the document was built from.
-_ENVELOPE = "metadata"
+_PROVENANCE = "metadata"
 
 
 # How many violations a refusal spells out before counting the rest. DSW
 # shows this message on the submission, not a report, and a document missing
 # forty fields would push the beginning of it out of sight.
 _SPELLED_OUT = 5
-
-# The order the verdict counts them in, so two files always read the same way.
-_STATUSES = ("pass", "fail", "warning", "missing")
 
 
 class SubmissionError(ValueError):
@@ -86,7 +81,7 @@ def _pins_are_well_formed(rules: Any) -> bool:
     )
 
 
-def take_envelope(document: dict, folder: str) -> dict[str, Any]:
+def take_provenance(document: dict, folder: str) -> dict[str, Any]:
     """The provenance block, taken out of the document before anything is
     written, so what is committed is the `dmp` object alone.
 
@@ -94,45 +89,46 @@ def take_envelope(document: dict, folder: str) -> dict[str, Any]:
     versions are unknown cannot be checked against them, and guessing is
     worse than saying so.
     """
-    envelope = document.pop(_ENVELOPE, None)
-    if not isinstance(envelope, dict):
+    provenance = document.pop(_PROVENANCE, None)
+    if not isinstance(provenance, dict):
         raise SubmissionError(
-            f"document carries no {_ENVELOPE!r} object, so the rules versions "
+            f"document carries no {_PROVENANCE!r} object, so the rules versions "
             f"it was built from are unknown. It was not rendered by a maDMP "
             f"document template."
         )
     # The folder comes from the submission service's URL and the project name
     # from the template that rendered the document. Comparing them is what
     # catches one project's document submitted through another's service.
-    if envelope.get("project") != folder:
+    if provenance.get("project") != folder:
         raise SubmissionError(
-            f"document was generated for project {envelope.get('project')!r}, "
+            f"document was generated for project {provenance.get('project')!r}, "
             f"submitted to {folder!r}"
         )
     if (
-        not isinstance(envelope.get("template_version"), str)
-        or not envelope["template_version"]
+        not isinstance(provenance.get("template_version"), str)
+        or not provenance["template_version"]
     ):
-        raise SubmissionError(f"{_ENVELOPE}.template_version is missing or empty")
-    if not _pins_are_well_formed(envelope.get("rules")):
+        raise SubmissionError(f"{_PROVENANCE}.template_version is missing or empty")
+    if not _pins_are_well_formed(provenance.get("rules")):
         raise SubmissionError(
-            f"{_ENVELOPE}.rules is not a non-empty list of {{standard: version}} "
+            f"{_PROVENANCE}.rules is not a non-empty list of {{standard: version}} "
             f"mappings"
         )
-    return envelope
+    return provenance
 
 
-def check(document: Any, envelope: dict[str, Any]) -> list[CheckResult]:
-    """Check the document against the rules its envelope names. Raises with
-    what to fix when it does not hold up, and otherwise hands back every
-    result, which is what the verdict beside the DMP is written from.
+def check(document: Any, provenance: dict[str, Any]) -> tuple[Model, list[CheckResult]]:
+    """Check the document against the rules its provenance names. Raises with
+    what to fix when it does not hold up, and otherwise hands back the model
+    it was judged against and every result, which is what the verdict beside
+    the DMP is written from.
 
     The versions come from the document, so what judges it is what it was
     built from, and a project whose pins moved since does not change the
     answer.
     """
     try:
-        model = merge_rules(resolve_pins(envelope["rules"], RULES_DIR))
+        model = merge_rules(resolve_pins(provenance["rules"], RULES_DIR))
     except ProblemsError as err:
         raise QualityControlError(
             f"the rules this document names cannot be loaded, {err}"
@@ -140,7 +136,7 @@ def check(document: Any, envelope: dict[str, Any]) -> list[CheckResult]:
 
     results = run_qc(model, document)
     if not has_failures(results):
-        return results
+        return model, results
 
     violations = [r for r in results if r.status == "fail"]
     spelled = "\n".join(f"  {r.message}" for r in violations[:_SPELLED_OUT])
@@ -152,32 +148,6 @@ def check(document: Any, envelope: dict[str, Any]) -> list[CheckResult]:
         f"quality control failed, {len(violations)} violation(s) against "
         f"{versions}:\n{spelled}" + (f"\n  and {rest} more" if rest > 0 else "")
     )
-
-
-def verdict(results: list[CheckResult], envelope: dict[str, Any]) -> dict[str, Any]:
-    """What is written beside a DMP to say it was checked, against what, and
-    by what.
-
-    The passing results are not kept, they say only that a field is a field.
-    The warnings are, being the whole of what a document that passed still has
-    to say. No timestamp: git dates the commit, and one here would change the
-    bytes at every submission and kill the unchanged verdict.
-    """
-    counted = Counter(r.status for r in results)
-    return {
-        "verdict": "pass",
-        "summary": {
-            "total": len(results),
-            **{status: counted.get(status, 0) for status in _STATUSES},
-        },
-        "rules": envelope["rules"],
-        "engine": version("madmp-core"),
-        "warnings": [
-            {"instance_path": r.instance_path, "message": r.message}
-            for r in results
-            if r.status == "warning"
-        ],
-    }
 
 
 def _bytes(document: Any) -> bytes:
@@ -195,7 +165,7 @@ def handle_submission(
     ``projects/<folder>/template/`` of the registry, and rewrite ``dmp_id``,
     in the document it is given, to the DMP's raw URL.
 
-    A document that does not hold up against the rules its envelope names is
+    A document that does not hold up against the rules its provenance names is
     refused before any of that, so what the registry holds is what passed.
 
     The three files go in one commit, so nothing ever holds a DMP without the
@@ -206,10 +176,10 @@ def handle_submission(
         raise SubmissionError(f"invalid project folder {folder!r}")
     if not isinstance(document, dict) or not isinstance(document.get("dmp"), dict):
         raise SubmissionError("document has no dmp object")
-    envelope = take_envelope(document, folder)
+    provenance = take_provenance(document, folder)
     # Before anything is read or written: it needs no network, and it is the
     # answer the researcher is most likely waiting for.
-    results = check(document, envelope)
+    model, results = check(document, provenance)
 
     owner, repo = config.github_owner, config.registry_repo
     base = f"projects/{folder}"
@@ -232,8 +202,8 @@ def handle_submission(
 
     wanted = {
         dmp_path: _bytes(document),
-        meta_path: _bytes(envelope),
-        check_path: _bytes(verdict(results, envelope)),
+        meta_path: _bytes(provenance),
+        check_path: _bytes(envelope(model, results, dmp_path)),
     }
     current = {path: github.get_file(owner, repo, path) for path in wanted}
 

@@ -10,10 +10,7 @@ the ``rules: [{standard: version}, ...]`` shape. Two files are written in that
 shape and both are read here: the provenance file a submission commits beside
 its DMP (JSON), and a project config (YAML).
 
-The envelope written to ``--json`` is what every other step reads, so it
-carries the verdict and the counts rather than leaving each reader to compute
-them from ``results``. Exit code 0 when the document has no real violation, 1
-otherwise.
+Exit code 0 when the document has no real violation, 1 otherwise.
 """
 
 from __future__ import annotations
@@ -21,20 +18,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from project import RULES_DIR, Model, merge_rules, resolve_pins
-from quality_control.engine import has_failures, results_to_dicts, run_qc
+from project import RULES_DIR, merge_rules, resolve_pins
+from quality_control.engine import STATUSES, envelope, run_qc
 from utils.errors import ProblemsError
-
-# What a status means for the run as a whole is decided in engine.py. This is
-# only the order they are counted in, so a summary always reads the same way.
-STATUSES = ("pass", "fail", "warning", "missing")
 
 
 class PinsFileError(ProblemsError):
@@ -95,24 +86,6 @@ def read_document(path: str | Path) -> Any:
         raise PinsFileError([f"is not valid JSON, {err}"], path) from err
 
 
-def envelope(model: Model, document: Any, dmp_path: str | Path) -> dict[str, Any]:
-    """Everything one run produced, in the shape it is written and read."""
-    results = run_qc(model, document)
-    counted = Counter(r.status for r in results)
-    return {
-        "dmp": str(dmp_path),
-        "generated_at": datetime.now(UTC).isoformat(),
-        "standards": list(model.standards),
-        "rules_versions": dict(model.standard_versions),
-        "verdict": "fail" if has_failures(results) else "pass",
-        "summary": {
-            "total": len(results),
-            **{status: counted.get(status, 0) for status in STATUSES},
-        },
-        "results": results_to_dicts(results),
-    }
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -133,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         print(err, file=sys.stderr)
         return 1
 
-    written = envelope(model, document, args.dmp)
+    written = envelope(model, run_qc(model, document), args.dmp)
     output = Path(args.json)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(written, indent=2) + "\n")
