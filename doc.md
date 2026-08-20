@@ -1944,6 +1944,24 @@ même chose qu'une garantie.
 Seule la lecture est concernée, un commit porte ses fichiers en entrées
 d'arbre et n'a pas cette limite.
 
+### Rien n'empêche de republier un tag déjà publié
+
+GHCR accepte un push sur un tag existant et l'écrase sans rien dire. La règle
+« un tag publié ne se réécrit pas » est donc tenue à la main, pas par un
+contrôle. Deux déploiements épinglant `v1.0.0` tourneraient alors sur des codes
+différents en annonçant la même version, et le verdict commité à côté de chaque
+DMP porterait ce numéro-là des deux côtés.
+
+Ce qui limite les dégâts : `version` refuse depuis le 20/08/2026 un tag qui ne
+dit pas ce que dit `pyproject.toml`, donc republier `v1.0.0` demande que la
+version du paquet soit restée `1.0.0`, c'est-à-dire que rien n'ait été relâché
+entre-temps. Le cas qui passe encore est le retag d'un même numéro sur un autre
+commit.
+
+Fermer le trou demanderait une étape qui interroge GHCR avant de pousser et
+refuse un tag déjà là. Pas construit, la discipline suffit à un dépôt à un
+seul auteur, et le jour où ce n'est plus le cas c'est cette étape qu'il faut.
+
 ### Le webhook n'a ni reprise ni gestion du quota
 
 GitHub répondant 403 ou 429 ressort en 502 vers DSW. Acceptable pour une

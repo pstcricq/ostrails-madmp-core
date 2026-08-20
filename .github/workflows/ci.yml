@@ -17,7 +17,11 @@
 # names the culprit. Each pays its own setup, and they run concurrently, so
 # wall-clock is the slowest of the seven.
 #
-# The line is not "before or after validation", it is report or act. The seven
+# An eighth reports too but only on a tag, `version`, which refuses a tag that
+# does not say what `pyproject.toml` says or that was cut off the default
+# branch.
+#
+# The line is not "before or after validation", it is report or act. The eight
 # jobs above only ever report, `generate` and `image` included since neither an
 # uploaded artifact nor an unpushed image reaches anything. Three jobs act, and
 # they are the only three with `needs:`: `registry-sync` writes into the
@@ -45,15 +49,21 @@
 # versions and a transitive release cannot turn CI red on its own.
 name: CI
 
-# Tags are here for `release` alone. Every reporting job runs again on a tag,
-# which is the point: what gets published is a commit that passed on the day it
-# is published, not on the day it was merged.
+# Tags are here for `version` and `release`. Every reporting job runs again on a
+# tag, which is the point: what gets published is a commit that passed on the
+# day it is published, not on the day it was merged.
 on:
   push:
     branches: [main]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+
+# Read-only by default, and every job inherits it. Only `release` needs more,
+# and it says so itself, so nothing here can write to this repository by
+# holding a token it was handed without asking.
+permissions:
+  contents: read
 
 # One run at a time per branch, and queued rather than cancelled. Two pushes in
 # quick succession would otherwise have two `registry-sync` jobs laying out the
@@ -168,21 +178,25 @@ jobs:
           REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
           REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}
 
-  # Builds the image and pushes nothing, so a Dockerfile that no longer builds
-  # is a red check on the pull request that broke it rather than a failed
-  # release weeks later. The layers land in the Actions cache, which is what
-  # makes `release` cheap: it builds the same context again and reuses them.
+  # Builds the image, starts it and asks it two questions. It pushes nothing,
+  # so a broken image is a red check on the pull request that broke it rather
+  # than a failed release weeks later. The layers land in the Actions cache,
+  # which is what makes `release` cheap: it builds the same context again and
+  # reuses them.
   #
   # No `needs:`. An image that does not build is broken whether or not a rules
   # file is, and saying so early is the whole reason this job is separate.
+  #
+  # (!!) amd64 alone here, where `release` builds both. The arm64 half is built
+  # under QEMU and took 182 of this job's 190 seconds, on every pull request,
+  # to prove something a build only ever fails at for a dependency shipping no
+  # arm64 wheel. `release` still builds both, so a failure there costs a tag to
+  # cut again and can never reach a deployment. The seconds bought back are
+  # spent below, on running the thing.
   image:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Builds the arm64 half under emulation. The runner is amd64, and without
-      # this the job would only ever prove that the architecture it happens to
-      # run on works.
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/build-push-action@v6
         with:
@@ -191,13 +205,46 @@ jobs:
           # directory away from the Dockerfile.
           context: .
           file: submission/Dockerfile
-          # Both, and the same two `release` publishes. A deployment host is
-          # amd64 and a developer's Mac is arm64, and an image that carries one
-          # of them refuses to run on the other rather than running slowly.
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: false
+          # Into the runner's docker daemon, which is what the steps below run.
+          load: true
+          tags: madmp-submission:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Building proves the Dockerfile resolves. It does not prove the wheel
+      # carries the files it installs, nor that the entrypoint names a module
+      # that exists, and both stay silent until a deployment pulls the image.
+      #
+      # The four variables are read at startup and refused when empty, so any
+      # value does here. Nothing below reaches GitHub: a document is checked
+      # before anything is read or written, and this one never passes.
+      - name: The image starts, and answers
+        run: |
+          docker run -d --name webhook -p 8080:8080 \
+            -e SUBMISSION_TOKEN=ci -e REGISTRY_TOKEN=ci \
+            -e REGISTRY_OWNER=ci -e REGISTRY_REPO=ci \
+            madmp-submission:ci
+          for _ in $(seq 30); do
+            curl -fsS http://localhost:8080/health && break
+            sleep 1
+          done
+          # /health answering is the entrypoint, the extra and the environment.
+          curl -fsS http://localhost:8080/health
+          # And this is the rules files. A document naming versions the wheel
+          # does not carry is refused for not loading them, which reads
+          # differently from being refused for its own holes, so asserting on
+          # the holes is asserting that the rules shipped.
+          code=$(curl -sS -o body.txt -w '%{http_code}' \
+            -X POST 'http://localhost:8080/submissions?project=glider' \
+            -H 'Authorization: Bearer ci' -H 'Content-Type: application/json' \
+            -d '{"dmp":{},"metadata":{"project":"glider","template_version":"1.0.0","rules":[{"rda_dcs":"1.0.0"},{"ostrails":"1.0.0"}]}}')
+          echo "$code"; cat body.txt
+          test "$code" = "422"
+          grep -q 'Quality control failed against rda_dcs 1.0.0, ostrails 1.0.0' body.txt
+      - name: What it said, whatever happened above
+        if: always()
+        run: docker logs webhook || true
 
   registry-sync:
     # The first of the three jobs that write outside this repository, and like
@@ -283,6 +330,54 @@ jobs:
           REGISTRY_OWNER: ${{ vars.REGISTRY_OWNER }}
           REGISTRY_REPO: ${{ vars.REGISTRY_REPO }}
 
+  # What a tag has to be true for. It builds nothing and publishes nothing, it
+  # refuses a tag that lies.
+  #
+  # The version lives in `pyproject.toml` and nowhere else: it is what
+  # `importlib.metadata` hands the webhook, which writes it into every verdict
+  # it commits, so a tag disagreeing with it would put a version in the
+  # registry naming a release nobody can check out. Bumping it is part of
+  # cutting the tag, and this is what catches forgetting.
+  #
+  # (!!) A job of this workflow, and in `release`'s `needs:`. As a workflow of
+  # its own it could only ever turn red beside a publish that had already
+  # happened: two workflows on one tag push run with no order between them, and
+  # GitHub Actions has no `needs:` across workflows.
+  version:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The ancestry check below reads history this tag is not the tip of,
+          # and a shallow clone carries none of it.
+          fetch-depth: 0
+      - name: The tag and the package version say the same thing
+        run: |
+          declared=$(python3 -c "
+          import tomllib
+          print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])
+          ")
+          tagged="${GITHUB_REF_NAME#v}"
+          echo "pyproject: $declared"
+          echo "tag:       $tagged"
+          if [ "$declared" != "$tagged" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match the package version $declared"
+            exit 1
+          fi
+      # A tag can be cut anywhere. One cut off the default branch would publish
+      # an image built from code that was never merged, under a version the
+      # repository's history does not explain.
+      - name: The tag sits on the default branch
+        env:
+          DEFAULT: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/$DEFAULT:refs/remotes/origin/$DEFAULT"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "refs/remotes/origin/$DEFAULT"; then
+            echo "::error::$GITHUB_REF_NAME is not on $DEFAULT, it names code that was never merged"
+            exit 1
+          fi
+
   # The third job that acts, and the only one keyed on a tag rather than on the
   # default branch. It publishes the webhook's image, which a DSW deployment
   # pulls and runs: `MADMP_CORE_VERSION` in that deployment's `.env` names one
@@ -298,7 +393,7 @@ jobs:
   # are in the cache by then, so this costs seconds, and passing an image
   # between jobs would be the same bytes with one more step to forget.
   release:
-    needs: [checks, rules, configs, projects, generate, registry, image]
+    needs: [checks, rules, configs, projects, generate, registry, image, version]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     # The only job here that writes to GitHub itself, and it writes packages,

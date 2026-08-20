@@ -468,8 +468,7 @@ madmp-core/
 ├── tests/                        one test file per module
 ├── build/                        where the generators write, never committed
 ├── .github/workflows/
-│   ├── ci.yml                    ten jobs, seven that report and three that act
-│   └── release.yml               a tag says the same thing as pyproject.toml
+│   └── ci.yml                    eleven jobs, eight that report and three that act
 ├── .dockerignore                 what the image's build context leaves out
 ├── .env.example                  every name the environment has to carry
 ├── pyproject.toml                one environment for the whole repository
@@ -502,10 +501,22 @@ install from the lockfile with `uv sync --frozen`:
 - **registry** : every project's destination in the registry, read, which is
   also what says the registry is reachable with the token it was given. Skips,
   loudly, without `REGISTRY_TOKEN`.
-- **image** : the webhook's image is built and pushed nowhere, so a Dockerfile
-  that no longer builds is a red check on the pull request that broke it rather
-  than a failed release weeks later. Its layers land in the Actions cache,
-  which is what makes `release` cost seconds.
+- **image** : the webhook's image is built, started and asked two questions,
+  and pushed nowhere, so a broken image is a red check on the pull request that
+  broke it rather than a failed release weeks later. Building alone proves the
+  Dockerfile resolves. `/health` answering proves the entrypoint names a module
+  that exists and the `[submission]` extra installed a server. A document
+  refused for its own holes, and not for rules that would not load, proves the
+  wheel carries the rules files, which packaging decides and no unit test can
+  see. Nothing there reaches GitHub, a document is checked before anything is
+  read or written. Its layers land in the Actions cache, which is what makes
+  `release` cost seconds.
+
+  It builds `linux/amd64` alone, where `release` builds that and `linux/arm64`.
+  The arm64 half goes through QEMU and took 182 of this job's 190 seconds on
+  every pull request, to prove something a build only fails at for a dependency
+  shipping no arm64 wheel. `release` builds both, so such a failure costs a tag
+  to cut again and can never reach a deployment.
 - **registry-sync** : writes into the registry repository. It waits on the six
   verdicts above and runs on `main` alone, on a pull request it shows as
   `skipped`, so its abstention is readable. Not on `image`, a Dockerfile that
@@ -530,7 +541,14 @@ A release is a tag, and the version lives in `pyproject.toml` and nowhere else.
 It is what `importlib.metadata` hands the webhook, which writes it into every
 verdict it commits, so a tag disagreeing with it would put a version in the
 registry naming a release nobody can check out. Bumping it is part of cutting
-the tag, and `release.yml` refuses a tag that forgot.
+the tag, and the `version` job refuses a tag that forgot. It refuses one cut
+off the default branch too, which would publish an image built from code that
+was never merged.
+
+`version` is a job of the CI workflow and sits in `release`'s `needs:`, and
+that placement is the whole of what makes it a guard. A workflow of its own,
+triggered by the same tag push, would run with no order against the one that
+publishes, so it could only ever turn red beside an image already pushed.
 
 What a release is for: a tag is what `release` publishes the webhook's image
 under, and a DSW deployment pulls
