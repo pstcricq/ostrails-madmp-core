@@ -190,6 +190,7 @@ madmp-core/
 ├── build/                        where the generators write, never committed
 ├── .github/workflows/ci.yml      eleven jobs
 ├── .env.example                  every name the environment has to carry
+├── LICENSE                       Apache-2.0
 ├── pyproject.toml                one environment for the whole repository
 └── uv.lock                       the versions, committed and installed from
 ```
@@ -248,3 +249,17 @@ checked against. Always a tag, never `latest`.
 
 The image is published under a private repository, so it is private too and
 pulling it needs `docker login ghcr.io`.
+
+## License
+
+**Apache-2.0**, Copyright 2026 Pierre St-Cricq dit Lompre (SOCIB), as part of
+the OSTrails project. See [LICENSE](LICENSE).
+
+Attribution is required, the patent grant is explicit, and there is no
+warranty. The generated DSW packages carry their own licence, declared per
+project in its config (`license: "CC BY 4.0"` for glider), because a
+questionnaire is not source code.
+
+The plans this produces live in
+[madmp-registry](https://github.com/pstcricq/ostrails-madmp-registry) under
+CC BY 4.0.
