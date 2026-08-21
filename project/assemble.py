@@ -17,10 +17,7 @@ from typing import Any
 
 from configs import load_config_file
 from project.merge import Model, merge_rules
-from project.pins import resolve_pins
-
-ROOT = Path(__file__).resolve().parents[1]
-RULES_DIR = ROOT / "rules" / "standards"
+from project.pins import RULES_DIR, resolve_pins
 
 
 @dataclass(frozen=True)

@@ -18,7 +18,7 @@ import a data package's façade, never a parser.
 only module that composes them.
 """
 
-from project.assemble import RULES_DIR, Project, assemble_project
+from project.assemble import Project, assemble_project
 from project.merge import (
     Field,
     Model,
@@ -27,7 +27,7 @@ from project.merge import (
     Tightening,
     merge_rules,
 )
-from project.pins import UnresolvedPinsError, resolve_pins
+from project.pins import RULES_DIR, UnresolvedPinsError, resolve_pins
 
 __all__ = [
     "RULES_DIR",
