@@ -24,10 +24,7 @@ Pin = dict[str, str]
 # them, so it is the one that spells the extension.
 SUFFIX = ".json"
 
-# Where the standards live, this repository's own tree. It sits here rather
-# than beside the assembling because it says where a resource is, which is not
-# a fact about assembling a project: the quality control and the webhook both
-# import it and neither assembles anything. This is the module that turns a pin
+# Where the standards live, this repository's own tree. This module turns a pin
 # into a path under it, so it is the one that names it.
 ROOT = Path(__file__).resolve().parents[1]
 RULES_DIR = ROOT / "rules" / "standards"
